@@ -1,0 +1,33 @@
+groups:
+  - claude
+  - codex
+
+base_branch: develop
+language: ko
+
+overrides:
+  # Kotlin 전용 스킬 제외 (TypeScript/Next.js 프로젝트)
+  claude/skills/kotest-guide: false
+  claude/skills/kotlin-spring-arch: false
+  claude/skills/migration-guide: false
+  claude/skills/database-schema: false
+  codex/skills/kotest-guide: false
+  codex/skills/kotlin-spring-arch: false
+  codex/skills/migration-guide: false
+  codex/skills/database-schema: false
+
+  # Claude 훅 (dispatcher + settings는 반드시 함께)
+  claude/hooks/dispatcher: true
+  claude/settings: true
+  claude/hooks/secret-guard: true
+  claude/hooks/command-guard: true
+  claude/hooks/eslint: true
+  claude/hooks/prettier: true
+  claude/hooks/ts-check: true
+  claude/hooks/jest: true
+
+  # Codex 훅 (Claude와 별개)
+  codex/hooks/dispatcher: true
+  codex/hooks-json: true
+  codex/hooks/secret-guard: true
+  codex/hooks/command-guard: true
