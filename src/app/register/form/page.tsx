@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Header } from "@/components/Header";
-import { PistonLogo } from "@/components/PistonLogo";
+import { PistonLogo } from "@/shared/ui";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function RegisterFormPage() {

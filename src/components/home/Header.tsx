@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PistonLogo } from "@/components/PistonLogo";
+import { PistonLogo } from "@/shared/ui";
 
 export function Header() {
   return (

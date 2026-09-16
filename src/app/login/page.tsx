@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { Header } from "@/components/Header"; 
-import { PistonLogo } from "@/components/PistonLogo";
+import { Header } from "@/components/Header";
+import { Button, PistonLogo, TextInput } from "@/shared/ui";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -28,23 +28,22 @@ export default function LoginPage() {
               <form onSubmit={handleSubmit} className="space-y-3">
                 {/* 아이디 */}
                 <div className="relative">
-                  <input
+                  <TextInput
                     type="text"
                     value={id}
                     onChange={(e) => setId(e.target.value)}
                     placeholder="아이디를 입력해 주세요."
-                    className="w-full h-12 px-4 rounded-xl border border-gray-200 bg-white/80 placeholder-gray-400 text-sm focus:outline-none focus:border-[#5B7FFF] focus:ring-1 focus:ring-[#5B7FFF] transition-all"
                   />
                 </div>
 
                 {/* 비밀번호 */}
                 <div className="relative">
-                  <input
+                  <TextInput
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="비밀번호를 입력해 주세요."
-                    className="w-full h-12 px-4 pr-12 rounded-xl border border-gray-200 bg-white/80 placeholder-gray-400 text-sm focus:outline-none focus:border-[#5B7FFF] focus:ring-1 focus:ring-[#5B7FFF] transition-all"
+                    className="pr-12"
                   />
                   <button
                     type="button"
@@ -56,12 +55,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* 로그인 버튼 */}
-                <button
-                  type="submit"
-                  className="w-full h-12 bg-[#5B7FFF] text-white font-semibold rounded-xl text-sm hover:bg-[#4a6ee5] active:scale-[0.99] transition-all mt-2 shadow-sm shadow-blue-200"
-                >
-                  로그인
-                </button>
+                <Button type="submit">로그인</Button>
               </form>
 
             {/* 하단 부가 링크 */}

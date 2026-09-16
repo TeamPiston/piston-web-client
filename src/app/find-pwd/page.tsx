@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Check } from "lucide-react";
-import { Header } from "@/components/Header"; 
-import { PistonLogo } from "@/components/PistonLogo";
+import { Header } from "@/components/Header";
+import { Button, PistonLogo, TextInput } from "@/shared/ui";
 
 export default function FindIdPage() {
   const [email, setEmail] = useState("");
@@ -33,12 +33,11 @@ export default function FindIdPage() {
                 
                 {!isSubmitted ? (
                   <div className="relative">
-                    <input
+                    <TextInput
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="가입하신 이메일을 입력해 주세요."
-                      className="w-full h-12 px-4 rounded-xl border border-gray-200 bg-white/80 placeholder-gray-400 text-sm focus:outline-none focus:border-[#5B7FFF] focus:ring-1 focus:ring-[#5B7FFF] transition-all"
                       required
                     />
                   </div>
@@ -50,13 +49,9 @@ export default function FindIdPage() {
                 )}
 
                 {/* 이메일 전송 버튼 */}
-                <button
-                  type="submit"
-                  disabled={isSubmitted}
-                  className="w-full h-12 bg-[#5B7FFF] text-white font-semibold rounded-xl text-sm hover:bg-[#4a6ee5] active:scale-[0.99] disabled:bg-[#8da6ff] disabled:scale-100 disabled:cursor-not-allowed transition-all mt-2 shadow-sm shadow-blue-200"
-                >
+                <Button type="submit" disabled={isSubmitted}>
                   이메일 전송
-                </button>
+                </Button>
               </form>
 
               {/* 하단 부가 링크 */}
