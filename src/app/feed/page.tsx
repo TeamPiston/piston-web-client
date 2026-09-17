@@ -5,6 +5,7 @@ import { CircleUserRound } from "lucide-react";
 import { PistonLogo } from "@/shared/ui";
 import { ArtworkCard, MOCK_ARTWORKS } from "@/entities/artwork";
 import { FeedSearchInput, useFeedSearch } from "@/features/feed-search";
+import { LikeButton } from "@/features/like-artwork";
 
 function FeedHeader() {
   return (
@@ -52,7 +53,7 @@ export default function FeedPage() {
 
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 justify-items-center w-full">
             {filteredItems.map((artwork) => (
-              <ArtworkCard key={artwork.id} artwork={artwork} />
+              <ArtworkCard key={artwork.id} artwork={artwork} likeSlot={<LikeButton />} />
             ))}
           </div>
 
