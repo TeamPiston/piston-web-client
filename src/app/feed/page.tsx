@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { Search, CircleUserRound } from "lucide-react";
+import { CircleUserRound } from "lucide-react";
 import { PistonLogo } from "@/shared/ui";
 import { ArtworkCard, MOCK_ARTWORKS } from "@/entities/artwork";
+import { FeedSearchInput, useFeedSearch } from "@/features/feed-search";
 
 function FeedHeader() {
   return (
@@ -30,18 +30,7 @@ function FeedHeader() {
 }
 
 export default function FeedPage() {
-  const [query, setQuery] = useState("");
-
-  const filteredItems = MOCK_ARTWORKS.filter((artwork) => {
-    const normalizedQuery = query.replace(/\s+/g, "").toLowerCase();
-    const normalizedTitle = artwork.title.replace(/\s+/g, "").toLowerCase();
-    const normalizedAuthor = artwork.author.replace(/\s+/g, "").toLowerCase();
-
-    return (
-      normalizedTitle.includes(normalizedQuery) ||
-      normalizedAuthor.includes(normalizedQuery)
-    );
-  });
+  const { query, setQuery, filteredItems } = useFeedSearch(MOCK_ARTWORKS);
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-sky-100/70 via-white to-teal-50/60">
@@ -59,20 +48,7 @@ export default function FeedPage() {
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-8 py-8 flex flex-col items-center">
 
-          <div className="mb-12 w-[400px] h-[48px]">
-            <div className="flex w-full h-full items-center justify-between rounded-[20px] bg-white pl-6 pr-6 py-2 shadow-sm ring-1 ring-black/[0.04] opacity-100 rotate-0">
-              <input
-                type="text"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="검색어를 입력하세요."
-                className="w-full bg-transparent text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none"
-              />
-              <button type="button" aria-label="검색" className="text-gray-400">
-                <Search className="h-3.5 w-3.5" strokeWidth={2.5} />
-              </button>
-            </div>
-          </div>
+          <FeedSearchInput value={query} onChange={setQuery} />
 
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 justify-items-center w-full">
             {filteredItems.map((artwork) => (
