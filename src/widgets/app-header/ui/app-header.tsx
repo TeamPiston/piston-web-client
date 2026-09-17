@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { PistonLogo } from "@/shared/ui";
 
-export function Header() {
+export function AppHeader() {
   return (
-    <header className="sticky top-0 z-20 grid w-full grid-cols-3 items-center px-12 py-4 bg-white/80 backdrop-blur-sm border-b border-gray-100">
+    <header className="sticky top-0 z-20 grid w-full grid-cols-3 items-center border-b border-gray-100 bg-white/80 px-12 py-4 backdrop-blur-sm">
       <span className="justify-self-start">
         <PistonLogo />
       </span>
 
-      <nav className="flex w-full max-w-xs justify-self-center items-center justify-between text-sm font-medium text-gray-700">
+      <nav className="flex w-full max-w-xs items-center justify-between justify-self-center text-sm font-medium text-gray-700">
         <Link href="/create" className="transition-colors hover:text-gray-950">
           Create
         </Link>
