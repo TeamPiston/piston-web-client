@@ -1,1 +1,1 @@
-export { RegisterFormPage as default } from "@/pages/register-form";
+export { default } from "@/pages/register-form";

@@ -1,1 +1,1 @@
-export { FindIdPage as default } from "@/pages/find-id";
+export { default } from "@/pages/find-id";

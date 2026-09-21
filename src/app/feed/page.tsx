@@ -1,1 +1,1 @@
-export { FeedPage as default } from "@/pages/feed";
+export { default } from "@/pages/feed";

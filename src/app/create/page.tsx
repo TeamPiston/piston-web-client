@@ -1,1 +1,1 @@
-export { CreatePage as default } from "@/pages/create";
+export { default } from "@/pages/create";
