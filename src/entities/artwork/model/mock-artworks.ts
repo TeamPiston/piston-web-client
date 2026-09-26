@@ -1,13 +1,58 @@
 import type { Artwork } from "./artwork";
 
 export const MOCK_ARTWORKS: Artwork[] = [
-  { id: 1, title: "테스트", author: "작가1", stlUrl: "/pencil-holder.stl" },
-  { id: 2, title: "테스트1", author: "dlskawls", stlUrl: "/pencil-holder.stl" },
-  { id: 3, title: "테스트2", author: "정종윤", stlUrl: "/pencil-holder.stl" },
-  { id: 4, title: "테스트3", author: "41221", stlUrl: "/pencil-holder.stl" },
-  { id: 5, title: "테스트4", author: "ㅎㅇ", stlUrl: "/pencil-holder.stl" },
-  { id: 6, title: "테스트5", author: "작가2", stlUrl: "/pencil-holder.stl" },
-  { id: 7, title: "테스트7", author: "작가3", stlUrl: "/pencil-holder.stl" },
-  { id: 8, title: "테스트8", author: "작가4", stlUrl: "/pencil-holder.stl" },
-  { id: 9, title: "테스트9", author: "작가5", stlUrl: "/pencil-holder.stl" },
+  {
+    id: "1",
+    title: "연필 홀더",
+    author: "작가1",
+    stlUrl: "/models/pencil-holder.stl",
+  },
+  {
+    id: "2",
+    title: "미니 큐브",
+    author: "dlskawls",
+    stlUrl: "/models/cube.stl",
+  },
+  {
+    id: "3",
+    title: "데스크 스탠드",
+    author: "정종윤",
+    stlUrl: "/models/desk-stand.stl",
+  },
+  {
+    id: "4",
+    title: "미니 화분",
+    author: "41221",
+    stlUrl: "/models/mini-planter.stl",
+  },
+  {
+    id: "5",
+    title: "체스 타워",
+    author: "ㅎㅇ",
+    stlUrl: "/models/chess-tower.stl",
+  },
+  {
+    id: "6",
+    title: "미니 트레이",
+    author: "작가2",
+    stlUrl: "/models/mini-tray.stl",
+  },
+  {
+    id: "7",
+    title: "블록 케이스",
+    author: "작가3",
+    stlUrl: "/models/block-case.stl",
+  },
+  {
+    id: "8",
+    title: "네임 플레이트",
+    author: "작가4",
+    stlUrl: "/models/name-plate.stl",
+  },
+  {
+    id: "9",
+    title: "케이블 홀더",
+    author: "작가5",
+    stlUrl: "/models/cable-holder.stl",
+  },
 ];

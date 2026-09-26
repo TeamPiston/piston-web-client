@@ -1,0 +1,86 @@
+solid mini-planter
+facet normal 0 0 -1
+ outer loop
+  vertex -11 -11 0
+  vertex 11 11 0
+  vertex 11 -11 0
+ endloop
+endfacet
+facet normal 0 0 -1
+ outer loop
+  vertex -11 -11 0
+  vertex -11 11 0
+  vertex 11 11 0
+ endloop
+endfacet
+facet normal 0 0 1
+ outer loop
+  vertex -11 -11 14
+  vertex 11 -11 14
+  vertex 11 11 14
+ endloop
+endfacet
+facet normal 0 0 1
+ outer loop
+  vertex -11 -11 14
+  vertex 11 11 14
+  vertex -11 11 14
+ endloop
+endfacet
+facet normal 0 -1 0
+ outer loop
+  vertex -11 -11 0
+  vertex 11 -11 0
+  vertex 11 -11 14
+ endloop
+endfacet
+facet normal 0 -1 0
+ outer loop
+  vertex -11 -11 0
+  vertex 11 -11 14
+  vertex -11 -11 14
+ endloop
+endfacet
+facet normal 0 1 0
+ outer loop
+  vertex -11 11 0
+  vertex -11 11 14
+  vertex 11 11 14
+ endloop
+endfacet
+facet normal 0 1 0
+ outer loop
+  vertex -11 11 0
+  vertex 11 11 14
+  vertex 11 11 0
+ endloop
+endfacet
+facet normal -1 0 0
+ outer loop
+  vertex -11 -11 0
+  vertex -11 -11 14
+  vertex -11 11 14
+ endloop
+endfacet
+facet normal -1 0 0
+ outer loop
+  vertex -11 -11 0
+  vertex -11 11 14
+  vertex -11 11 0
+ endloop
+endfacet
+facet normal 1 0 0
+ outer loop
+  vertex 11 -11 0
+  vertex 11 11 14
+  vertex 11 -11 14
+ endloop
+endfacet
+facet normal 1 0 0
+ outer loop
+  vertex 11 -11 0
+  vertex 11 11 0
+  vertex 11 11 14
+ endloop
+endfacet
+endsolid mini-planter

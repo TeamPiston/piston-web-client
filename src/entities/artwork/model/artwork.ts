@@ -1,8 +1,8 @@
 export interface Artwork {
-  id: number;
+  id: string;
   title: string;
   author: string;
-  stlUrl?: string;
+  stlUrl: string;
 }
 
 export interface FilamentColor {
@@ -11,7 +11,6 @@ export interface FilamentColor {
 }
 
 export interface ArtworkDetail extends Artwork {
-  stlUrl: string;
   description: string;
   filamentColors: FilamentColor[];
   filamentUsage: {

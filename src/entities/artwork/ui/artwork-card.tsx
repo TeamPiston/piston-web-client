@@ -5,8 +5,6 @@ import type { ReactNode } from "react";
 import { StlViewer } from "@/shared/ui";
 import type { Artwork } from "../model/artwork";
 
-const FALLBACK_STL_URL = "/pencil-holder.stl";
-
 interface ArtworkCardProps {
   artwork: Artwork;
   likeSlot?: ReactNode;
@@ -23,7 +21,7 @@ export function ArtworkCard({ artwork, likeSlot }: ArtworkCardProps) {
         className="group flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[18px] border border-gray-100/50 bg-gray-50/50"
       >
         <StlViewer
-          url={artwork.stlUrl ?? FALLBACK_STL_URL}
+          url={artwork.stlUrl}
           compact
           autoRotate
           interactive={false}
