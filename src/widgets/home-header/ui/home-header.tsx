@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { PistonLogo } from "@/components/PistonLogo";
+import { PistonLogo } from "@/shared/ui";
 
-export function Header() {
+export function HomeHeader() {
   return (
     <header className="sticky top-0 z-20 grid w-full grid-cols-3 items-center px-12 py-4 bg-white/80 backdrop-blur-sm border-b border-gray-100">
       <span className="justify-self-start">
