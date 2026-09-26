@@ -3,7 +3,7 @@
 import { ArrowLeft, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { ArtworkDetail } from "@/entities/artwork";
+import type { ArtworkDetail, FilamentColor } from "@/entities/artwork";
 import { LikeButton } from "@/features/like-artwork";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 
@@ -11,9 +11,32 @@ interface ArtworkDetailPageProps {
   artwork: ArtworkDetail;
 }
 
+const FALLBACK_STL_URL = "/pencil-holder.stl";
+const FALLBACK_FILAMENT_COLORS: FilamentColor[] = [
+  { name: "빨강", value: "#f04444" },
+  { name: "주황", value: "#ff7855" },
+  { name: "노랑", value: "#ffd166" },
+  { name: "초록", value: "#0dcc9a" },
+  { name: "파랑", value: "#5a7bff" },
+];
+
 export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   const router = useRouter();
   const [isQueued, setIsQueued] = useState(false);
+
+  const stlUrl = artwork.stlUrl ?? FALLBACK_STL_URL;
+  const description =
+    artwork.description ??
+    artwork.title + "에 대한 상세 설명을 확인할 수 있는 작품입니다.";
+  const filamentColors =
+    Array.isArray(artwork.filamentColors) && artwork.filamentColors.length > 0
+      ? artwork.filamentColors
+      : FALLBACK_FILAMENT_COLORS;
+  const filamentUsage = artwork.filamentUsage ?? {
+    length: "12m",
+    weight: "36g",
+  };
+  const estimatedPrintTime = artwork.estimatedPrintTime ?? "1시간";
 
   return (
     <main className="min-h-[calc(100vh-73px)] w-full bg-[#fbfbfb] px-4 py-8 sm:px-8 lg:px-16 lg:py-14">
@@ -30,7 +53,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
 
         <section className="mt-7 grid gap-10 rounded-[32px] bg-white p-6 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12 lg:p-8">
           <div className="flex min-w-0 flex-col">
-            <ArtworkModelPreview url={artwork.stlUrl} />
+            <ArtworkModelPreview url={stlUrl} />
 
             <div className="mt-6 flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -56,13 +79,13 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
 
           <div className="flex min-w-0 flex-col justify-between">
             <p className="max-h-[270px] overflow-y-auto pr-2 text-sm leading-6 text-gray-950">
-              {artwork.description}
+              {description}
             </p>
 
             <div className="mt-10">
               <p className="text-sm font-medium text-gray-950">필요한 필라멘트 색상</p>
               <div className="mt-4 flex items-center gap-4">
-                {artwork.filamentColors.map((color) => (
+                {filamentColors.map((color) => (
                   <span
                     key={color.name}
                     aria-label={color.name}
@@ -78,14 +101,14 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
               <div>
                 <p className="text-sm font-medium text-gray-950">필요한 필라멘트 사용량</p>
                 <p className="mt-3 text-xl font-semibold tracking-normal text-gray-950">
-                  {artwork.filamentUsage.length}
+                  {filamentUsage.length}
                   <span className="px-2 text-gray-300">|</span>
-                  {artwork.filamentUsage.weight}
+                  {filamentUsage.weight}
                 </p>
               </div>
 
               <a
-                href={artwork.stlUrl}
+                href={stlUrl}
                 download
                 aria-label="3D 모델 다운로드"
                 title="3D 모델 다운로드"
@@ -98,7 +121,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
             <div className="mt-9">
               <p className="text-sm font-medium text-gray-950">예상 출력 시간</p>
               <p className="mt-3 text-xl font-semibold text-gray-950">
-                {artwork.estimatedPrintTime}
+                {estimatedPrintTime}
               </p>
             </div>
           </div>
