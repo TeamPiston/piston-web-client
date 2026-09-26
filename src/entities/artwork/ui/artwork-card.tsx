@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Box } from "lucide-react";
+import { StlViewer } from "@/shared/ui";
 import type { Artwork } from "../model/artwork";
+
+const FALLBACK_STL_URL = "/pencil-holder.stl";
 
 interface ArtworkCardProps {
   artwork: Artwork;
@@ -18,11 +20,13 @@ export function ArtworkCard({ artwork, likeSlot }: ArtworkCardProps) {
       <Link
         href={detailHref}
         aria-label={artwork.title + " 작품 상세 보기"}
-        className="group flex min-h-0 flex-1 items-center justify-center rounded-[18px] border border-gray-100/50 bg-gray-50/50"
+        className="group flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[18px] border border-gray-100/50 bg-gray-50/50"
       >
-        <Box
-          className="h-20 w-20 text-gray-800 transition-transform duration-200 group-hover:scale-105"
-          strokeWidth={0.75}
+        <StlViewer
+          url={artwork.stlUrl ?? FALLBACK_STL_URL}
+          compact
+          autoRotate
+          interactive={false}
         />
       </Link>
 
