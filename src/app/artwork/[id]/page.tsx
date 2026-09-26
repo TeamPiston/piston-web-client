@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { MOCK_ARTWORKS } from "@/entities/artwork";
+import { getMockArtworkDetailById } from "@/entities/artwork";
 import ArtworkDetailPage from "@/pages/artwork-detail";
 
 interface ArtworkDetailRouteProps {
@@ -8,7 +8,7 @@ interface ArtworkDetailRouteProps {
 
 export default async function ArtworkDetailRoute({ params }: ArtworkDetailRouteProps) {
   const { id } = await params;
-  const artwork = MOCK_ARTWORKS.find((item) => item.id === Number(id));
+  const artwork = getMockArtworkDetailById(Number(id));
 
   if (!artwork) {
     notFound();

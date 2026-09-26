@@ -38,7 +38,7 @@ export default function ThreeDTestPage() {
       </div>
 
       <div className="w-full max-w-[900px] aspect-video border border-slate-700 rounded-xl overflow-hidden shadow-2xl bg-black">
-        <StlViewer />
+        <StlViewer url="/pencil-holder.stl" />
       </div>
     </div>
   );

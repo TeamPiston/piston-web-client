@@ -16,7 +16,11 @@ function StlMesh({ url }: { url: string }) {
   );
 }
 
-export function ArtworkModelPreview() {
+interface ArtworkModelPreviewProps {
+  url: string;
+}
+
+export function ArtworkModelPreview({ url }: ArtworkModelPreviewProps) {
   const previewRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -53,7 +57,7 @@ export function ArtworkModelPreview() {
         <directionalLight position={[10, 15, 8]} intensity={1.1} />
         <Suspense fallback={null}>
           <Center>
-            <StlMesh url="/pencil-holder.stl" />
+            <StlMesh url={url} />
           </Center>
         </Suspense>
         <OrbitControls
