@@ -13,6 +13,8 @@ interface ArtworkDetailPageProps {
   artwork: ArtworkDetail;
 }
 
+type PrintStatus = "idle" | "printing" | "failed";
+
 const FALLBACK_STL_URL = "/pencil-holder.stl";
 const FALLBACK_FILAMENT_COLORS: FilamentColor[] = [
   { name: "빨강", value: "#f04444" },
@@ -24,7 +26,7 @@ const FALLBACK_FILAMENT_COLORS: FilamentColor[] = [
 
 export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   const router = useRouter();
-  const [isQueued, setIsQueued] = useState(false);
+  const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const stlUrl = artwork.stlUrl ?? FALLBACK_STL_URL;
@@ -40,11 +42,43 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
     weight: "36g",
   };
   const estimatedPrintTime = artwork.estimatedPrintTime ?? "1시간";
+  const isQueued = printStatus === "printing";
+
+  const handlePrintConfirm = () => {
+    setIsPrintModalOpen(false);
+
+    // Replace this mock result with the printer API response when it is connected.
+    const isPrinterConnected = true;
+    setPrintStatus(isPrinterConnected ? "printing" : "failed");
+  };
 
   return (
     <>
       <Header />
       <main className="box-border min-h-[calc(100vh-73px)] w-full overflow-x-hidden bg-[#fbfbfb] px-4 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-12 2xl:px-16">
+        {printStatus !== "idle" && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={[
+              "mx-auto mb-3 max-w-[1600px] text-center text-lg font-semibold leading-7",
+              printStatus === "printing" ? "text-[#5a7bff]" : "text-red-500",
+            ].join(" ")}
+          >
+            {printStatus === "printing" ? (
+              <>
+                <p>출력이 시작되었습니다.</p>
+                <p>마이페이지에서 출력 상황을 확인해 주세요!</p>
+              </>
+            ) : (
+              <>
+                <p>출력을 실패했습니다.</p>
+                <p>주의 사항을 확인해 주세요.</p>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="mx-auto max-w-[1600px]">
           <button
           type="button"
@@ -77,7 +111,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
               type="button"
               onClick={() => setIsPrintModalOpen(true)}
               disabled={isQueued}
-              className="mt-8 h-12 w-full rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition hover:bg-[#4a6ee5] active:scale-[0.99]"
+              className="mt-8 h-12 w-full rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition hover:bg-[#4a6ee5] active:scale-[0.99] disabled:cursor-default disabled:hover:bg-[#5a7bff]"
             >
               {isQueued ? "출력 대기 중" : "출력하기"}
             </button>
@@ -140,10 +174,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
         filamentColors={filamentColors}
         filamentUsage={filamentUsage}
         onClose={() => setIsPrintModalOpen(false)}
-        onConfirm={() => {
-          setIsPrintModalOpen(false);
-          setIsQueued(true);
-        }}
+        onConfirm={handlePrintConfirm}
       />
     </>
   );
