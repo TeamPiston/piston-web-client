@@ -34,7 +34,7 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 grid w-full grid-cols-3 items-center bg-white/85 px-12 py-4 backdrop-blur-sm border-b border-gray-200">
+      <header className="sticky top-0 z-20 grid h-[100px] w-full grid-cols-3 items-center border-b border-gray-200 bg-white/85 px-12 py-4 backdrop-blur-sm">
         <span className="justify-self-start">
           <PistonLogo />
         </span>

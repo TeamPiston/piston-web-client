@@ -55,31 +55,33 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   return (
     <>
       <Header />
-      <main className="box-border min-h-[calc(100vh-73px)] w-full overflow-x-hidden bg-[#fbfbfb] px-4 py-3 sm:px-8 sm:py-4 lg:h-[calc(100vh-73px)] lg:overflow-hidden lg:px-12 lg:py-4 2xl:px-16">
-        {printStatus !== "idle" && (
-          <div
-            role="status"
-            aria-live="polite"
-            className={[
-              "mx-auto mb-2 max-w-[1600px] text-center text-base font-semibold leading-6",
-              printStatus === "printing" ? "text-[#5a7bff]" : "text-red-500",
-            ].join(" ")}
-          >
-            {printStatus === "printing" ? (
-              <>
-                <p>출력이 시작되었습니다.</p>
-                <p>마이페이지에서 출력 상황을 확인해 주세요!</p>
-              </>
-            ) : (
-              <>
-                <p>출력을 실패했습니다.</p>
-                <p>주의 사항을 확인해 주세요.</p>
-              </>
-            )}
-          </div>
-        )}
+      <main className="box-border min-h-[calc(100vh-100px)] w-full overflow-x-hidden bg-[#fbfbfb] px-4 py-3 sm:px-8 sm:py-4 lg:h-[calc(100vh-100px)] lg:overflow-hidden lg:px-12 lg:pb-0 lg:pt-[52px] 2xl:px-16">
+        <div className="mx-auto h-12 max-w-[1600px]">
+          {printStatus !== "idle" && (
+            <div
+              role="status"
+              aria-live="polite"
+              className={[
+                "text-center text-base font-semibold leading-6",
+                printStatus === "printing" ? "text-[#5a7bff]" : "text-red-500",
+              ].join(" ")}
+            >
+              {printStatus === "printing" ? (
+                <>
+                  <p>출력이 시작되었습니다.</p>
+                  <p>마이페이지에서 출력 상황을 확인해 주세요!</p>
+                </>
+              ) : (
+                <>
+                  <p>출력을 실패했습니다.</p>
+                  <p>주의 사항을 확인해 주세요.</p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
-        <div className="mx-auto max-w-[1600px]">
+        <div className="mx-auto max-w-[1320px]">
           <button
           type="button"
           onClick={() => router.back()}
@@ -90,7 +92,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
           <ArrowLeft className="h-5 w-5" strokeWidth={2.4} aria-hidden="true" />
           </button>
 
-          <section className="mt-3 grid w-full gap-6 rounded-[28px] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:mt-4 sm:p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8 lg:p-5 2xl:gap-10">
+          <section className="mt-3 grid w-full gap-6 rounded-[28px] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:mt-4 sm:p-4 lg:mx-auto lg:h-[600px] lg:max-w-[1200px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8 lg:overflow-hidden lg:p-5 2xl:gap-10">
           <div className="flex min-w-0 flex-col">
             <ArtworkModelPreview url={stlUrl} />
 
