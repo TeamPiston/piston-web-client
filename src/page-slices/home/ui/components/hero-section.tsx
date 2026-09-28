@@ -1,7 +1,22 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/entities/session";
 import { PistonLogo } from "@/shared/ui";
 
 export function HeroSection() {
+  const { isLoggedIn } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => setIsMounted(true));
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
+
+  const startHref = isMounted && isLoggedIn ? "/create" : "/login";
+
   return (
     <section className="relative flex min-h-[620px] items-center justify-center overflow-hidden bg-gradient-to-br from-sky-100 via-white to-teal-50 px-6 py-24 text-center sm:min-h-[720px]">
       <div
@@ -26,7 +41,7 @@ export function HeroSection() {
           복잡한 3D 프린터 지식 없이 한 문장으로 아이디어를 출력해 보세요.
         </p>
         <Link
-          href="/create"
+          href={startHref}
           className="mt-14 inline-flex h-12 items-center justify-center rounded-xl border border-zinc-200 bg-white px-8 text-sm font-semibold text-zinc-800 shadow-sm transition hover:-translate-y-0.5 hover:border-[#5B7FFF] hover:text-[#4b6fff] hover:shadow-md"
         >
           시작하기
