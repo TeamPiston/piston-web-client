@@ -42,7 +42,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   return (
     <>
       <FeedHeader />
-      <main className="min-h-[calc(100vh-73px)] w-full bg-[#fbfbfb] px-4 py-8 sm:px-8 lg:px-16 lg:py-14">
+      <main className="box-border min-h-[calc(100vh-73px)] w-full bg-[#fbfbfb] px-4 py-8 sm:px-8 lg:px-16 lg:py-14">
         <div className="mx-auto max-w-[1200px]">
         <button
           type="button"
@@ -54,7 +54,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
           <ArrowLeft className="h-7 w-7" strokeWidth={2.4} aria-hidden="true" />
         </button>
 
-        <section className="mt-7 grid w-full gap-10 rounded-[32px] bg-white p-6 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:p-8 lg:h-[600px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12 lg:p-8">
+        <section className="mt-7 grid w-full gap-10 rounded-[32px] bg-white p-6 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12 lg:p-8">
           <div className="flex min-w-0 flex-col">
             <ArtworkModelPreview url={stlUrl} />
 
