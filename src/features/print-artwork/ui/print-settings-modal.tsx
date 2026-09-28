@@ -8,6 +8,7 @@ type PrintColorMode = "color" | "monochrome";
 
 interface PrintSettingsModalProps {
   isOpen: boolean;
+  isPrinterConnected?: boolean;
   estimatedPrintTime: string;
   filamentColors: FilamentColor[];
   filamentUsage: {
@@ -27,6 +28,7 @@ const printChecklist = [
 
 export function PrintSettingsModal({
   isOpen,
+  isPrinterConnected = false,
   estimatedPrintTime,
   filamentColors,
   filamentUsage,
@@ -97,22 +99,41 @@ export function PrintSettingsModal({
         <div className="mt-7 space-y-5">
           <fieldset>
             <legend className="mb-2 text-xs font-bold text-gray-950">출력할 프린터</legend>
-            <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-950">MAX4_02</p>
-                <p className="mt-1 truncate text-xs text-gray-400">
-                  QIDI X-Max 4 · 192.168.0.24 · 연결됨
-                </p>
+            {isPrinterConnected ? (
+              <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-950">MAX4_02</p>
+                  <p className="mt-1 truncate text-xs text-gray-400">
+                    QIDI X-Max 4 · 192.168.0.24 · 연결됨
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-gray-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-gray-950">연결된 프린터가 없어요</p>
+                  <p className="mt-1 truncate text-xs text-gray-400">
+                    프린터를 등록하면 바로 출력할 수 있어요.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-lg bg-[#5a7bff] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
+                >
+                  프린터 등록
+                </button>
+              </div>
+            )}
           </fieldset>
 
-          <fieldset>
+          <fieldset disabled={!isPrinterConnected} className={!isPrinterConnected ? "opacity-40" : undefined}>
             <legend className="mb-2 text-xs font-bold text-gray-950">출력 색상</legend>
             <div className="grid grid-cols-2 gap-2">
               <ColorModeOption
                 isSelected={colorMode === "color"}
+                disabled={!isPrinterConnected}
                 label="컬러"
                 description="여러 색 필라멘트 사용"
                 onSelect={() => setColorMode("color")}
@@ -129,6 +150,7 @@ export function PrintSettingsModal({
               </ColorModeOption>
               <ColorModeOption
                 isSelected={colorMode === "monochrome"}
+                disabled={!isPrinterConnected}
                 label="흑백"
                 description="흰색과 검정만 사용"
                 onSelect={() => setColorMode("monochrome")}
@@ -144,7 +166,10 @@ export function PrintSettingsModal({
             </p>
           </fieldset>
 
-          <div className="grid grid-cols-2 rounded-xl bg-gray-50 p-4 text-center">
+          <div className={[
+            "grid grid-cols-2 rounded-xl bg-gray-50 p-4 text-center",
+            !isPrinterConnected && "opacity-40",
+          ].filter(Boolean).join(" ")}>
             <div>
               <p className="text-[10px] font-medium text-gray-400">예상 출력 시간</p>
               <p className="mt-2 text-base font-semibold text-gray-950">{estimatedPrintTime}</p>
@@ -157,7 +182,10 @@ export function PrintSettingsModal({
             </div>
           </div>
 
-          <ol className="space-y-3 rounded-xl bg-gray-50 p-4">
+          <ol className={[
+            "space-y-3 rounded-xl bg-gray-50 p-4",
+            !isPrinterConnected && "opacity-40",
+          ].filter(Boolean).join(" ")}>
             {printChecklist.map((item, index) => (
               <li key={item} className="flex gap-3 text-xs font-medium text-gray-700">
                 <span className="font-semibold text-[#5a7bff]">{index + 1}.</span>
@@ -177,7 +205,8 @@ export function PrintSettingsModal({
             <button
               type="button"
               onClick={onConfirm}
-              className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
+              disabled={!isPrinterConnected}
+              className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               출력 시작하기
             </button>
@@ -191,6 +220,7 @@ export function PrintSettingsModal({
 interface ColorModeOptionProps {
   children: React.ReactNode;
   description: string;
+  disabled: boolean;
   isSelected: boolean;
   label: string;
   onSelect: () => void;
@@ -199,6 +229,7 @@ interface ColorModeOptionProps {
 function ColorModeOption({
   children,
   description,
+  disabled,
   isSelected,
   label,
   onSelect,
@@ -207,9 +238,11 @@ function ColorModeOption({
     <button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
       aria-pressed={isSelected}
       className={[
         "flex min-w-0 flex-col items-center justify-center rounded-lg px-2 py-3 text-center transition-colors",
+        disabled && "cursor-not-allowed",
         isSelected
           ? "bg-white shadow-sm ring-1 ring-gray-100"
           : "bg-gray-50 hover:bg-gray-100",

@@ -43,6 +43,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   };
   const estimatedPrintTime = artwork.estimatedPrintTime ?? "1시간";
   const isQueued = printStatus === "printing";
+  const isPrinterConnected = false;
 
   const handlePrintConfirm = () => {
     setIsPrintModalOpen(false);
@@ -172,6 +173,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
       </main>
       <PrintSettingsModal
         isOpen={isPrintModalOpen}
+        isPrinterConnected={isPrinterConnected}
         estimatedPrintTime={estimatedPrintTime}
         filamentColors={filamentColors}
         filamentUsage={filamentUsage}
