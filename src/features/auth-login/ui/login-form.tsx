@@ -17,8 +17,8 @@ export function LoginForm() {
   } = useLoginForm();
 
   return (
-    <div className="w-full bg-white p-8">
-      <p className="text-xs text-gray-500 mb-4 font-medium">아이디로 로그인</p>
+    <div className="box-border w-full bg-white p-5 sm:p-8">
+      <p className="mb-4 text-xs font-medium text-gray-500">아이디로 로그인</p>
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* 아이디 */}
         <div className="relative">
@@ -53,7 +53,7 @@ export function LoginForm() {
       </form>
 
       {/* 하단 부가 링크 */}
-      <div className="flex items-center justify-center gap-4 mt-6 text-[11px] text-gray-500 font-medium">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] font-medium text-gray-500">
         <Link href="/find-id" className="hover:text-gray-800 transition-colors">
           아이디 찾기
         </Link>

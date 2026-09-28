@@ -21,8 +21,8 @@ export function LikeButton({ className = "" }: LikeButtonProps) {
       <Image
         src={liked ? "/on.svg" : "/like.svg"}
         alt=""
-        width={21}
-        height={21}
+        width={30}
+        height={30}
         aria-hidden="true"
       />
     </button>

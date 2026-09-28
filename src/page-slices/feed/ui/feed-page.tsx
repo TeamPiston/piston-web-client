@@ -29,7 +29,7 @@ export default function FeedPage() {
 
         <main
           aria-busy={isLoading}
-          className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center px-8 py-8"
+          className="mx-auto flex w-full max-w-[1760px] flex-1 flex-col items-center px-4 py-6 sm:px-8 sm:py-8 2xl:px-12"
         >
           <FeedSearchInput value={query} onChange={setQuery} />
 
@@ -38,7 +38,7 @@ export default function FeedPage() {
               <div
                 aria-hidden={!isLoading}
                 className={[
-                  "col-start-1 row-start-1 grid w-full grid-cols-1 justify-items-center gap-8 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3",
+                  "col-start-1 row-start-1 grid w-full grid-cols-1 justify-items-center gap-6 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3 xl:gap-8 2xl:grid-cols-4",
                   isLoading ? "opacity-100" : "pointer-events-none opacity-0",
                 ].join(" ")}
               >
@@ -50,7 +50,7 @@ export default function FeedPage() {
               <div
                 aria-hidden={isLoading}
                 className={[
-                  "col-start-1 row-start-1 grid w-full grid-cols-1 justify-items-center gap-8 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3",
+                  "col-start-1 row-start-1 grid w-full grid-cols-1 justify-items-center gap-6 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3 xl:gap-8 2xl:grid-cols-4",
                   contentStateClass,
                 ].join(" ")}
               >

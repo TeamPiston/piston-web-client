@@ -14,7 +14,7 @@ export function ArtworkCard({ artwork, likeSlot }: ArtworkCardProps) {
   const detailHref = "/artwork/" + artwork.id;
 
   return (
-    <div className="flex h-[280px] w-[320px] flex-col justify-between rounded-[26px] bg-white/80 p-4 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm transition hover:shadow-md">
+    <div className="flex min-h-[280px] w-full max-w-[360px] flex-col justify-between rounded-[26px] bg-white/80 p-3 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm transition hover:shadow-md sm:p-4">
       <Link
         href={detailHref}
         aria-label={artwork.title + " 작품 상세 보기"}

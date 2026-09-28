@@ -47,7 +47,7 @@ export function ArtworkModelPreview({ url }: ArtworkModelPreviewProps) {
   return (
     <div
       ref={previewRef}
-      className="relative h-[280px] w-full overflow-hidden rounded-[22px] bg-[#f6f6f6] sm:h-[340px]"
+      className="relative aspect-[4/3] min-h-[280px] w-full overflow-hidden rounded-[22px] bg-[#f6f6f6] sm:min-h-[340px] lg:aspect-auto lg:h-[clamp(340px,32vw,560px)]"
     >
       <Canvas
         camera={{ fov: 42, near: 0.1, far: 200, position: [0, 14, 42] }}

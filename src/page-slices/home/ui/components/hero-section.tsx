@@ -17,7 +17,7 @@ export function HeroSection() {
         className="absolute left-1/2 top-1/2 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30 blur-3xl"
       />
 
-      <div className="relative z-10 flex max-w-3xl flex-col items-center">
+      <div className="relative z-10 flex w-full max-w-4xl flex-col items-center">
         <PistonLogo height={40} />
         <p className="mt-10 text-base font-semibold leading-8 text-zinc-700 sm:text-lg">
           PISTON은 AI 챗봇을 활용하여 자연어로 3D 프린팅을 쉽게 도와주는

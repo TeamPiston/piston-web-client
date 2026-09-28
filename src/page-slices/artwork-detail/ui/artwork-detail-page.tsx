@@ -42,26 +42,26 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   return (
     <>
       <FeedHeader />
-      <main className="box-border min-h-[calc(100vh-73px)] w-full bg-[#fbfbfb] px-4 py-8 sm:px-8 lg:px-16 lg:py-14">
-        <div className="mx-auto max-w-[1200px]">
-        <button
+      <main className="box-border min-h-[calc(100vh-73px)] w-full overflow-x-hidden bg-[#fbfbfb] px-4 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-12 2xl:px-16">
+        <div className="mx-auto max-w-[1600px]">
+          <button
           type="button"
           onClick={() => router.back()}
           aria-label="이전 페이지로 돌아가기"
           title="이전 페이지로 돌아가기"
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-gray-950 shadow-sm ring-1 ring-black/[0.04] transition hover:-translate-x-0.5 hover:shadow-md"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-gray-950 shadow-sm ring-1 ring-black/[0.04] transition hover:-translate-x-0.5 hover:shadow-md sm:h-16 sm:w-16"
         >
           <ArrowLeft className="h-7 w-7" strokeWidth={2.4} aria-hidden="true" />
-        </button>
+          </button>
 
-        <section className="mt-7 grid w-full gap-10 rounded-[32px] bg-white p-6 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12 lg:p-8">
+          <section className="mt-6 grid w-full gap-8 rounded-[32px] bg-white p-4 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:mt-7 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12 lg:p-8 2xl:gap-16">
           <div className="flex min-w-0 flex-col">
             <ArtworkModelPreview url={stlUrl} />
 
             <div className="mt-6 flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h1 className="max-w-[12ch] truncate text-lg font-semibold text-gray-950">
-                  {artwork.title.slice(0, 12)}
+                <h1 className="max-w-[20ch] truncate text-lg font-semibold text-gray-950 sm:text-xl">
+                  {artwork.title}
                 </h1>
                 <p className="mt-2 text-sm text-gray-400">
                   {artwork.author}(제작자)
@@ -87,7 +87,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
 
             <div className="mt-10">
               <p className="text-sm font-medium text-gray-950">필요한 필라멘트 색상</p>
-              <div className="mt-4 flex items-center gap-4">
+              <div className="mt-4 flex flex-wrap items-center gap-3 sm:gap-4">
                 {filamentColors.map((color) => (
                   <span
                     key={color.name}
@@ -100,7 +100,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
               </div>
             </div>
 
-            <div className="mt-10 grid grid-cols-[1fr_auto] items-end gap-6">
+            <div className="mt-10 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:gap-6">
               <div>
                 <p className="text-sm font-medium text-gray-950">필요한 필라멘트 사용량</p>
                 <p className="mt-3 text-xl font-semibold tracking-normal text-gray-950">
@@ -128,7 +128,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
               </p>
             </div>
           </div>
-        </section>
+          </section>
         </div>
       </main>
     </>

@@ -66,7 +66,7 @@ function FeatureRow({ feature }: { feature: FeatureItem }) {
     <section className="border-t border-zinc-100 bg-white/70">
       <div
         className={
-          "mx-auto grid min-h-[520px] w-full max-w-6xl items-center gap-12 px-6 py-20 sm:px-10 lg:grid-cols-2 lg:gap-20 lg:py-28 " +
+          "mx-auto grid min-h-[520px] w-full max-w-[1440px] items-center gap-12 px-6 py-20 sm:px-10 lg:grid-cols-2 lg:gap-20 lg:py-28 2xl:max-w-[1600px] " +
           (feature.reversed ? "lg:[&>div:first-child]:order-2" : "")
         }
       >

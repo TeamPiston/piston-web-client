@@ -11,7 +11,7 @@ const footerLinks = [
 export function FooterSection() {
   return (
     <footer className="border-t border-zinc-100 bg-[#fbfbfb] px-6 py-14 sm:px-10">
-      <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-[1fr_auto]">
+      <div className="mx-auto grid max-w-[1440px] gap-10 md:grid-cols-[1fr_auto] 2xl:max-w-[1600px]">
         <div>
           <PistonLogo height={22} />
           <p className="mt-4 text-sm font-extrabold text-zinc-900">
@@ -31,7 +31,7 @@ export function FooterSection() {
           ))}
         </nav>
       </div>
-      <div className="mx-auto mt-12 max-w-6xl border-t border-zinc-200 pt-8 text-xs font-medium text-zinc-400">
+      <div className="mx-auto mt-12 max-w-[1440px] border-t border-zinc-200 pt-8 text-xs font-medium text-zinc-400 2xl:max-w-[1600px]">
         © 2026 PISTON. All rights reserved.
       </div>
     </footer>

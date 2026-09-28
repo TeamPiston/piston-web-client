@@ -9,8 +9,8 @@ export function FindPwdForm() {
   const { email, setEmail, isSubmitted, handleSubmit } = useFindPwdForm();
 
   return (
-    <div className="w-full bg-white p-8">
-      <p className="text-xs text-gray-500 mb-2 font-medium">비밀번호 찾기</p>
+    <div className="box-border w-full bg-white p-5 sm:p-8">
+      <p className="mb-2 text-xs font-medium text-gray-500">비밀번호 찾기</p>
 
       <form onSubmit={handleSubmit} className="space-y-1">
         {!isSubmitted ? (
@@ -24,8 +24,8 @@ export function FindPwdForm() {
             />
           </div>
         ) : (
-          <div className="w-full h-12 px-4 rounded-xl bg-gray-100/80 border border-gray-200 flex items-center justify-between text-sm text-gray-700 animate-fadeIn">
-            <span>입력하신 이메일로 비밀번호가 전송되었습니다.</span>
+          <div className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-100/80 px-4 py-2 text-sm text-gray-700 animate-fadeIn">
+            <span className="min-w-0">입력하신 이메일로 비밀번호가 전송되었습니다.</span>
             <Check size={18} className="text-teal-500 stroke-[2.5]" />
           </div>
         )}
@@ -37,7 +37,7 @@ export function FindPwdForm() {
       </form>
 
       {/* 하단 부가 링크 */}
-      <div className="flex items-center justify-center gap-4 mt-6 text-[11px] text-gray-500 font-medium">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] font-medium text-gray-500">
         <Link href="/find-id" className="hover:text-gray-800 transition-colors">
           아이디 찾기
         </Link>

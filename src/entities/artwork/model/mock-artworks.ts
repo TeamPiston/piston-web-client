@@ -16,13 +16,13 @@ export const MOCK_ARTWORKS: Artwork[] = [
   {
     id: "3",
     title: "데스크 스탠드",
-    author: "정종윤",
+    author: "JJY",
     stlUrl: "/models/desk-stand.stl",
   },
   {
     id: "4",
     title: "미니 화분",
-    author: "41221",
+    author: "JJY",
     stlUrl: "/models/mini-planter.stl",
   },
   {

@@ -29,15 +29,15 @@ export default function ThreeDTestPage() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">3D 모델 랜더링 테스트</h1>
-        <p className="text-sm text-slate-400 mt-1">
+    <div className="flex min-h-screen w-full flex-col items-center justify-center overflow-x-hidden bg-slate-900 px-4 py-8 text-white sm:px-6 lg:px-10">
+      <div className="mb-6 max-w-3xl text-center">
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">3D 모델 랜더링 테스트</h1>
+        <p className="mt-1 text-sm text-slate-400">
           public/pencil-holder.stl 파일을 로드 중입니다.
         </p>
       </div>
 
-      <div className="w-full max-w-[900px] aspect-video border border-slate-700 rounded-xl overflow-hidden shadow-2xl bg-black">
+      <div className="h-[clamp(320px,65vh,760px)] w-full max-w-[1400px] overflow-hidden rounded-xl border border-slate-700 bg-black shadow-2xl">
         <StlViewer url="/pencil-holder.stl" />
       </div>
     </div>

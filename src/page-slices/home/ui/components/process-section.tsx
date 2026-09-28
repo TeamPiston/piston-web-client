@@ -24,7 +24,7 @@ const processSteps = [
 export function ProcessSection() {
   return (
     <section className="border-t border-zinc-100 bg-zinc-50 px-6 py-24 sm:px-10">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-[1440px] 2xl:max-w-[1600px]">
         <h2 className="text-center text-3xl font-extrabold text-zinc-950 sm:text-4xl">
           연결부터 출력까지, 네 단계면 끝나요
         </h2>

@@ -2,7 +2,7 @@ export function ArtworkCardSkeleton() {
   return (
     <div
       aria-hidden="true"
-      className="flex h-[280px] w-[320px] flex-col justify-between rounded-[26px] bg-white/80 p-4 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm"
+      className="flex min-h-[280px] w-full max-w-[360px] flex-col justify-between rounded-[26px] bg-white/80 p-3 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm sm:p-4"
     >
       <div className="flex flex-1 animate-pulse items-center justify-center rounded-[18px] border border-gray-100/50 bg-gray-50/80">
         <div className="h-20 w-20 rounded-[18px] bg-gray-200/80" />

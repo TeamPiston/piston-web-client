@@ -9,7 +9,7 @@ export function TermsAgreement() {
 
   return (
     <>
-      <div className="w-full max-w-[600px] bg-gray-50 border border-gray-100 p-7 rounded-sm text-sm leading-relaxed max-h-[488px] overflow-y-auto">
+      <div className="box-border max-h-[calc(100dvh-220px)] w-full max-w-[600px] overflow-y-auto rounded-sm border border-gray-100 bg-gray-50 p-5 text-sm leading-relaxed sm:max-h-[488px] sm:p-7">
         <p>이용약관</p>
 
         <br></br>
@@ -160,8 +160,8 @@ export function TermsAgreement() {
       </div>
 
       {/* 하단 동의 체크박스 및 다음 버튼 */}
-      <div className="w-full max-w-[500px] mt-6 flex flex-col items-start">
-        <label className="flex items-center gap-2 cursor-pointer select-none group">
+      <div className="mt-6 flex w-full max-w-[500px] flex-col items-start">
+        <label className="group flex cursor-pointer select-none items-center gap-2">
           <div
             className={`w-5 h-5 border rounded flex items-center justify-center transition-colors ${
               isChecked
