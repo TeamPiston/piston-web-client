@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ArtworkCard, ArtworkCardSkeleton, MOCK_ARTWORKS } from "@/entities/artwork";
 import { EmptyResult, FeedSearchInput, useFeedSearch } from "@/features/feed-search";
 import { LikeButton } from "@/features/like-artwork";
-import { FeedHeader } from "@/widgets/feed-header";
+import { Header } from "@/widgets/header";
 
 export default function FeedPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -25,7 +25,7 @@ export default function FeedPage() {
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
       <div className="flex min-h-screen w-full flex-col">
-        <FeedHeader />
+        <Header />
 
         <main
           aria-busy={isLoading}

@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { ArtworkDetail, FilamentColor } from "@/entities/artwork";
 import { LikeButton } from "@/features/like-artwork";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
-import { FeedHeader } from "@/widgets/feed-header";
+import { Header } from "@/widgets/header";
 
 interface ArtworkDetailPageProps {
   artwork: ArtworkDetail;
@@ -41,7 +41,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
 
   return (
     <>
-      <FeedHeader />
+      <Header />
       <main className="box-border min-h-[calc(100vh-73px)] w-full overflow-x-hidden bg-[#fbfbfb] px-4 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-12 2xl:px-16">
         <div className="mx-auto max-w-[1600px]">
           <button

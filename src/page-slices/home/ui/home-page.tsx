@@ -1,4 +1,4 @@
-import { HomeHeader } from "@/widgets/home-header";
+import { Header } from "@/widgets/header";
 import {
   CTASection,
   FeatureSection,
@@ -10,7 +10,7 @@ import {
 export default function Home() {
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb] text-[#171717]">
-      <HomeHeader />
+      <Header />
       <main>
         <HeroSection />
         <FeatureSection />
