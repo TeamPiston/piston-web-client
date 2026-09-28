@@ -3,6 +3,7 @@
 import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/entities/session";
 import { PistonLogo } from "@/shared/ui";
 
@@ -14,6 +15,13 @@ const navigationItems = [
 export function Header() {
   const pathname = usePathname();
   const { isLoggedIn, logout } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => setIsMounted(true));
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
 
   return (
     <header className="sticky top-0 z-20 grid w-full grid-cols-3 items-center bg-white/85 px-12 py-4 backdrop-blur-sm">
@@ -41,7 +49,7 @@ export function Header() {
         })}
       </nav>
 
-      {isLoggedIn ? (
+      {isMounted && isLoggedIn ? (
         <button
           type="button"
           onClick={logout}
