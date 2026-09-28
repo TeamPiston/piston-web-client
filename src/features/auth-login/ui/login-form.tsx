@@ -13,6 +13,7 @@ export function LoginForm() {
     setPassword,
     showPassword,
     togglePasswordVisibility,
+    error,
     handleSubmit,
   } = useLoginForm();
 
@@ -47,6 +48,12 @@ export function LoginForm() {
             {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
           </button>
         </div>
+
+        {error && (
+          <p role="alert" className="pt-1 text-xs font-medium text-red-500">
+            {error}
+          </p>
+        )}
 
         {/* 로그인 버튼 */}
         <Button type="submit">로그인</Button>

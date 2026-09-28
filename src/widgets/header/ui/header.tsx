@@ -13,7 +13,7 @@ const navigationItems = [
 
 export function Header() {
   const pathname = usePathname();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-20 flex w-full items-center justify-between gap-4 border-b border-gray-100 bg-white/85 px-4 py-3 backdrop-blur-sm sm:gap-6 sm:px-6 sm:py-4 lg:px-10 xl:px-12">
@@ -42,14 +42,15 @@ export function Header() {
       </nav>
 
       {isLoggedIn ? (
-        <Link
-          href="/mypage"
-          aria-label="마이페이지"
-          title="마이페이지"
+        <button
+          type="button"
+          onClick={logout}
+          aria-label="로그아웃"
+          title="로그아웃"
           className="shrink-0 text-gray-900 transition-colors hover:text-gray-600"
         >
           <CircleUserRound className="h-7 w-7 sm:h-8 sm:w-8" strokeWidth={1.25} />
-        </Link>
+        </button>
       ) : (
         <Link
           href="/login"
