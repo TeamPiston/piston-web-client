@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ArtworkDetail, FilamentColor } from "@/entities/artwork";
 import { LikeButton } from "@/features/like-artwork";
+import { PrintSettingsModal } from "@/features/print-artwork";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import { Header } from "@/widgets/header";
 
@@ -24,6 +25,7 @@ const FALLBACK_FILAMENT_COLORS: FilamentColor[] = [
 export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   const router = useRouter();
   const [isQueued, setIsQueued] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const stlUrl = artwork.stlUrl ?? FALLBACK_STL_URL;
   const description =
@@ -73,7 +75,8 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
 
             <button
               type="button"
-              onClick={() => setIsQueued(true)}
+              onClick={() => setIsPrintModalOpen(true)}
+              disabled={isQueued}
               className="mt-8 h-12 w-full rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition hover:bg-[#4a6ee5] active:scale-[0.99]"
             >
               {isQueued ? "출력 대기 중" : "출력하기"}
@@ -131,6 +134,17 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
           </section>
         </div>
       </main>
+      <PrintSettingsModal
+        isOpen={isPrintModalOpen}
+        estimatedPrintTime={estimatedPrintTime}
+        filamentColors={filamentColors}
+        filamentUsage={filamentUsage}
+        onClose={() => setIsPrintModalOpen(false)}
+        onConfirm={() => {
+          setIsPrintModalOpen(false);
+          setIsQueued(true);
+        }}
+      />
     </>
   );
 }
