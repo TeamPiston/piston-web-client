@@ -128,8 +128,8 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
             </button>
           </div>
 
-          <div className="flex min-w-0 flex-col justify-between py-1.5 lg:py-2">
-            <p className="max-h-[160px] overflow-y-auto text-xs leading-relaxed text-gray-950 lg:max-h-[180px]">
+          <div className="flex min-w-0 flex-col justify-between gap-5 py-1.5 lg:py-2">
+            <p className="max-h-[190px] overflow-y-auto text-[13px] font-normal leading-[1.75] text-gray-950">
               {description}
             </p>
 
@@ -151,7 +151,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
             <div className="my-auto grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 py-2">
               <div>
                 <p className="text-xs font-medium text-gray-950">필요한 필라멘트 사용량</p>
-                <p className="mt-1.5 text-base font-semibold tracking-normal text-gray-950 sm:text-lg">
+                <p className="mt-1.5 text-lg font-bold tracking-normal text-gray-950">
                   {filamentUsage.length}
                   <span className="px-2 text-gray-300">|</span>
                   {filamentUsage.weight}
@@ -171,7 +171,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
 
             <div className="pt-2">
               <p className="text-xs font-medium text-gray-950">예상 출력 시간</p>
-              <p className="mt-1.5 text-base font-semibold text-gray-950 sm:text-lg">
+              <p className="mt-1.5 text-lg font-bold text-gray-950">
                 {estimatedPrintTime}
               </p>
             </div>
