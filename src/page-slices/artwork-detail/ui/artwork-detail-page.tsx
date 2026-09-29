@@ -101,7 +101,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
           <ArrowLeft className="h-5 w-5" strokeWidth={2.4} aria-hidden="true" />
           </button>
 
-          <section className="mt-3 grid w-full gap-6 rounded-[28px] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:mt-4 sm:p-4 lg:mx-auto lg:h-[600px] lg:max-w-[1200px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8 lg:overflow-hidden lg:p-[28px] 2xl:gap-10">
+          <section className="mt-3 grid w-full gap-6 rounded-[28px] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:mt-4 sm:p-4 lg:mx-auto lg:h-[600px] lg:max-w-[1200px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8 lg:overflow-hidden lg:p-[28px] 2xl:grid-cols-[504px_504px] 2xl:gap-24">
           <div className="flex min-w-0 flex-col">
             <ArtworkModelPreview url={stlUrl} />
 
