@@ -43,12 +43,11 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   };
   const estimatedPrintTime = artwork.estimatedPrintTime ?? "1시간";
   const isQueued = printStatus === "printing";
-  const [isPrinterConnected] = useState(false);
+  const [isPrinterConnected] = useState(true);
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
     setIsPrintModalOpen(false);
 
-    // Keep the selected mode ready for the printer API request.
     void colorMode;
     setPrintStatus(isPrinterConnected ? "printing" : "failed");
   };
@@ -102,7 +101,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
           <ArrowLeft className="h-5 w-5" strokeWidth={2.4} aria-hidden="true" />
           </button>
 
-          <section className="mt-3 grid w-full gap-6 rounded-[28px] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:mt-4 sm:p-4 lg:mx-auto lg:h-[600px] lg:max-w-[1200px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8 lg:overflow-hidden lg:p-5 2xl:gap-10">
+          <section className="mt-3 grid w-full gap-6 rounded-[28px] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:mt-4 sm:p-4 lg:mx-auto lg:h-[600px] lg:max-w-[1200px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8 lg:overflow-hidden lg:p-[28px] 2xl:gap-10">
           <div className="flex min-w-0 flex-col">
             <ArtworkModelPreview url={stlUrl} />
 
@@ -129,14 +128,14 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
             </button>
           </div>
 
-          <div className="flex min-w-0 flex-col justify-between">
-            <p className="max-h-[180px] overflow-y-auto pr-2 text-xs leading-5 text-gray-950 lg:max-h-[190px]">
+          <div className="flex min-w-0 flex-col justify-between py-1.5 lg:py-2">
+            <p className="max-h-[160px] overflow-y-auto text-xs leading-relaxed text-gray-950 lg:max-h-[180px]">
               {description}
             </p>
 
-            <div className="mt-5">
+            <div className="my-auto py-2">
               <p className="text-xs font-medium text-gray-950">필요한 필라멘트 색상</p>
-              <div className="mt-3 flex flex-wrap items-center gap-3 sm:gap-4">
+              <div className="mt-2.5 flex flex-wrap items-center gap-3">
                 {filamentColors.map((color) => (
                   <span
                     key={color.name}
@@ -149,10 +148,10 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:gap-6">
+            <div className="my-auto grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 py-2">
               <div>
                 <p className="text-xs font-medium text-gray-950">필요한 필라멘트 사용량</p>
-                <p className="mt-2 text-lg font-semibold tracking-normal text-gray-950">
+                <p className="mt-1.5 text-base font-semibold tracking-normal text-gray-950 sm:text-lg">
                   {filamentUsage.length}
                   <span className="px-2 text-gray-300">|</span>
                   {filamentUsage.weight}
@@ -164,15 +163,15 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
                 download
                 aria-label="3D 모델 다운로드"
                 title="3D 모델 다운로드"
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-[#f0f0f0] text-gray-950 transition hover:bg-[#e5e5e5]"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f0f0f0] text-gray-950 transition hover:bg-[#e5e5e5]"
               >
                 <Download className="h-5 w-5" aria-hidden="true" />
               </a>
             </div>
 
-            <div className="mt-5">
+            <div className="pt-2">
               <p className="text-xs font-medium text-gray-950">예상 출력 시간</p>
-              <p className="mt-2 text-lg font-semibold text-gray-950">
+              <p className="mt-1.5 text-base font-semibold text-gray-950 sm:text-lg">
                 {estimatedPrintTime}
               </p>
             </div>

@@ -52,10 +52,10 @@ export function ArtworkModelPreview({ url }: ArtworkModelPreviewProps) {
     <div
       ref={previewRef}
       className={[
-        "relative overflow-hidden bg-[#f6f6f6]",
+        "relative overflow-hidden bg-[#f5f5f5]",
         isFullscreen
           ? "h-full w-full rounded-none"
-          : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[clamp(360px,39vh,420px)]",
+          : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
       ].join(" ")}
     >
       <Canvas
