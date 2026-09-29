@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { SessionContext, type SessionContextValue } from "./context";
 import type { UserProfile } from "./context";
-import { SESSION_STORAGE_KEY } from "./config";
+import { AUTH_EXPIRED_EVENT, SESSION_STORAGE_KEY } from "./config";
 
 const LEGACY_MOCK_USER: UserProfile = {
   id: "admin",
@@ -48,6 +48,13 @@ function getStoredUser(): UserProfile | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(getStoredUser);
+
+  useEffect(() => {
+    const handleAuthExpired = () => setUser(null);
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, []);
 
   const login = (nextUser: UserProfile) => {
     if (typeof window !== "undefined") {
