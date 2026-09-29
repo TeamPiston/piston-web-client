@@ -16,7 +16,7 @@ interface PrintSettingsModalProps {
     weight: string;
   };
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (settings: { colorMode: string }) => void;
 }
 
 const printChecklist = [
@@ -204,7 +204,7 @@ export function PrintSettingsModal({
             </button>
             <button
               type="button"
-              onClick={onConfirm}
+              onClick={() => onConfirm({ colorMode })}
               disabled={!isPrinterConnected}
               className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300"
             >

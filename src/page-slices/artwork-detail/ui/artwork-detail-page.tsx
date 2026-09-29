@@ -43,14 +43,23 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   };
   const estimatedPrintTime = artwork.estimatedPrintTime ?? "1시간";
   const isQueued = printStatus === "printing";
-  const isPrinterConnected = false;
+  const [isPrinterConnected] = useState(false);
 
-  const handlePrintConfirm = () => {
+  const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
     setIsPrintModalOpen(false);
 
-    // Replace this mock result with the printer API response when it is connected.
-    const isPrinterConnected = true;
+    // Keep the selected mode ready for the printer API request.
+    void colorMode;
     setPrintStatus(isPrinterConnected ? "printing" : "failed");
+  };
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/feed");
   };
 
   return (
@@ -85,7 +94,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
         <div className="mx-auto max-w-[1320px]">
           <button
           type="button"
-          onClick={() => router.back()}
+          onClick={handleBack}
           aria-label="이전 페이지로 돌아가기"
           title="이전 페이지로 돌아가기"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-gray-950 shadow-sm ring-1 ring-black/[0.04] transition hover:-translate-x-0.5 hover:shadow-md sm:h-12 sm:w-12"

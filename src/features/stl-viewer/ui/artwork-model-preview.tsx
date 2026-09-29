@@ -36,18 +36,27 @@ export function ArtworkModelPreview({ url }: ArtworkModelPreviewProps) {
   const handleFullscreen = async () => {
     if (!previewRef.current) return;
 
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-      return;
-    }
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        return;
+      }
 
-    await previewRef.current.requestFullscreen();
+      await previewRef.current.requestFullscreen();
+    } catch {
+      setIsFullscreen(false);
+    }
   };
 
   return (
     <div
       ref={previewRef}
-      className="relative aspect-[4/3] min-h-[280px] w-full overflow-hidden rounded-[22px] bg-[#f6f6f6] sm:min-h-[340px] lg:aspect-auto lg:h-[clamp(360px,39vh,420px)]"
+      className={[
+        "relative overflow-hidden bg-[#f6f6f6]",
+        isFullscreen
+          ? "h-full w-full rounded-none"
+          : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[clamp(360px,39vh,420px)]",
+      ].join(" ")}
     >
       <Canvas
         camera={{ fov: 42, near: 0.1, far: 200, position: [0, 14, 42] }}

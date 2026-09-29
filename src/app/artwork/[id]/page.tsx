@@ -3,6 +3,7 @@ import {
   getMockArtworkDetailById,
   MOCK_ARTWORK_DETAILS,
 } from "@/entities/artwork";
+import { ProtectedRoute } from "@/features/auth-guard";
 import ArtworkDetailPage from "@/pages/artwork-detail";
 
 interface ArtworkDetailRouteProps {
@@ -23,5 +24,9 @@ export default async function ArtworkDetailRoute({
     notFound();
   }
 
-  return <ArtworkDetailPage artwork={artwork} />;
+  return (
+    <ProtectedRoute>
+      <ArtworkDetailPage artwork={artwork} />
+    </ProtectedRoute>
+  );
 }
