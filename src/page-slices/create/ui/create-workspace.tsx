@@ -124,6 +124,7 @@ export default function CreateWorkspaceEntry() {
 function CreateWorkspace() {
   const [draft, setDraft] = useState("");
   const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
+  const selectedFileName = attachedImage?.name ?? null;
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
   const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
@@ -175,8 +176,8 @@ function CreateWorkspace() {
       return;
     }
 
-    const userContent = attachedImage
-      ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${attachedImage.name}`
+    const userContent = attachedImage && selectedFileName
+      ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${selectedFileName}`
       : prompt;
 
     setMessages((currentMessages) => [
