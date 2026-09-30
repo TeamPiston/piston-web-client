@@ -8,9 +8,11 @@ import {
   Move3d,
   Plus,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
+  useEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -42,6 +44,18 @@ interface DesignVersion {
   meta: string;
   stlUrl: string;
 }
+
+interface ChatHistory {
+  id: string;
+  title: string;
+}
+
+const INITIAL_CHAT_HISTORIES: ChatHistory[] = [
+  { id: "pencil-holder", title: "육각형 연필꽂이" },
+  { id: "cable-clip", title: "케이블 정리 클립" },
+  { id: "monitor-stand", title: "책상 모니터 받침대" },
+  { id: "plant-tray", title: "화분 받침 트레이" },
+];
 
 const MOCK_VERSIONS: DesignVersion[] = [
   {
@@ -102,6 +116,10 @@ export default function CreateWorkspaceEntry() {
 
 function CreateWorkspace() {
   const [draft, setDraft] = useState("");
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
+  const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedFileName, setSelectedFileName] = useState("");
@@ -109,9 +127,18 @@ function CreateWorkspace() {
   const [versions, setVersions] = useState<DesignVersion[]>([]);
   const [cameraDistance, setCameraDistance] = useState(42);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const historyTitleInputRef = useRef<HTMLInputElement>(null);
+  const isCancelingHistoryEditRef = useRef(false);
 
   const selectedVersion =
     versions.find((version) => version.id === selectedVersionId) ?? MOCK_VERSIONS[2];
+
+  useEffect(() => {
+    if (editingHistoryId) {
+      historyTitleInputRef.current?.focus();
+      historyTitleInputRef.current?.select();
+    }
+  }, [editingHistoryId]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -164,12 +191,86 @@ function CreateWorkspace() {
     );
   };
 
+  const handleNewChat = () => {
+    setDraft("");
+    setEditingHistoryId(null);
+    setIsGenerated(false);
+    setMessages([]);
+    setSelectedFileName("");
+    setSelectedVersionId("v3");
+    setVersions([]);
+    setCameraDistance(42);
+    setIsHistoryOpen(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleStartHistoryEdit = (history: ChatHistory) => {
+    isCancelingHistoryEditRef.current = false;
+    setEditingHistoryId(history.id);
+    setEditingHistoryTitle(history.title);
+  };
+
+  const handleSaveHistoryTitle = () => {
+    if (!editingHistoryId) {
+      return;
+    }
+
+    if (isCancelingHistoryEditRef.current) {
+      isCancelingHistoryEditRef.current = false;
+      return;
+    }
+
+    const nextTitle = editingHistoryTitle.trim();
+    if (nextTitle) {
+      setChatHistories((currentHistories) =>
+        currentHistories.map((history) =>
+          history.id === editingHistoryId ? { ...history, title: nextTitle } : history,
+        ),
+      );
+    }
+
+    setEditingHistoryId(null);
+    setEditingHistoryTitle("");
+  };
+
+  const handleHistoryTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleSaveHistoryTitle();
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      isCancelingHistoryEditRef.current = true;
+      setEditingHistoryId(null);
+      setEditingHistoryTitle("");
+    }
+  };
+
   return (
     <>
       <Header />
-      <main className="min-h-[calc(100vh-100px)] overflow-hidden bg-white xl:h-[calc(100vh-100px)]">
+      <main className="relative min-h-[calc(100vh-100px)] overflow-hidden bg-white xl:h-[calc(100vh-100px)]">
         <div className="grid min-h-[calc(100vh-100px)] xl:h-full xl:grid-cols-[360px_minmax(0,1fr)_360px]">
-          <aside className="hidden border-r border-gray-200 bg-white xl:block" aria-hidden="true" />
+          <aside className="relative hidden border-r border-gray-200 bg-white xl:block">
+            {isHistoryOpen && (
+              <HistorySidebar
+                chatHistories={chatHistories}
+                editingHistoryId={editingHistoryId}
+                editingHistoryTitle={editingHistoryTitle}
+                historyTitleInputRef={historyTitleInputRef}
+                onClose={() => setIsHistoryOpen(false)}
+                onEditTitle={handleStartHistoryEdit}
+                onSaveTitle={handleSaveHistoryTitle}
+                onTitleChange={setEditingHistoryTitle}
+                onTitleKeyDown={handleHistoryTitleKeyDown}
+                onNewChat={handleNewChat}
+              />
+            )}
+          </aside>
 
           <section className="grid min-h-[calc(100vh-100px)] min-w-0 lg:grid-cols-2">
             <ChatPanel
@@ -182,6 +283,7 @@ function CreateWorkspace() {
               onInputKeyDown={handleInputKeyDown}
               onSubmit={handleSubmit}
               selectedFileName={selectedFileName}
+              onToggleHistory={() => setIsHistoryOpen((isOpen) => !isOpen)}
             />
             <PreviewPanel
               cameraDistance={cameraDistance}
@@ -198,6 +300,25 @@ function CreateWorkspace() {
             versions={versions}
           />
         </div>
+
+        {isHistoryOpen && (
+          <div className="absolute inset-0 z-30 bg-black/10 xl:hidden">
+            <div className="h-full w-[min(360px,calc(100vw-28px))]">
+              <HistorySidebar
+                chatHistories={chatHistories}
+                editingHistoryId={editingHistoryId}
+                editingHistoryTitle={editingHistoryTitle}
+                historyTitleInputRef={historyTitleInputRef}
+                onClose={() => setIsHistoryOpen(false)}
+                onEditTitle={handleStartHistoryEdit}
+                onSaveTitle={handleSaveHistoryTitle}
+                onTitleChange={setEditingHistoryTitle}
+                onTitleKeyDown={handleHistoryTitleKeyDown}
+                onNewChat={handleNewChat}
+              />
+            </div>
+          </div>
+        )}
       </main>
     </>
   );
@@ -213,6 +334,7 @@ interface ChatPanelProps {
   onInputKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   selectedFileName: string;
+  onToggleHistory: () => void;
 }
 
 function ChatPanel({
@@ -225,11 +347,13 @@ function ChatPanel({
   onInputKeyDown,
   onSubmit,
   selectedFileName,
+  onToggleHistory,
 }: ChatPanelProps) {
   return (
     <section className="relative flex min-h-[720px] min-w-0 flex-col border-r border-gray-200 bg-white px-6 pb-[52px] pt-20 xl:min-h-0 xl:px-[60px]">
       <button
         type="button"
+        onClick={onToggleHistory}
         aria-label="대화 메뉴 열기"
         title="대화 메뉴"
         className="absolute left-6 top-6 flex h-12 w-12 items-center justify-center rounded-lg border border-gray-300 text-gray-950 transition-colors hover:bg-gray-50"
@@ -316,6 +440,94 @@ function ChatPanel({
         </form>
       </div>
     </section>
+  );
+}
+
+interface HistorySidebarProps {
+  chatHistories: ChatHistory[];
+  editingHistoryId: string | null;
+  editingHistoryTitle: string;
+  historyTitleInputRef: React.RefObject<HTMLInputElement | null>;
+  onClose: () => void;
+  onEditTitle: (history: ChatHistory) => void;
+  onNewChat: () => void;
+  onSaveTitle: () => void;
+  onTitleChange: (value: string) => void;
+  onTitleKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
+}
+
+function HistorySidebar({
+  chatHistories,
+  editingHistoryId,
+  editingHistoryTitle,
+  historyTitleInputRef,
+  onClose,
+  onEditTitle,
+  onNewChat,
+  onSaveTitle,
+  onTitleChange,
+  onTitleKeyDown,
+}: HistorySidebarProps) {
+  return (
+    <aside className="flex h-full w-full flex-col rounded-r-2xl bg-white px-5 py-6 shadow-lg">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-bold text-gray-950">채팅</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="채팅 히스토리 닫기"
+          title="닫기"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={onNewChat}
+        className="mt-6 flex h-11 items-center justify-center gap-2 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
+      >
+        <Plus className="h-4 w-4" aria-hidden="true" />
+        새 채팅
+      </button>
+
+      <p className="mt-8 text-xs font-semibold text-gray-400">이전 채팅</p>
+      <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto">
+        {chatHistories.map((history) => {
+          const isEditing = editingHistoryId === history.id;
+
+          return (
+            <div
+              key={history.id}
+              role="button"
+              tabIndex={0}
+              onDoubleClick={() => onEditTitle(history)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !isEditing) {
+                  onEditTitle(history);
+                }
+              }}
+              className="rounded-lg px-3 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              {isEditing ? (
+                <input
+                  ref={historyTitleInputRef}
+                  value={editingHistoryTitle}
+                  onChange={(event) => onTitleChange(event.target.value)}
+                  onBlur={onSaveTitle}
+                  onKeyDown={onTitleKeyDown}
+                  aria-label="채팅 제목 수정"
+                  className="w-full rounded border border-[#5a7bff] bg-white px-2 py-1 text-sm text-gray-950 outline-none"
+                />
+              ) : (
+                <span className="block truncate">{history.title}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </aside>
   );
 }
 
