@@ -122,14 +122,14 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
               type="button"
               onClick={() => setIsPrintModalOpen(true)}
               disabled={isQueued}
-              className="mt-5 h-11 w-full rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition hover:bg-[#4a6ee5] active:scale-[0.99] disabled:cursor-default disabled:hover:bg-[#5a7bff]"
+              className="mt-10 h-11 w-full rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition hover:bg-[#4a6ee5] active:scale-[0.99] disabled:cursor-default disabled:hover:bg-[#5a7bff]"
             >
               {isQueued ? "출력 대기 중" : "출력하기"}
             </button>
           </div>
 
           <div className="flex min-w-0 flex-col justify-start gap-7 py-1">
-            <div className="min-h-[245px]">
+            <div className="min-h-[250px]">
               <p className="h-full max-h-[190px] overflow-y-auto text-[13px] leading-[1.75] text-gray-950 font-normal">
                 {description}
               </p>
