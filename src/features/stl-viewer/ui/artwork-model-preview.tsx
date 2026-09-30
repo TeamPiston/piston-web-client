@@ -17,10 +17,16 @@ function StlMesh({ url }: { url: string }) {
 }
 
 interface ArtworkModelPreviewProps {
+  cameraDistance?: number;
+  variant?: "detail" | "create";
   url: string;
 }
 
-export function ArtworkModelPreview({ url }: ArtworkModelPreviewProps) {
+export function ArtworkModelPreview({
+  cameraDistance = 42,
+  url,
+  variant = "detail",
+}: ArtworkModelPreviewProps) {
   const previewRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -55,11 +61,14 @@ export function ArtworkModelPreview({ url }: ArtworkModelPreviewProps) {
         "relative overflow-hidden bg-[#f5f5f5]",
         isFullscreen
           ? "h-full w-full rounded-none"
-          : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
+          : variant === "create"
+            ? "h-full w-full rounded-[28px]"
+            : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
       ].join(" ")}
     >
       <Canvas
-        camera={{ fov: 42, near: 0.1, far: 200, position: [0, 14, 42] }}
+        key={cameraDistance}
+        camera={{ fov: 42, near: 0.1, far: 200, position: [0, 14, cameraDistance] }}
         shadows
       >
         <ambientLight intensity={0.75} />
