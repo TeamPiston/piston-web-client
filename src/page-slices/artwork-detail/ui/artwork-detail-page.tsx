@@ -128,14 +128,14 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
             </button>
           </div>
 
-          <div className="flex min-w-0 flex-col justify-between gap-5 py-1.5 lg:py-2">
-            <p className="max-h-[190px] overflow-y-auto text-[13px] font-normal leading-[1.75] text-gray-950">
+          <div className="flex min-w-0 flex-col gap-6 py-2">
+            <p className="max-h-[160px] min-h-[70px] overflow-y-auto text-[13px] leading-[1.75] text-gray-950 font-normal">
               {description}
             </p>
 
-            <div className="my-auto py-2">
+            <div className="flex flex-col gap-3">
               <p className="text-xs font-medium text-gray-950">필요한 필라멘트 색상</p>
-              <div className="mt-2.5 flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 {filamentColors.map((color) => (
                   <span
                     key={color.name}
@@ -148,10 +148,10 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
               </div>
             </div>
 
-            <div className="my-auto grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 py-2">
-              <div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
+              <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium text-gray-950">필요한 필라멘트 사용량</p>
-                <p className="mt-1.5 text-lg font-bold tracking-normal text-gray-950">
+                <p className="text-lg font-bold tracking-normal text-gray-950">
                   {filamentUsage.length}
                   <span className="px-2 text-gray-300">|</span>
                   {filamentUsage.weight}
@@ -169,9 +169,9 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
               </a>
             </div>
 
-            <div className="pt-2">
+            <div className="flex flex-col gap-2">
               <p className="text-xs font-medium text-gray-950">예상 출력 시간</p>
-              <p className="mt-1.5 text-lg font-bold text-gray-950">
+              <p className="text-lg font-bold text-gray-950">
                 {estimatedPrintTime}
               </p>
             </div>
