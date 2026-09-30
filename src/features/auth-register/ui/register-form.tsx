@@ -33,15 +33,15 @@ export function RegisterForm() {
   } = useRegisterForm();
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-[500px] space-y-5 text-sm">
+    <form onSubmit={handleSubmit} className="box-border w-full max-w-[500px] space-y-5 text-sm">
       <div className="flex flex-col gap-1.5">
-        <div className="flex justify-between items-center">
-          <label className="font-semibold text-gray-800">이메일</label>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <label className="font-medium text-[#171717]">이메일</label>
           {emailTouched && !emailValid && email.length > 0 && (
             <span className="text-[11px] text-red-500 font-medium">올바른 이메일 형식이 아닙니다.</span>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 gap-2">
           <input
             type="email"
             placeholder="예: s25045@gsm.hs.kr"
@@ -73,13 +73,13 @@ export function RegisterForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className="flex justify-between items-center">
-          <label className="font-semibold text-gray-800">인증번호</label>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <label className="font-medium text-[#171717]">인증번호</label>
           {authError && (
             <span className="text-[11px] text-red-500 font-medium">올바른 인증번호가 아닙니다.</span>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 gap-2">
           <div className="relative flex-1">
             <input
               type="text"
@@ -113,8 +113,8 @@ export function RegisterForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className="flex justify-between items-center">
-          <label className="font-semibold text-gray-800">아이디 - 4자 이상</label>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <label className="font-medium text-[#171717]">아이디 - 4자 이상</label>
           {idTouched && !idValid && id.length > 0 && (
             <span className="text-[11px] text-red-500 font-medium">올바른 아이디 형식이 아닙니다.</span>
           )}
@@ -143,8 +143,8 @@ export function RegisterForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className="flex justify-between items-center">
-          <label className="font-semibold text-gray-800">비밀번호 - 4자 이상</label>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <label className="font-medium text-[#171717]">비밀번호 - 4자 이상</label>
           {passwordTouched && !passwordValid && password.length > 0 && (
             <span className="text-[11px] text-red-500 font-medium">올바른 비밀번호 형식이 아닙니다.</span>
           )}

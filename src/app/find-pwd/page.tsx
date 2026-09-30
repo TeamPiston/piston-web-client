@@ -1,1 +1,1 @@
-export { FindPwdPage as default } from "@/pages/find-pwd";
+export { default } from "@/pages/find-pwd";

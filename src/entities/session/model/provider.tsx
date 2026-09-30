@@ -1,32 +1,81 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { SessionContext, type SessionContextValue } from "./context";
-import { SESSION_STORAGE_KEY } from "./config";
+import type { UserProfile } from "./context";
+import { AUTH_EXPIRED_EVENT, SESSION_STORAGE_KEY } from "./config";
+
+const LEGACY_MOCK_USER: UserProfile = {
+  id: "admin",
+  email: "admin@example.com",
+  name: "관리자",
+};
+
+function isUserProfile(value: unknown): value is UserProfile {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.email === "string" &&
+    typeof candidate.name === "string"
+  );
+}
+
+function getStoredUser(): UserProfile | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storedSession = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (storedSession === "true") {
+    return LEGACY_MOCK_USER;
+  }
+
+  if (!storedSession) {
+    return null;
+  }
+
+  try {
+    const parsedSession: unknown = JSON.parse(storedSession);
+    return isUserProfile(parsedSession) ? parsedSession : null;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return window.localStorage.getItem(SESSION_STORAGE_KEY) === "true";
-  });
+  const [user, setUser] = useState<UserProfile | null>(getStoredUser);
 
-  const login = () => {
+  useEffect(() => {
+    const handleAuthExpired = () => setUser(null);
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, []);
+
+  const login = (nextUser: UserProfile) => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(SESSION_STORAGE_KEY, "true");
+      window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser));
     }
-    setIsLoggedIn(true);
+    setUser(nextUser);
   };
 
   const logout = () => {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(SESSION_STORAGE_KEY);
     }
-    setIsLoggedIn(false);
+    setUser(null);
   };
 
-  const value: SessionContextValue = { isLoggedIn, login, logout };
+  const value: SessionContextValue = {
+    isLoggedIn: user !== null,
+    user,
+    login,
+    logout,
+  };
 
   return (
     <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

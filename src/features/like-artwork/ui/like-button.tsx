@@ -1,9 +1,13 @@
 "use client";
 
-import { Heart } from "lucide-react";
+import Image from "next/image";
 import { useLikeArtwork } from "../model/use-like-artwork";
 
-export function LikeButton() {
+interface LikeButtonProps {
+  className?: string;
+}
+
+export function LikeButton({ className = "" }: LikeButtonProps) {
   const { liked, toggleLike } = useLikeArtwork();
 
   return (
@@ -11,14 +15,15 @@ export function LikeButton() {
       type="button"
       onClick={toggleLike}
       aria-pressed={liked}
-      aria-label="찜하기"
-      className="flex h-6 w-6 shrink-0 items-center justify-center text-gray-300 transition hover:text-gray-500"
+      aria-label={liked ? "찜하기 취소" : "찜하기"}
+      className={"flex h-7 w-7 shrink-0 items-center justify-center transition-opacity hover:opacity-75 " + className}
     >
-      <Heart
-        className="h-4 w-4"
-        strokeWidth={2}
-        fill={liked ? "#5A7BFF" : "none"}
-        color={liked ? "#5A7BFF" : "currentColor"}
+      <Image
+        src={liked ? "/on.svg" : "/like.svg"}
+        alt=""
+        width={30}
+        height={30}
+        aria-hidden="true"
       />
     </button>
   );

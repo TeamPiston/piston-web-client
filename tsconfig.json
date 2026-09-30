@@ -19,7 +19,16 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@/pages/create": ["./src/page-slices/create/ui/create-page.tsx"],
+      "@/pages/feed": ["./src/page-slices/feed/ui/feed-page.tsx"],
+      "@/pages/find-id": ["./src/page-slices/find-id/ui/find-id-page.tsx"],
+      "@/pages/find-pwd": ["./src/page-slices/find-pwd/ui/find-pwd-page.tsx"],
+      "@/pages/home": ["./src/page-slices/home/ui/home-page.tsx"],
+      "@/pages/artwork-detail": ["./src/page-slices/artwork-detail/ui/artwork-detail-page.tsx"],
+      "@/pages/login": ["./src/page-slices/login/ui/login-page.tsx"],
+      "@/pages/register": ["./src/page-slices/register/ui/register-page.tsx"],
+      "@/pages/register-form": ["./src/page-slices/register-form/ui/register-form-page.tsx"]
     }
   },
   "include": [
