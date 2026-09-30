@@ -22,7 +22,9 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import type { FilamentColor } from "@/entities/artwork";
 import { useAuth } from "@/entities/session";
+import { PrintSettingsModal } from "@/features/print-artwork";
 import {
   ArtworkModelPreview,
   type ArtworkModelDimensions,
@@ -35,6 +37,20 @@ import { Header, LoginRequiredModal } from "@/widgets/header";
 const subscribeToHydration = () => () => {};
 const getClientHydrationSnapshot = () => true;
 const getServerHydrationSnapshot = () => false;
+
+const CREATE_FILAMENT_COLORS: FilamentColor[] = [
+  { name: "빨강", value: "#f04444" },
+  { name: "주황", value: "#ff7855" },
+  { name: "노랑", value: "#ffd166" },
+  { name: "초록", value: "#0dcc9a" },
+];
+
+const CREATE_FILAMENT_USAGE = {
+  length: "12m",
+  weight: "36g",
+};
+
+const CREATE_ESTIMATED_PRINT_TIME = "1시간";
 
 type MessageRole = "assistant" | "user";
 
@@ -269,7 +285,9 @@ function CreateWorkspace() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [isPrintBlocked, setIsPrintBlocked] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [printNotice, setPrintNotice] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState("v3");
   const [versions, setVersions] = useState<DesignVersion[]>([]);
   const [currentModelParams, setCurrentModelParams] = useState<ResolvedArtworkModelParams>(
@@ -306,6 +324,15 @@ function CreateWorkspace() {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
     textarea.style.overflowY = textarea.scrollHeight > 200 ? "auto" : "hidden";
   }, [draft]);
+
+  useEffect(() => {
+    if (!printNotice) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setPrintNotice(null), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [printNotice]);
 
   const appendMockResponse = (userContent: string, prompt: string) => {
     const normalizedPrompt = prompt.toLowerCase();
@@ -348,6 +375,7 @@ function CreateWorkspace() {
     if (hasCopyrightIssue) {
       setIsGenerated(false);
       setIsPrintBlocked(false);
+      setIsPrintModalOpen(false);
       setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
       return;
     }
@@ -402,6 +430,21 @@ function CreateWorkspace() {
     setSelectedVersionId(CORRECTED_VERSION_ID);
     setCurrentModelParams(resolveModelParams(MOCK_CORRECTED_VERSION));
     setIsGenerated(true);
+  };
+
+  const handlePrintOpen = () => {
+    if (!isGenerated || isPrintBlocked) {
+      return;
+    }
+
+    setIsPrintModalOpen(true);
+  };
+
+  const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
+    setIsPrintModalOpen(false);
+    setPrintNotice("출력이 시작되었습니다. 마이페이지에서 출력 상황을 확인해 주세요!");
+
+    void colorMode;
   };
 
   const handleVersionSelect = (versionId: string) => {
@@ -470,8 +513,10 @@ function CreateWorkspace() {
     setEditingHistoryId(null);
     setIsGenerated(false);
     setIsPrintBlocked(false);
+    setIsPrintModalOpen(false);
     setMessages([]);
     setAttachedImage(null);
+    setPrintNotice(null);
     setSelectedVersionId("v3");
     setVersions([]);
     setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
@@ -570,6 +615,7 @@ function CreateWorkspace() {
               isGenerated={isGenerated}
               isPrintBlocked={isPrintBlocked}
               modelParams={currentModelParams}
+              onPrint={handlePrintOpen}
               onZoom={handleZoom}
             />
           </section>
@@ -601,6 +647,24 @@ function CreateWorkspace() {
           </div>
         )}
       </main>
+      {printNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed left-1/2 top-24 z-40 -translate-x-1/2 rounded-full bg-gray-950 px-5 py-3 text-sm font-medium text-white shadow-lg"
+        >
+          {printNotice}
+        </div>
+      )}
+      <PrintSettingsModal
+        isOpen={isPrintModalOpen}
+        isPrinterConnected
+        estimatedPrintTime={CREATE_ESTIMATED_PRINT_TIME}
+        filamentColors={CREATE_FILAMENT_COLORS}
+        filamentUsage={CREATE_FILAMENT_USAGE}
+        onClose={() => setIsPrintModalOpen(false)}
+        onConfirm={handlePrintConfirm}
+      />
     </>
   );
 }
@@ -946,6 +1010,7 @@ interface PreviewPanelProps {
   isGenerated: boolean;
   isPrintBlocked: boolean;
   modelParams: ResolvedArtworkModelParams;
+  onPrint: () => void;
   onZoom: (direction: "in" | "out") => void;
 }
 
@@ -954,6 +1019,7 @@ function PreviewPanel({
   isGenerated,
   isPrintBlocked,
   modelParams,
+  onPrint,
   onZoom,
 }: PreviewPanelProps) {
   return (
@@ -1003,6 +1069,7 @@ function PreviewPanel({
       <div className="mt-5 grid w-full max-w-[432px] grid-cols-[minmax(0,1fr)_48px] gap-7">
         <button
           type="button"
+          onClick={onPrint}
           disabled={!isGenerated || isPrintBlocked}
           className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white"
         >
