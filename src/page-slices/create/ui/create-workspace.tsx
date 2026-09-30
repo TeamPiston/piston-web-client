@@ -93,6 +93,8 @@ interface ChatMessage {
   role: MessageRole;
 }
 
+type PrintSuccessPhase = "fading" | "hidden" | "visible";
+
 const MOCK_PRINT_WARNING: PrintWarning = {
   title: "이대로는 출력할 수 없어요",
   description: "모델은 만들어졌지만 아래 항목이 프린터 규격을 벗어났어요.",
@@ -286,8 +288,9 @@ function CreateWorkspace() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [isPrintBlocked, setIsPrintBlocked] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [printNotice, setPrintNotice] = useState<string | null>(null);
+  const [printSuccessPhase, setPrintSuccessPhase] = useState<PrintSuccessPhase>("hidden");
   const [selectedVersionId, setSelectedVersionId] = useState("v3");
   const [versions, setVersions] = useState<DesignVersion[]>([]);
   const [currentModelParams, setCurrentModelParams] = useState<ResolvedArtworkModelParams>(
@@ -297,6 +300,7 @@ function CreateWorkspace() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
   const historyTitleInputRef = useRef<HTMLInputElement>(null);
+  const loadingTimeoutRef = useRef<number | null>(null);
   const isCancelingHistoryEditRef = useRef(false);
 
   useEffect(() => {
@@ -326,13 +330,26 @@ function CreateWorkspace() {
   }, [draft]);
 
   useEffect(() => {
-    if (!printNotice) {
+    return () => {
+      if (loadingTimeoutRef.current !== null) {
+        window.clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (printSuccessPhase !== "visible") {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => setPrintNotice(null), 4000);
-    return () => window.clearTimeout(timeoutId);
-  }, [printNotice]);
+    const fadeTimeoutId = window.setTimeout(() => setPrintSuccessPhase("fading"), 3500);
+    const hideTimeoutId = window.setTimeout(() => setPrintSuccessPhase("hidden"), 4000);
+
+    return () => {
+      window.clearTimeout(fadeTimeoutId);
+      window.clearTimeout(hideTimeoutId);
+    };
+  }, [printSuccessPhase]);
 
   const appendMockResponse = (userContent: string, prompt: string) => {
     const normalizedPrompt = prompt.toLowerCase();
@@ -369,26 +386,36 @@ function CreateWorkspace() {
     setMessages((currentMessages) => [
       ...currentMessages,
       { id: timestamp, role: "user", content: userContent },
-      assistantMessage,
     ]);
+    setIsLoading(true);
+    setIsGenerated(false);
+    setIsPrintBlocked(false);
+    setIsPrintModalOpen(false);
 
-    if (hasCopyrightIssue) {
-      setIsGenerated(false);
-      setIsPrintBlocked(false);
-      setIsPrintModalOpen(false);
+    loadingTimeoutRef.current = window.setTimeout(() => {
+      loadingTimeoutRef.current = null;
+      setIsLoading(false);
+      setMessages((currentMessages) => [...currentMessages, assistantMessage]);
+
+      if (hasCopyrightIssue) {
+        setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
+        return;
+      }
+
+      setVersions(MOCK_VERSIONS);
+      setSelectedVersionId("v3");
       setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
-      return;
-    }
-
-    setVersions(MOCK_VERSIONS);
-    setSelectedVersionId("v3");
-    setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
-    setIsGenerated(true);
-    setIsPrintBlocked(hasPrintIssue);
+      setIsGenerated(true);
+      setIsPrintBlocked(hasPrintIssue);
+    }, 1800);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (isLoading) {
+      return;
+    }
 
     const prompt = draft.trim();
     if (!prompt && !attachedImage) {
@@ -442,7 +469,7 @@ function CreateWorkspace() {
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
     setIsPrintModalOpen(false);
-    setPrintNotice("출력이 시작되었습니다. 마이페이지에서 출력 상황을 확인해 주세요!");
+    setPrintSuccessPhase("visible");
 
     void colorMode;
   };
@@ -509,14 +536,20 @@ function CreateWorkspace() {
   };
 
   const handleNewChat = () => {
+    if (loadingTimeoutRef.current !== null) {
+      window.clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+
     setDraft("");
     setEditingHistoryId(null);
     setIsGenerated(false);
     setIsPrintBlocked(false);
     setIsPrintModalOpen(false);
+    setIsLoading(false);
     setMessages([]);
     setAttachedImage(null);
-    setPrintNotice(null);
+    setPrintSuccessPhase("hidden");
     setSelectedVersionId("v3");
     setVersions([]);
     setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
@@ -600,6 +633,7 @@ function CreateWorkspace() {
               draftTextareaRef={draftTextareaRef}
               fileInputRef={fileInputRef}
               isGenerated={isGenerated}
+              isLoading={isLoading}
               messages={messages}
               onDraftChange={setDraft}
               onFileChange={handleFileChange}
@@ -616,6 +650,7 @@ function CreateWorkspace() {
               isPrintBlocked={isPrintBlocked}
               modelParams={currentModelParams}
               onPrint={handlePrintOpen}
+              printSuccessPhase={printSuccessPhase}
               onZoom={handleZoom}
             />
           </section>
@@ -647,15 +682,6 @@ function CreateWorkspace() {
           </div>
         )}
       </main>
-      {printNotice && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed left-1/2 top-24 z-40 -translate-x-1/2 rounded-full bg-gray-950 px-5 py-3 text-sm font-medium text-white shadow-lg"
-        >
-          {printNotice}
-        </div>
-      )}
       <PrintSettingsModal
         isOpen={isPrintModalOpen}
         isPrinterConnected
@@ -675,6 +701,7 @@ interface ChatPanelProps {
   draftTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isGenerated: boolean;
+  isLoading: boolean;
   messages: ChatMessage[];
   onAutoFix: (warning: PrintWarning) => void;
   onDraftChange: (value: string) => void;
@@ -692,6 +719,7 @@ function ChatPanel({
   draftTextareaRef,
   fileInputRef,
   isGenerated,
+  isLoading,
   messages,
   onAutoFix,
   onDraftChange,
@@ -717,10 +745,12 @@ function ChatPanel({
       <div
         className={[
           "mx-auto flex min-h-0 w-full max-w-[480px] flex-1 flex-col",
-          isGenerated || messages.length > 0 ? "overflow-hidden" : "justify-end pb-8",
+          isGenerated || isLoading || messages.length > 0
+            ? "overflow-hidden"
+            : "justify-end pb-8",
         ].join(" ")}
       >
-        {isGenerated || messages.length > 0 ? (
+        {isGenerated || isLoading || messages.length > 0 ? (
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-6 pr-1 pt-4">
             {messages.map((message) => (
               <div
@@ -747,6 +777,7 @@ function ChatPanel({
                 )}
               </div>
             ))}
+            {isLoading && <AiLoadingCard />}
           </div>
         ) : (
           <div className="flex flex-1 items-end justify-center pb-3">
@@ -802,6 +833,7 @@ function ChatPanel({
                 onChange={(event) => onDraftChange(event.target.value)}
                 onKeyDown={onInputKeyDown}
                 onPaste={onPaste}
+                disabled={isLoading}
                 rows={1}
                 placeholder="메시지를 입력해 주세요."
                 aria-label="디자인 생성 메시지"
@@ -809,9 +841,10 @@ function ChatPanel({
               />
               <button
                 type="submit"
+                disabled={isLoading}
                 aria-label="메시지 전송"
                 title="메시지 전송"
-                className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
+                className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff] disabled:cursor-not-allowed disabled:text-gray-300"
               >
                 <CornerDownLeft className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
               </button>
@@ -914,6 +947,24 @@ function HistorySidebar({
   );
 }
 
+function AiLoadingCard() {
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[92%] rounded-2xl border border-gray-200 bg-white p-4 text-gray-950">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <span className="flex items-center gap-1 text-[#5a7bff]" aria-hidden="true">
+            <span className="animate-bounce">●</span>
+            <span className="animate-bounce [animation-delay:-0.15s]">●</span>
+            <span className="animate-bounce [animation-delay:-0.3s]">●</span>
+          </span>
+          3D 모델을 생성하고 있어요
+        </div>
+        <p className="mt-2 text-xs text-gray-400">보통 20~40초 정도 걸려요</p>
+      </div>
+    </div>
+  );
+}
+
 interface PrintWarningCardProps {
   onAutoFix: (warning: PrintWarning) => void;
   warning: PrintWarning;
@@ -1011,6 +1062,7 @@ interface PreviewPanelProps {
   isPrintBlocked: boolean;
   modelParams: ResolvedArtworkModelParams;
   onPrint: () => void;
+  printSuccessPhase: PrintSuccessPhase;
   onZoom: (direction: "in" | "out") => void;
 }
 
@@ -1020,10 +1072,26 @@ function PreviewPanel({
   isPrintBlocked,
   modelParams,
   onPrint,
+  printSuccessPhase,
   onZoom,
 }: PreviewPanelProps) {
   return (
     <section className="flex min-h-[720px] min-w-0 flex-col items-center bg-white px-6 pb-8 pt-20 lg:pt-[120px] xl:min-h-0">
+      {printSuccessPhase !== "hidden" && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={[
+            "mb-3 text-center transition-opacity duration-500",
+            printSuccessPhase === "fading" ? "opacity-0" : "opacity-100",
+          ].join(" ")}
+        >
+          <p className="font-semibold text-blue-600">출력이 시작되었습니다.</p>
+          <p className="font-semibold text-blue-600">
+            마이페이지에서 출력 상황을 확인해 주세요!
+          </p>
+        </div>
+      )}
       <div className="relative h-[600px] w-full max-w-[432px]">
         {isGenerated ? (
           <>
