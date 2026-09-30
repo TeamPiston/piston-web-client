@@ -10,6 +10,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   useEffect,
@@ -17,6 +18,7 @@ import {
   useState,
   useSyncExternalStore,
   type ChangeEvent,
+  type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
@@ -48,6 +50,11 @@ interface DesignVersion {
 interface ChatHistory {
   id: string;
   title: string;
+}
+
+interface AttachedImage {
+  name: string;
+  url: string;
 }
 
 const INITIAL_CHAT_HISTORIES: ChatHistory[] = [
@@ -116,17 +123,18 @@ export default function CreateWorkspaceEntry() {
 
 function CreateWorkspace() {
   const [draft, setDraft] = useState("");
+  const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
   const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [selectedFileName, setSelectedFileName] = useState("");
   const [selectedVersionId, setSelectedVersionId] = useState("v3");
   const [versions, setVersions] = useState<DesignVersion[]>([]);
   const [cameraDistance, setCameraDistance] = useState(42);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
   const historyTitleInputRef = useRef<HTMLInputElement>(null);
   const isCancelingHistoryEditRef = useRef(false);
 
@@ -140,16 +148,35 @@ function CreateWorkspace() {
     }
   }, [editingHistoryId]);
 
+  useEffect(() => {
+    return () => {
+      if (attachedImage) {
+        URL.revokeObjectURL(attachedImage.url);
+      }
+    };
+  }, [attachedImage]);
+
+  useEffect(() => {
+    const textarea = draftTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 200 ? "auto" : "hidden";
+  }, [draft]);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const prompt = draft.trim();
-    if (!prompt && !selectedFileName) {
+    if (!prompt && !attachedImage) {
       return;
     }
 
-    const userContent = selectedFileName
-      ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${selectedFileName}`
+    const userContent = attachedImage
+      ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${attachedImage.name}`
       : prompt;
 
     setMessages((currentMessages) => [
@@ -166,13 +193,46 @@ function CreateWorkspace() {
     setSelectedVersionId("v3");
     setIsGenerated(true);
     setDraft("");
-    setSelectedFileName("");
+    setAttachedImage(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const attachImage = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      return;
+    }
+
+    setAttachedImage({
+      name: file.name || "붙여넣은 이미지",
+      url: URL.createObjectURL(file),
+    });
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const [file] = Array.from(event.target.files ?? []);
     if (file) {
-      setSelectedFileName(file.name);
+      attachImage(file);
+    }
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const imageFile = Array.from(event.clipboardData.files).find((file) =>
+      file.type.startsWith("image/"),
+    );
+
+    if (imageFile) {
+      event.preventDefault();
+      attachImage(imageFile);
+    }
+  };
+
+  const handleRemoveAttachment = () => {
+    setAttachedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
@@ -196,7 +256,7 @@ function CreateWorkspace() {
     setEditingHistoryId(null);
     setIsGenerated(false);
     setMessages([]);
-    setSelectedFileName("");
+    setAttachedImage(null);
     setSelectedVersionId("v3");
     setVersions([]);
     setCameraDistance(42);
@@ -274,15 +334,18 @@ function CreateWorkspace() {
 
           <section className="grid min-h-[calc(100vh-100px)] min-w-0 lg:grid-cols-2">
             <ChatPanel
+              attachedImage={attachedImage}
               draft={draft}
+              draftTextareaRef={draftTextareaRef}
               fileInputRef={fileInputRef}
               isGenerated={isGenerated}
               messages={messages}
               onDraftChange={setDraft}
               onFileChange={handleFileChange}
               onInputKeyDown={handleInputKeyDown}
+              onPaste={handlePaste}
+              onRemoveAttachment={handleRemoveAttachment}
               onSubmit={handleSubmit}
-              selectedFileName={selectedFileName}
               onToggleHistory={() => setIsHistoryOpen((isOpen) => !isOpen)}
             />
             <PreviewPanel
@@ -325,28 +388,34 @@ function CreateWorkspace() {
 }
 
 interface ChatPanelProps {
+  attachedImage: AttachedImage | null;
   draft: string;
+  draftTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isGenerated: boolean;
   messages: ChatMessage[];
   onDraftChange: (value: string) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onInputKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
+  onRemoveAttachment: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  selectedFileName: string;
   onToggleHistory: () => void;
 }
 
 function ChatPanel({
+  attachedImage,
   draft,
+  draftTextareaRef,
   fileInputRef,
   isGenerated,
   messages,
   onDraftChange,
   onFileChange,
   onInputKeyDown,
+  onPaste,
+  onRemoveAttachment,
   onSubmit,
-  selectedFileName,
   onToggleHistory,
 }: ChatPanelProps) {
   return (
@@ -396,10 +465,7 @@ function ChatPanel({
         )}
 
         <form onSubmit={onSubmit} className="w-full">
-          {selectedFileName && (
-            <p className="mb-2 truncate text-xs text-gray-500">첨부: {selectedFileName}</p>
-          )}
-          <div className="flex min-h-[60px] items-center gap-3 rounded-xl border border-[#5a7bff] bg-white px-4 py-2 shadow-sm">
+          <div className="flex min-h-[60px] flex-col rounded-xl border border-[#5a7bff] bg-white px-4 py-3 shadow-sm">
             <input
               ref={fileInputRef}
               type="file"
@@ -407,32 +473,57 @@ function ChatPanel({
               onChange={onFileChange}
               className="sr-only"
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="참고 이미지 첨부"
-              title="참고 이미지 첨부"
-              className="shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
-            >
-              <Plus className="h-7 w-7" strokeWidth={1.8} aria-hidden="true" />
-            </button>
-            <textarea
-              value={draft}
-              onChange={(event) => onDraftChange(event.target.value)}
-              onKeyDown={onInputKeyDown}
-              rows={1}
-              placeholder="메시지를 입력해 주세요."
-              aria-label="디자인 생성 메시지"
-              className="min-h-10 flex-1 resize-none border-0 bg-transparent py-2 text-sm text-gray-950 outline-none placeholder:text-gray-400"
-            />
-            <button
-              type="submit"
-              aria-label="메시지 전송"
-              title="메시지 전송"
-              className="shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
-            >
-              <CornerDownLeft className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
-            </button>
+            {attachedImage && (
+              <div className="group relative mb-3 h-24 w-24 overflow-hidden rounded-lg bg-gray-200">
+                <Image
+                  src={attachedImage.url}
+                  alt="첨부 이미지 미리보기"
+                  width={96}
+                  height={96}
+                  unoptimized
+                  className="h-full w-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={onRemoveAttachment}
+                  aria-label="첨부 이미지 삭제"
+                  title="첨부 이미지 삭제"
+                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+            <div className="flex min-h-10 items-end gap-3">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="참고 이미지 첨부"
+                title="참고 이미지 첨부"
+                className="shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
+              >
+                <Plus className="h-7 w-7" strokeWidth={1.8} aria-hidden="true" />
+              </button>
+              <textarea
+                ref={draftTextareaRef}
+                value={draft}
+                onChange={(event) => onDraftChange(event.target.value)}
+                onKeyDown={onInputKeyDown}
+                onPaste={onPaste}
+                rows={1}
+                placeholder="메시지를 입력해 주세요."
+                aria-label="디자인 생성 메시지"
+                className="max-h-[200px] min-h-10 flex-1 resize-none overflow-hidden border-0 bg-transparent py-2 text-sm text-gray-950 outline-none placeholder:text-gray-400"
+              />
+              <button
+                type="submit"
+                aria-label="메시지 전송"
+                title="메시지 전송"
+                className="shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
+              >
+                <CornerDownLeft className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            </div>
           </div>
           <p className="mt-3 text-center text-xs text-gray-400">
             참고 이미지가 자세할수록 원하는 결과물에 가깝게 만들어져요
