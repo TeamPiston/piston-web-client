@@ -1083,7 +1083,7 @@ function PreviewPanel({
             role="status"
             aria-live="polite"
             className={[
-              "pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 whitespace-nowrap text-center transition-opacity duration-500",
+              "pointer-events-none absolute -top-20 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap text-center transition-opacity duration-500",
               printSuccessPhase === "fading" ? "opacity-0" : "opacity-100",
             ].join(" ")}
           >
