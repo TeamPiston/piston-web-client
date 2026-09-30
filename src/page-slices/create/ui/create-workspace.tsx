@@ -50,10 +50,17 @@ interface PrintWarning {
   title: string;
 }
 
+interface CopyrightWarning {
+  description: string;
+  title: string;
+}
+
 interface ChatMessage {
   content: string;
   id: number;
+  copyrightWarning?: CopyrightWarning;
   hasPrintIssue?: boolean;
+  isCopyrightIssue?: boolean;
   printWarning?: PrintWarning;
   role: MessageRole;
 }
@@ -73,6 +80,28 @@ const MOCK_PRINT_WARNING: PrintWarning = {
 
 const NORMALIZED_MOCK_RESPONSE =
   "규격에 맞게 모델을 자동 수정했어요. 이제 출력할 수 있습니다.";
+
+const MOCK_COPYRIGHT_WARNING: CopyrightWarning = {
+  title: "이 요청은 만들어 드릴 수 없어요",
+  description:
+    "저작권이 있는 캐릭터나 상표가 들어간 디자인은 생성하지 않아요. 직접 떠올린 형태를 설명해 주시면 바로 만들어 드릴게요.",
+};
+
+const COPYRIGHT_KEYWORDS = [
+  "피카츄",
+  "포켓몬",
+  "디즈니",
+  "마리오",
+  "로고",
+  "상표",
+  "캐릭터",
+  "pokemon",
+  "disney",
+  "mario",
+  "logo",
+  "trademark",
+  "character",
+];
 
 interface DesignVersion extends ArtworkModelParams {
   description: string;
@@ -234,15 +263,23 @@ function CreateWorkspace() {
   }, [draft]);
 
   const appendMockResponse = (userContent: string, prompt: string) => {
-    const hasPrintIssue = ["얇게", "최대한 얇게", "얇은"].some((keyword) =>
-      prompt.includes(keyword),
+    const normalizedPrompt = prompt.toLowerCase();
+    const hasCopyrightIssue = COPYRIGHT_KEYWORDS.some((keyword) =>
+      normalizedPrompt.includes(keyword),
+    );
+    const hasPrintIssue = !hasCopyrightIssue && ["얇게", "최대한 얇게", "얇은"].some(
+      (keyword) => prompt.includes(keyword),
     );
     const timestamp = Date.now();
-
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { id: timestamp, role: "user", content: userContent },
-      hasPrintIssue
+    const assistantMessage: ChatMessage = hasCopyrightIssue
+      ? {
+          id: timestamp + 1,
+          role: "assistant",
+          content: MOCK_COPYRIGHT_WARNING.title,
+          copyrightWarning: MOCK_COPYRIGHT_WARNING,
+          isCopyrightIssue: true,
+        }
+      : hasPrintIssue
         ? {
             id: timestamp + 1,
             role: "assistant",
@@ -255,8 +292,21 @@ function CreateWorkspace() {
             role: "assistant",
             content:
               "육각형 연필꽂이를 생성했어요. 높이와 바닥 지름을 조정하면서 원하는 형태로 다듬어 보세요.",
-          },
+          };
+
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      { id: timestamp, role: "user", content: userContent },
+      assistantMessage,
     ]);
+
+    if (hasCopyrightIssue) {
+      setIsGenerated(false);
+      setIsPrintBlocked(false);
+      setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
+      return;
+    }
+
     setVersions(MOCK_VERSIONS);
     setSelectedVersionId("v3");
     setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
@@ -553,17 +603,19 @@ function ChatPanel({
       <div
         className={[
           "mx-auto flex min-h-0 w-full max-w-[480px] flex-1 flex-col",
-          isGenerated ? "overflow-hidden" : "justify-end pb-8",
+          isGenerated || messages.length > 0 ? "overflow-hidden" : "justify-end pb-8",
         ].join(" ")}
       >
-        {isGenerated ? (
+        {isGenerated || messages.length > 0 ? (
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-6 pr-1 pt-4">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={message.role === "user" ? "flex justify-end" : "flex justify-start"}
               >
-                {message.hasPrintIssue && message.printWarning ? (
+                {message.isCopyrightIssue && message.copyrightWarning ? (
+                  <CopyrightWarningCard warning={message.copyrightWarning} />
+                ) : message.hasPrintIssue && message.printWarning ? (
                   <PrintWarningCard warning={message.printWarning} onAutoFix={onAutoFix} />
                 ) : (
                   <p
@@ -783,6 +835,24 @@ function PrintWarningCard({ onAutoFix, warning }: PrintWarningCardProps) {
       >
         규격에 맞게 자동 수정
       </button>
+    </div>
+  );
+}
+
+interface CopyrightWarningCardProps {
+  warning: CopyrightWarning;
+}
+
+function CopyrightWarningCard({ warning }: CopyrightWarningCardProps) {
+  return (
+    <div className="max-w-[92%] rounded-2xl border border-gray-200 bg-white p-4 text-gray-950">
+      <div className="flex items-center gap-2 text-sm font-semibold text-amber-500">
+        <span aria-hidden="true" className="text-base leading-none">
+          ●
+        </span>
+        {warning.title}
+      </div>
+      <p className="mt-4 text-xs leading-5 text-gray-500">{warning.description}</p>
     </div>
   );
 }
