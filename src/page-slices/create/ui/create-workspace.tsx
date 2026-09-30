@@ -1077,22 +1077,22 @@ function PreviewPanel({
 }: PreviewPanelProps) {
   return (
     <section className="flex min-h-[720px] min-w-0 flex-col items-center bg-white px-6 pb-8 pt-20 lg:pt-[120px] xl:min-h-0">
-      {printSuccessPhase !== "hidden" && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={[
-            "mb-3 text-center transition-opacity duration-500",
-            printSuccessPhase === "fading" ? "opacity-0" : "opacity-100",
-          ].join(" ")}
-        >
-          <p className="font-semibold text-blue-600">출력이 시작되었습니다.</p>
-          <p className="font-semibold text-blue-600">
-            마이페이지에서 출력 상황을 확인해 주세요!
-          </p>
-        </div>
-      )}
       <div className="relative h-[600px] w-full max-w-[432px]">
+        {printSuccessPhase !== "hidden" && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={[
+              "pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 whitespace-nowrap text-center transition-opacity duration-500",
+              printSuccessPhase === "fading" ? "opacity-0" : "opacity-100",
+            ].join(" ")}
+          >
+            <p className="font-semibold text-blue-600">출력이 시작되었습니다.</p>
+            <p className="font-semibold text-blue-600">
+              마이페이지에서 출력 상황을 확인해 주세요!
+            </p>
+          </div>
+        )}
         {isGenerated ? (
           <>
             <ArtworkModelPreview
@@ -1102,7 +1102,7 @@ function PreviewPanel({
               stlUrl={modelParams.stlUrl}
               variant="create"
             />
-            <div className="absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white px-4 py-2 text-xs text-gray-500 shadow-md ring-1 ring-black/[0.04]">
+            <div className="absolute left-1/2 top-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white px-4 py-2 text-xs text-gray-500 shadow-md ring-1 ring-black/[0.04]">
               <Move3d className="h-4 w-4 text-gray-950" aria-hidden="true" />
               드래그해서 돌려보세요
             </div>
