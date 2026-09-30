@@ -4,27 +4,38 @@ import { Center, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { Suspense, useEffect, useRef, useState } from "react";
+import type { ArtworkModelScale } from "../model/artwork-model";
 import { useStlModel } from "../model/use-stl-model";
 
-function StlMesh({ url }: { url: string }) {
-  const geometry = useStlModel(url);
+interface StlMeshProps {
+  color: string;
+  scale: ArtworkModelScale;
+  stlUrl: string;
+}
+
+function StlMesh({ color, scale, stlUrl }: StlMeshProps) {
+  const geometry = useStlModel(stlUrl);
 
   return (
-    <mesh geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial color="#9ca3af" roughness={0.45} metalness={0.08} />
+    <mesh geometry={geometry} scale={scale} castShadow receiveShadow>
+      <meshStandardMaterial color={color} roughness={0.45} metalness={0.08} />
     </mesh>
   );
 }
 
 interface ArtworkModelPreviewProps {
   cameraDistance?: number;
+  color?: string;
+  scale?: ArtworkModelScale;
+  stlUrl: string;
   variant?: "detail" | "create";
-  url: string;
 }
 
 export function ArtworkModelPreview({
   cameraDistance = 42,
-  url,
+  color = "#9ca3af",
+  scale = [1, 1, 1],
+  stlUrl,
   variant = "detail",
 }: ArtworkModelPreviewProps) {
   const previewRef = useRef<HTMLDivElement>(null);
@@ -75,7 +86,7 @@ export function ArtworkModelPreview({
         <directionalLight position={[10, 15, 8]} intensity={1.1} />
         <Suspense fallback={null}>
           <Center>
-            <StlMesh url={url} />
+            <StlMesh color={color} scale={scale} stlUrl={stlUrl} />
           </Center>
         </Suspense>
         <OrbitControls

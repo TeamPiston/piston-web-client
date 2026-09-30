@@ -23,7 +23,12 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useAuth } from "@/entities/session";
-import { ArtworkModelPreview } from "@/features/stl-viewer";
+import {
+  ArtworkModelPreview,
+  type ArtworkModelDimensions,
+  type ArtworkModelParams,
+  type ArtworkModelScale,
+} from "@/features/stl-viewer";
 import { PistonLogo } from "@/shared/ui";
 import { Header, LoginRequiredModal } from "@/widgets/header";
 
@@ -69,11 +74,17 @@ const MOCK_PRINT_WARNING: PrintWarning = {
 const NORMALIZED_MOCK_RESPONSE =
   "규격에 맞게 모델을 자동 수정했어요. 이제 출력할 수 있습니다.";
 
-interface DesignVersion {
+interface DesignVersion extends ArtworkModelParams {
   description: string;
   id: string;
   label: string;
   meta: string;
+}
+
+interface ResolvedArtworkModelParams {
+  color: string;
+  dimensions: ArtworkModelDimensions;
+  scale: ArtworkModelScale;
   stlUrl: string;
 }
 
@@ -101,6 +112,9 @@ const MOCK_VERSIONS: DesignVersion[] = [
     description: "육각형 연필꽂이 생성",
     meta: "5분 전",
     stlUrl: "/pencil-holder.stl",
+    scale: [1, 1, 1],
+    color: "#9ca3af",
+    dimensions: { width: 80, height: 100, depth: 80 },
   },
   {
     id: "v2",
@@ -108,6 +122,9 @@ const MOCK_VERSIONS: DesignVersion[] = [
     description: "바닥 지름 15mm 넓힘",
     meta: "2분 전",
     stlUrl: "/pencil-holder.stl",
+    scale: [1.15, 1, 1.15],
+    color: "#7c8cf8",
+    dimensions: { width: 92, height: 100, depth: 92 },
   },
   {
     id: "v3",
@@ -115,8 +132,25 @@ const MOCK_VERSIONS: DesignVersion[] = [
     description: "안쪽을 체스 칸으로 나눔",
     meta: "방금",
     stlUrl: "/pencil-holder.stl",
+    scale: [1.15, 1.05, 1.15],
+    color: "#5a7bff",
+    dimensions: { width: 92, height: 105, depth: 92 },
   },
 ];
+
+const DEFAULT_MODEL_PARAMS: ResolvedArtworkModelParams = {
+  stlUrl: "/pencil-holder.stl",
+  scale: [1, 1, 1],
+  color: "#9ca3af",
+  dimensions: { width: 80, height: 100, depth: 80 },
+};
+
+const resolveModelParams = (version: DesignVersion): ResolvedArtworkModelParams => ({
+  stlUrl: version.stlUrl ?? DEFAULT_MODEL_PARAMS.stlUrl,
+  scale: version.scale ?? DEFAULT_MODEL_PARAMS.scale,
+  color: version.color ?? DEFAULT_MODEL_PARAMS.color,
+  dimensions: version.dimensions ?? DEFAULT_MODEL_PARAMS.dimensions,
+});
 
 export default function CreateWorkspaceEntry() {
   const router = useRouter();
@@ -164,14 +198,14 @@ function CreateWorkspace() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState("v3");
   const [versions, setVersions] = useState<DesignVersion[]>([]);
+  const [currentModelParams, setCurrentModelParams] = useState<ResolvedArtworkModelParams>(
+    () => resolveModelParams(MOCK_VERSIONS[2]),
+  );
   const [cameraDistance, setCameraDistance] = useState(42);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
   const historyTitleInputRef = useRef<HTMLInputElement>(null);
   const isCancelingHistoryEditRef = useRef(false);
-
-  const selectedVersion =
-    versions.find((version) => version.id === selectedVersionId) ?? MOCK_VERSIONS[2];
 
   useEffect(() => {
     if (editingHistoryId) {
@@ -225,6 +259,7 @@ function CreateWorkspace() {
     ]);
     setVersions(MOCK_VERSIONS);
     setSelectedVersionId("v3");
+    setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
     setIsGenerated(true);
     setIsPrintBlocked(hasPrintIssue);
   };
@@ -265,7 +300,18 @@ function CreateWorkspace() {
     setIsPrintBlocked(false);
     setVersions(MOCK_VERSIONS);
     setSelectedVersionId("v3");
+    setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
     setIsGenerated(true);
+  };
+
+  const handleVersionSelect = (versionId: string) => {
+    const nextVersion = versions.find((version) => version.id === versionId);
+    if (!nextVersion) {
+      return;
+    }
+
+    setSelectedVersionId(nextVersion.id);
+    setCurrentModelParams(resolveModelParams(nextVersion));
   };
 
   const attachImage = (file: File) => {
@@ -328,6 +374,7 @@ function CreateWorkspace() {
     setAttachedImage(null);
     setSelectedVersionId("v3");
     setVersions([]);
+    setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
     setCameraDistance(42);
     setIsHistoryOpen(false);
 
@@ -422,7 +469,7 @@ function CreateWorkspace() {
               cameraDistance={cameraDistance}
               isGenerated={isGenerated}
               isPrintBlocked={isPrintBlocked}
-              selectedVersion={selectedVersion}
+              modelParams={currentModelParams}
               onZoom={handleZoom}
             />
           </section>
@@ -430,7 +477,7 @@ function CreateWorkspace() {
           <VersionHistory
             isGenerated={isGenerated}
             selectedVersionId={selectedVersionId}
-            setSelectedVersionId={setSelectedVersionId}
+            onSelectVersion={handleVersionSelect}
             versions={versions}
           />
         </div>
@@ -744,16 +791,16 @@ interface PreviewPanelProps {
   cameraDistance: number;
   isGenerated: boolean;
   isPrintBlocked: boolean;
+  modelParams: ResolvedArtworkModelParams;
   onZoom: (direction: "in" | "out") => void;
-  selectedVersion: DesignVersion;
 }
 
 function PreviewPanel({
   cameraDistance,
   isGenerated,
   isPrintBlocked,
+  modelParams,
   onZoom,
-  selectedVersion,
 }: PreviewPanelProps) {
   return (
     <section className="flex min-h-[720px] min-w-0 flex-col items-center bg-white px-6 pb-8 pt-20 lg:pt-[120px] xl:min-h-0">
@@ -762,7 +809,9 @@ function PreviewPanel({
           <>
             <ArtworkModelPreview
               cameraDistance={cameraDistance}
-              url={selectedVersion.stlUrl}
+              color={modelParams.color}
+              scale={modelParams.scale}
+              stlUrl={modelParams.stlUrl}
               variant="create"
             />
             <div className="absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white px-4 py-2 text-xs text-gray-500 shadow-md ring-1 ring-black/[0.04]">
@@ -807,7 +856,7 @@ function PreviewPanel({
         </button>
         {isGenerated ? (
           <a
-            href={selectedVersion.stlUrl}
+            href={modelParams.stlUrl}
             download
             aria-label="3D 모델 다운로드"
             title="3D 모델 다운로드"
@@ -838,15 +887,15 @@ function PreviewPanel({
 
 interface VersionHistoryProps {
   isGenerated: boolean;
+  onSelectVersion: (versionId: string) => void;
   selectedVersionId: string;
-  setSelectedVersionId: (versionId: string) => void;
   versions: DesignVersion[];
 }
 
 function VersionHistory({
   isGenerated,
+  onSelectVersion,
   selectedVersionId,
-  setSelectedVersionId,
   versions,
 }: VersionHistoryProps) {
   return (
@@ -865,7 +914,7 @@ function VersionHistory({
               <button
                 key={version.id}
                 type="button"
-                onClick={() => setSelectedVersionId(version.id)}
+                onClick={() => onSelectVersion(version.id)}
                 className={[
                   "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors",
                   isSelected
