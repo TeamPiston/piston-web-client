@@ -129,7 +129,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
           </div>
 
           <div className="flex min-w-0 flex-col justify-start gap-7 py-1">
-            <div className="min-h-[250px]">
+            <div className="min-h-[255px]">
               <p className="h-full max-h-[190px] overflow-y-auto text-[13px] leading-[1.75] text-gray-950 font-normal">
                 {description}
               </p>
