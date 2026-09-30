@@ -124,7 +124,7 @@ export default function CreateWorkspaceEntry() {
 function CreateWorkspace() {
   const [draft, setDraft] = useState("");
   const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
-  const selectedFileName = attachedImage?.name ?? null;
+  const selectedFileName = attachedImage ? attachedImage.name : null;
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
   const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
