@@ -50,6 +50,17 @@ interface PrintWarning {
   title: string;
 }
 
+interface PrintCorrectionIssue {
+  corrected: string;
+  current: string;
+  label: string;
+}
+
+interface PrintCorrection {
+  issues: PrintCorrectionIssue[];
+  title: string;
+}
+
 interface CopyrightWarning {
   description: string;
   title: string;
@@ -61,6 +72,7 @@ interface ChatMessage {
   copyrightWarning?: CopyrightWarning;
   hasPrintIssue?: boolean;
   isCopyrightIssue?: boolean;
+  printCorrection?: PrintCorrection;
   printWarning?: PrintWarning;
   role: MessageRole;
 }
@@ -78,8 +90,7 @@ const MOCK_PRINT_WARNING: PrintWarning = {
   ],
 };
 
-const NORMALIZED_MOCK_RESPONSE =
-  "규격에 맞게 모델을 자동 수정했어요. 이제 출력할 수 있습니다.";
+const CORRECTED_VERSION_ID = "v4";
 
 const MOCK_COPYRIGHT_WARNING: CopyrightWarning = {
   title: "이 요청은 만들어 드릴 수 없어요",
@@ -179,6 +190,40 @@ const resolveModelParams = (version: DesignVersion): ResolvedArtworkModelParams 
   scale: version.scale ?? DEFAULT_MODEL_PARAMS.scale,
   color: version.color ?? DEFAULT_MODEL_PARAMS.color,
   dimensions: version.dimensions ?? DEFAULT_MODEL_PARAMS.dimensions,
+});
+
+const MOCK_CORRECTED_VERSION: DesignVersion = {
+  id: CORRECTED_VERSION_ID,
+  label: CORRECTED_VERSION_ID,
+  description: "규격에 맞게 두께 보정",
+  meta: "방금",
+  stlUrl: "/pencil-holder.stl",
+  scale: [1.2, 1.1, 1.2],
+  color: "#14b8a6",
+  dimensions: { width: 96, height: 110, depth: 96 },
+};
+
+const getFirstNumber = (value: string) => {
+  const match = value.match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : 0;
+};
+
+const formatMillimeters = (value: number) => `${value.toFixed(1)} mm`;
+
+const createPrintCorrection = (warning: PrintWarning): PrintCorrection => ({
+  title: "규격에 맞게 고쳤어요",
+  issues: warning.issues.map((issue) => {
+    const currentValue = getFirstNumber(issue.current);
+    const minimumValue = getFirstNumber(issue.required);
+    const safetyMargin = minimumValue * 0.2;
+    const correctedValue = Math.max(currentValue, minimumValue + safetyMargin);
+
+    return {
+      label: issue.label,
+      current: issue.current,
+      corrected: formatMillimeters(correctedValue),
+    };
+  }),
 });
 
 export default function CreateWorkspaceEntry() {
@@ -335,22 +380,27 @@ function CreateWorkspace() {
     }
   };
 
-  const handleAutoFix = () => {
+  const handleAutoFix = (warning: PrintWarning) => {
     const timestamp = Date.now();
+    const correction = createPrintCorrection(warning);
 
     setMessages((currentMessages) => [
       ...currentMessages,
-      { id: timestamp, role: "user", content: "규격에 맞게 수정해줘" },
+      { id: timestamp, role: "user", content: "규격에 맞게 자동 수정" },
       {
         id: timestamp + 1,
         role: "assistant",
-        content: NORMALIZED_MOCK_RESPONSE,
+        content: correction.title,
+        printCorrection: correction,
       },
     ]);
     setIsPrintBlocked(false);
-    setVersions(MOCK_VERSIONS);
-    setSelectedVersionId("v3");
-    setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
+    setVersions((currentVersions) => [
+      ...currentVersions.filter((version) => version.id !== CORRECTED_VERSION_ID),
+      MOCK_CORRECTED_VERSION,
+    ]);
+    setSelectedVersionId(CORRECTED_VERSION_ID);
+    setCurrentModelParams(resolveModelParams(MOCK_CORRECTED_VERSION));
     setIsGenerated(true);
   };
 
@@ -562,7 +612,7 @@ interface ChatPanelProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isGenerated: boolean;
   messages: ChatMessage[];
-  onAutoFix: () => void;
+  onAutoFix: (warning: PrintWarning) => void;
   onDraftChange: (value: string) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onInputKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -615,6 +665,8 @@ function ChatPanel({
               >
                 {message.isCopyrightIssue && message.copyrightWarning ? (
                   <CopyrightWarningCard warning={message.copyrightWarning} />
+                ) : message.printCorrection ? (
+                  <PrintCorrectionCard correction={message.printCorrection} />
                 ) : message.hasPrintIssue && message.printWarning ? (
                   <PrintWarningCard warning={message.printWarning} onAutoFix={onAutoFix} />
                 ) : (
@@ -799,7 +851,7 @@ function HistorySidebar({
 }
 
 interface PrintWarningCardProps {
-  onAutoFix: () => void;
+  onAutoFix: (warning: PrintWarning) => void;
   warning: PrintWarning;
 }
 
@@ -830,11 +882,43 @@ function PrintWarningCard({ onAutoFix, warning }: PrintWarningCardProps) {
       </div>
       <button
         type="button"
-        onClick={onAutoFix}
+        onClick={() => onAutoFix(warning)}
         className="mt-3 h-11 w-full rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-950 transition-colors hover:bg-gray-50"
       >
         규격에 맞게 자동 수정
       </button>
+    </div>
+  );
+}
+
+interface PrintCorrectionCardProps {
+  correction: PrintCorrection;
+}
+
+function PrintCorrectionCard({ correction }: PrintCorrectionCardProps) {
+  return (
+    <div className="max-w-[92%] rounded-2xl border border-gray-200 bg-white p-4 text-gray-950">
+      <div className="flex items-center gap-2 text-sm font-semibold text-emerald-500">
+        <span aria-hidden="true" className="text-base leading-none">
+          ●
+        </span>
+        {correction.title}
+      </div>
+      <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3">
+        {correction.issues.map((issue, index) => (
+          <div
+            key={issue.label}
+            className={index < correction.issues.length - 1 ? "mb-3" : ""}
+          >
+            <p className="text-xs text-gray-500">{issue.label}</p>
+            <p className="mt-1 text-sm font-semibold text-gray-950">
+              {issue.current}
+              <span className="px-2 text-gray-400">→</span>
+              {issue.corrected}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
