@@ -128,52 +128,56 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
             </button>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-6 py-2">
-            <p className="max-h-[160px] min-h-[70px] overflow-y-auto text-[13px] leading-[1.75] text-gray-950 font-normal">
-              {description}
-            </p>
-
-            <div className="flex flex-col gap-3">
-              <p className="text-xs font-medium text-gray-950">필요한 필라멘트 색상</p>
-              <div className="flex flex-wrap items-center gap-3">
-                {filamentColors.map((color) => (
-                  <span
-                    key={color.name}
-                    aria-label={color.name}
-                    title={color.name}
-                    className="h-8 w-8 rounded-full ring-1 ring-black/[0.03]"
-                    style={{ backgroundColor: color.value }}
-                  />
-                ))}
-              </div>
+          <div className="flex min-w-0 flex-col h-full justify-between gap-4 py-1">
+            <div className="flex-1 min-h-[180px] lg:min-h-[190px]">
+              <p className="h-full max-h-[190px] overflow-y-auto text-[13px] leading-[1.75] text-gray-950 font-normal">
+                {description}
+              </p>
             </div>
 
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
+            <div className="flex flex-col gap-3.5">
+              <div className="flex flex-col gap-3">
+                <p className="text-xs font-medium text-gray-950">필요한 필라멘트 색상</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  {filamentColors.map((color) => (
+                    <span
+                      key={color.name}
+                      aria-label={color.name}
+                      title={color.name}
+                      className="h-8 w-8 rounded-full ring-1 ring-black/[0.03]"
+                      style={{ backgroundColor: color.value }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-medium text-gray-950">필요한 필라멘트 사용량</p>
+                  <p className="text-lg font-bold tracking-normal text-gray-950">
+                    {filamentUsage.length}
+                    <span className="px-2 text-gray-300">|</span>
+                    {filamentUsage.weight}
+                  </p>
+                </div>
+
+                <a
+                  href={stlUrl}
+                  download
+                  aria-label="3D 모델 다운로드"
+                  title="3D 모델 다운로드"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f0f0f0] text-gray-950 transition hover:bg-[#e5e5e5]"
+                >
+                  <Download className="h-5 w-5" aria-hidden="true" />
+                </a>
+              </div>
+
               <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium text-gray-950">필요한 필라멘트 사용량</p>
-                <p className="text-lg font-bold tracking-normal text-gray-950">
-                  {filamentUsage.length}
-                  <span className="px-2 text-gray-300">|</span>
-                  {filamentUsage.weight}
+                <p className="text-xs font-medium text-gray-950">예상 출력 시간</p>
+                <p className="text-lg font-bold text-gray-950">
+                  {estimatedPrintTime}
                 </p>
               </div>
-
-              <a
-                href={stlUrl}
-                download
-                aria-label="3D 모델 다운로드"
-                title="3D 모델 다운로드"
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f0f0f0] text-gray-950 transition hover:bg-[#e5e5e5]"
-              >
-                <Download className="h-5 w-5" aria-hidden="true" />
-              </a>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-gray-950">예상 출력 시간</p>
-              <p className="text-lg font-bold text-gray-950">
-                {estimatedPrintTime}
-              </p>
             </div>
           </div>
           </section>
