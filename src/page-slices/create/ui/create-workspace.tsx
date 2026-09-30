@@ -33,11 +33,41 @@ const getServerHydrationSnapshot = () => false;
 
 type MessageRole = "assistant" | "user";
 
+interface PrintIssue {
+  current: string;
+  label: string;
+  required: string;
+}
+
+interface PrintWarning {
+  description: string;
+  issues: PrintIssue[];
+  title: string;
+}
+
 interface ChatMessage {
   content: string;
   id: number;
+  hasPrintIssue?: boolean;
+  printWarning?: PrintWarning;
   role: MessageRole;
 }
+
+const MOCK_PRINT_WARNING: PrintWarning = {
+  title: "이대로는 출력할 수 없어요",
+  description: "모델은 만들어졌지만 아래 항목이 프린터 규격을 벗어났어요.",
+  issues: [
+    { label: "벽 두께", current: "0.8 mm", required: "최소 1.2 mm 필요" },
+    {
+      label: "손잡이 기둥 지름",
+      current: "1.4 mm",
+      required: "최소 2 mm 필요",
+    },
+  ],
+};
+
+const NORMALIZED_MOCK_RESPONSE =
+  "규격에 맞게 모델을 자동 수정했어요. 이제 출력할 수 있습니다.";
 
 interface DesignVersion {
   description: string;
@@ -130,6 +160,7 @@ function CreateWorkspace() {
   const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
+  const [isPrintBlocked, setIsPrintBlocked] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState("v3");
   const [versions, setVersions] = useState<DesignVersion[]>([]);
@@ -168,6 +199,36 @@ function CreateWorkspace() {
     textarea.style.overflowY = textarea.scrollHeight > 200 ? "auto" : "hidden";
   }, [draft]);
 
+  const appendMockResponse = (userContent: string, prompt: string) => {
+    const hasPrintIssue = ["얇게", "최대한 얇게", "얇은"].some((keyword) =>
+      prompt.includes(keyword),
+    );
+    const timestamp = Date.now();
+
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      { id: timestamp, role: "user", content: userContent },
+      hasPrintIssue
+        ? {
+            id: timestamp + 1,
+            role: "assistant",
+            content: MOCK_PRINT_WARNING.title,
+            hasPrintIssue: true,
+            printWarning: MOCK_PRINT_WARNING,
+          }
+        : {
+            id: timestamp + 1,
+            role: "assistant",
+            content:
+              "육각형 연필꽂이를 생성했어요. 높이와 바닥 지름을 조정하면서 원하는 형태로 다듬어 보세요.",
+          },
+    ]);
+    setVersions(MOCK_VERSIONS);
+    setSelectedVersionId("v3");
+    setIsGenerated(true);
+    setIsPrintBlocked(hasPrintIssue);
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -180,25 +241,31 @@ function CreateWorkspace() {
       ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${selectedFileName}`
       : prompt;
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { id: Date.now(), role: "user", content: userContent },
-      {
-        id: Date.now() + 1,
-        role: "assistant",
-        content:
-          "육각형 연필꽂이를 생성했어요. 높이와 바닥 지름을 조정하면서 원하는 형태로 다듬어 보세요.",
-      },
-    ]);
-    setVersions(MOCK_VERSIONS);
-    setSelectedVersionId("v3");
-    setIsGenerated(true);
+    appendMockResponse(userContent, prompt);
     setDraft("");
     setAttachedImage(null);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  const handleAutoFix = () => {
+    const timestamp = Date.now();
+
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      { id: timestamp, role: "user", content: "규격에 맞게 수정해줘" },
+      {
+        id: timestamp + 1,
+        role: "assistant",
+        content: NORMALIZED_MOCK_RESPONSE,
+      },
+    ]);
+    setIsPrintBlocked(false);
+    setVersions(MOCK_VERSIONS);
+    setSelectedVersionId("v3");
+    setIsGenerated(true);
   };
 
   const attachImage = (file: File) => {
@@ -256,6 +323,7 @@ function CreateWorkspace() {
     setDraft("");
     setEditingHistoryId(null);
     setIsGenerated(false);
+    setIsPrintBlocked(false);
     setMessages([]);
     setAttachedImage(null);
     setSelectedVersionId("v3");
@@ -344,6 +412,7 @@ function CreateWorkspace() {
               onDraftChange={setDraft}
               onFileChange={handleFileChange}
               onInputKeyDown={handleInputKeyDown}
+              onAutoFix={handleAutoFix}
               onPaste={handlePaste}
               onRemoveAttachment={handleRemoveAttachment}
               onSubmit={handleSubmit}
@@ -352,6 +421,7 @@ function CreateWorkspace() {
             <PreviewPanel
               cameraDistance={cameraDistance}
               isGenerated={isGenerated}
+              isPrintBlocked={isPrintBlocked}
               selectedVersion={selectedVersion}
               onZoom={handleZoom}
             />
@@ -395,6 +465,7 @@ interface ChatPanelProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isGenerated: boolean;
   messages: ChatMessage[];
+  onAutoFix: () => void;
   onDraftChange: (value: string) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onInputKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -411,6 +482,7 @@ function ChatPanel({
   fileInputRef,
   isGenerated,
   messages,
+  onAutoFix,
   onDraftChange,
   onFileChange,
   onInputKeyDown,
@@ -444,16 +516,20 @@ function ChatPanel({
                 key={message.id}
                 className={message.role === "user" ? "flex justify-end" : "flex justify-start"}
               >
-                <p
-                  className={[
-                    "max-w-[88%] whitespace-pre-line rounded-2xl px-4 py-3 text-sm leading-6",
-                    message.role === "user"
-                      ? "rounded-br-md bg-[#5a7bff] text-white"
-                      : "rounded-bl-md border border-gray-200 bg-white text-gray-950",
-                  ].join(" ")}
-                >
-                  {message.content}
-                </p>
+                {message.hasPrintIssue && message.printWarning ? (
+                  <PrintWarningCard warning={message.printWarning} onAutoFix={onAutoFix} />
+                ) : (
+                  <p
+                    className={[
+                      "max-w-[88%] whitespace-pre-line rounded-2xl px-4 py-3 text-sm leading-6",
+                      message.role === "user"
+                        ? "rounded-br-md bg-[#5a7bff] text-white"
+                        : "rounded-bl-md border border-gray-200 bg-white text-gray-950",
+                    ].join(" ")}
+                  >
+                    {message.content}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -466,7 +542,7 @@ function ChatPanel({
         )}
 
         <form onSubmit={onSubmit} className="w-full">
-          <div className="flex min-h-[60px] flex-col rounded-xl border border-[#5a7bff] bg-white px-4 py-3 shadow-sm">
+          <div className="flex min-h-[60px] flex-col rounded-xl border border-[#5a7bff] bg-white px-4 py-2 shadow-sm">
             <input
               ref={fileInputRef}
               type="file"
@@ -501,7 +577,7 @@ function ChatPanel({
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="참고 이미지 첨부"
                 title="참고 이미지 첨부"
-                className="shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
+                className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
               >
                 <Plus className="h-7 w-7" strokeWidth={1.8} aria-hidden="true" />
               </button>
@@ -520,7 +596,7 @@ function ChatPanel({
                 type="submit"
                 aria-label="메시지 전송"
                 title="메시지 전송"
-                className="shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
+                className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
               >
                 <CornerDownLeft className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
               </button>
@@ -623,9 +699,51 @@ function HistorySidebar({
   );
 }
 
+interface PrintWarningCardProps {
+  onAutoFix: () => void;
+  warning: PrintWarning;
+}
+
+function PrintWarningCard({ onAutoFix, warning }: PrintWarningCardProps) {
+  return (
+    <div className="max-w-[92%] rounded-2xl border border-red-400 bg-white p-4 text-gray-950">
+      <div className="flex items-center gap-2 text-sm font-semibold text-red-500">
+        <span aria-hidden="true" className="text-base leading-none">
+          ●
+        </span>
+        {warning.title}
+      </div>
+      <p className="mt-4 text-xs leading-5 text-gray-500">{warning.description}</p>
+      <div className="mt-3 rounded-xl bg-gray-50 px-4 py-3">
+        {warning.issues.map((issue, index) => (
+          <div
+            key={issue.label}
+            className={index < warning.issues.length - 1 ? "mb-3" : ""}
+          >
+            <p className="text-xs text-gray-500">{issue.label}</p>
+            <p className="mt-1 text-sm font-semibold text-gray-950">
+              {issue.current}
+              <span className="px-2 text-gray-400">→</span>
+              {issue.required}
+            </p>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={onAutoFix}
+        className="mt-3 h-11 w-full rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-950 transition-colors hover:bg-gray-50"
+      >
+        규격에 맞게 자동 수정
+      </button>
+    </div>
+  );
+}
+
 interface PreviewPanelProps {
   cameraDistance: number;
   isGenerated: boolean;
+  isPrintBlocked: boolean;
   onZoom: (direction: "in" | "out") => void;
   selectedVersion: DesignVersion;
 }
@@ -633,6 +751,7 @@ interface PreviewPanelProps {
 function PreviewPanel({
   cameraDistance,
   isGenerated,
+  isPrintBlocked,
   onZoom,
   selectedVersion,
 }: PreviewPanelProps) {
@@ -681,7 +800,7 @@ function PreviewPanel({
       <div className="mt-5 grid w-full max-w-[432px] grid-cols-[minmax(0,1fr)_48px] gap-7">
         <button
           type="button"
-          disabled={!isGenerated}
+          disabled={!isGenerated || isPrintBlocked}
           className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white"
         >
           {isGenerated ? "출력하기" : "디자인을 생성해 주세요."}
