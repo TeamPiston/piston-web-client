@@ -19,6 +19,7 @@ import {
   useSyncExternalStore,
   type ChangeEvent,
   type ClipboardEvent,
+  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
@@ -153,9 +154,12 @@ interface ChatHistory {
 }
 
 interface AttachedImage {
+  id: string;
   name: string;
   url: string;
 }
+
+const MAX_ATTACHED_IMAGES = 2;
 
 const INITIAL_CHAT_HISTORIES: ChatHistory[] = [
   { id: "pencil-holder", title: "육각형 연필꽂이" },
@@ -281,8 +285,8 @@ export default function CreateWorkspaceEntry() {
 function CreateWorkspace() {
   const router = useRouter();
   const [draft, setDraft] = useState("");
-  const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
-  const selectedFileName = attachedImage ? attachedImage.name : null;
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [isLimitExceeded, setIsLimitExceeded] = useState(false);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
   const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
@@ -307,6 +311,7 @@ function CreateWorkspace() {
   );
   const [cameraDistance, setCameraDistance] = useState(42);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachedImagesRef = useRef<AttachedImage[]>([]);
   const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
   const historyTitleInputRef = useRef<HTMLInputElement>(null);
   const loadingTimeoutRef = useRef<number | null>(null);
@@ -320,12 +325,14 @@ function CreateWorkspace() {
   }, [editingHistoryId]);
 
   useEffect(() => {
+    attachedImagesRef.current = attachedImages;
+  }, [attachedImages]);
+
+  useEffect(() => {
     return () => {
-      if (attachedImage) {
-        URL.revokeObjectURL(attachedImage.url);
-      }
+      attachedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.url));
     };
-  }, [attachedImage]);
+  }, []);
 
   useEffect(() => {
     const textarea = draftTextareaRef.current;
@@ -428,17 +435,20 @@ function CreateWorkspace() {
     }
 
     const prompt = draft.trim();
-    if (!prompt && !attachedImage) {
+    if (!prompt && attachedImages.length === 0) {
       return;
     }
 
-    const userContent = attachedImage && selectedFileName
-      ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${selectedFileName}`
+    const attachedFileNames = attachedImages.map((image) => image.name).join(", ");
+    const userContent = attachedImages.length > 0
+      ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${attachedFileNames}`
       : prompt;
 
     appendMockResponse(userContent, prompt);
     setDraft("");
-    setAttachedImage(null);
+    attachedImages.forEach((image) => URL.revokeObjectURL(image.url));
+    setAttachedImages([]);
+    setIsLimitExceeded(false);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -549,40 +559,72 @@ function CreateWorkspace() {
     setCurrentModelParams(resolveModelParams(nextVersion));
   };
 
-  const attachImage = (file: File) => {
-    if (!file.type.startsWith("image/")) {
+  const addImages = (files: File[]) => {
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
       return;
     }
 
-    setAttachedImage({
+    const availableSlots = MAX_ATTACHED_IMAGES - attachedImages.length;
+    if (availableSlots <= 0) {
+      setIsLimitExceeded(true);
+      return;
+    }
+
+    const filesToAdd = imageFiles.slice(0, availableSlots);
+    const nextImages = filesToAdd.map((file, index) => ({
+      id: `${file.name}-${file.lastModified}-${Date.now()}-${index}`,
       name: file.name || "붙여넣은 이미지",
       url: URL.createObjectURL(file),
-    });
+    }));
+
+    setAttachedImages((currentImages) => [...currentImages, ...nextImages]);
+    setIsLimitExceeded(imageFiles.length > availableSlots);
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const [file] = Array.from(event.target.files ?? []);
-    if (file) {
-      attachImage(file);
-    }
+    addImages(Array.from(event.target.files ?? []));
+    event.target.value = "";
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const imageFile = Array.from(event.clipboardData.files).find((file) =>
+    const imageFiles = Array.from(event.clipboardData.files).filter((file) =>
       file.type.startsWith("image/"),
     );
 
-    if (imageFile) {
+    if (imageFiles.length > 0) {
       event.preventDefault();
-      attachImage(imageFile);
+      addImages(imageFiles);
     }
   };
 
-  const handleRemoveAttachment = () => {
-    setAttachedImage(null);
+  const handleDrop = (event: DragEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    addImages(Array.from(event.dataTransfer.files));
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLFormElement>) => {
+    event.preventDefault();
+  };
+
+  const handleRemoveAttachment = (imageId: string) => {
+    const imageToRemove = attachedImages.find((image) => image.id === imageId);
+    if (imageToRemove) {
+      URL.revokeObjectURL(imageToRemove.url);
+    }
+
+    setAttachedImages((currentImages) =>
+      currentImages.filter((image) => image.id !== imageId),
+    );
+    setIsLimitExceeded(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    setIsLimitExceeded(false);
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -619,7 +661,9 @@ function CreateWorkspace() {
     setCurrentPrintTask(null);
     setIsLoading(false);
     setMessages([]);
-    setAttachedImage(null);
+    attachedImages.forEach((image) => URL.revokeObjectURL(image.url));
+    setAttachedImages([]);
+    setIsLimitExceeded(false);
     setPrintSuccessPhase("hidden");
     setSelectedVersionId("v3");
     setVersions([]);
@@ -699,14 +743,17 @@ function CreateWorkspace() {
 
           <section className="grid min-h-[calc(100vh-100px)] min-w-0 lg:grid-cols-2">
             <ChatPanel
-              attachedImage={attachedImage}
+              attachedImages={attachedImages}
               draft={draft}
               draftTextareaRef={draftTextareaRef}
               fileInputRef={fileInputRef}
               isGenerated={isGenerated}
+              isLimitExceeded={isLimitExceeded}
               isLoading={isLoading}
               messages={messages}
-              onDraftChange={setDraft}
+              onDraftChange={handleDraftChange}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
               onFileChange={handleFileChange}
               onInputKeyDown={handleInputKeyDown}
               onAutoFix={handleAutoFix}
@@ -783,33 +830,39 @@ function CreateWorkspace() {
 }
 
 interface ChatPanelProps {
-  attachedImage: AttachedImage | null;
+  attachedImages: AttachedImage[];
   draft: string;
   draftTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isGenerated: boolean;
+  isLimitExceeded: boolean;
   isLoading: boolean;
   messages: ChatMessage[];
   onAutoFix: (warning: PrintWarning) => void;
   onDraftChange: (value: string) => void;
+  onDragOver: (event: DragEvent<HTMLFormElement>) => void;
+  onDrop: (event: DragEvent<HTMLFormElement>) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onInputKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
-  onRemoveAttachment: () => void;
+  onRemoveAttachment: (imageId: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggleHistory: () => void;
 }
 
 function ChatPanel({
-  attachedImage,
+  attachedImages,
   draft,
   draftTextareaRef,
   fileInputRef,
   isGenerated,
+  isLimitExceeded,
   isLoading,
   messages,
   onAutoFix,
   onDraftChange,
+  onDragOver,
+  onDrop,
   onFileChange,
   onInputKeyDown,
   onPaste,
@@ -874,8 +927,18 @@ function ChatPanel({
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="w-full">
-          <div className="flex min-h-[60px] flex-col rounded-xl border border-[#5a7bff] bg-white px-4 py-2 shadow-sm">
+        <form
+          onSubmit={onSubmit}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          className="w-full"
+        >
+          <div
+            className={[
+              "flex min-h-[60px] flex-col rounded-xl bg-white px-4 py-2 shadow-sm",
+              isLimitExceeded ? "border-2 border-red-400" : "border border-[#5a7bff]",
+            ].join(" ")}
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -883,25 +946,32 @@ function ChatPanel({
               onChange={onFileChange}
               className="sr-only"
             />
-            {attachedImage && (
-              <div className="group relative mb-3 h-24 w-24 overflow-hidden rounded-lg bg-gray-200">
-                <Image
-                  src={attachedImage.url}
-                  alt="첨부 이미지 미리보기"
-                  width={96}
-                  height={96}
-                  unoptimized
-                  className="h-full w-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={onRemoveAttachment}
-                  aria-label="첨부 이미지 삭제"
-                  title="첨부 이미지 삭제"
-                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
+            {attachedImages.length > 0 && (
+              <div className="mb-3 flex gap-2">
+                {attachedImages.map((image) => (
+                  <div
+                    key={image.id}
+                    className="group relative h-16 w-16 overflow-hidden rounded-lg bg-gray-200"
+                  >
+                    <Image
+                      src={image.url}
+                      alt={`첨부 이미지 미리보기: ${image.name}`}
+                      width={64}
+                      height={64}
+                      unoptimized
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveAttachment(image.id)}
+                      aria-label={`${image.name} 첨부 이미지 삭제`}
+                      title="첨부 이미지 삭제"
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                    >
+                      <X className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
             <div className="flex min-h-10 items-end gap-3">
@@ -937,6 +1007,11 @@ function ChatPanel({
               </button>
             </div>
           </div>
+          {isLimitExceeded && (
+            <p className="mt-2 text-center text-xs text-red-500">
+              • 사진은 최대 2장까지 첨부할 수 있어요
+            </p>
+          )}
           <p className="mt-3 text-center text-xs text-gray-400">
             참고 이미지가 자세할수록 원하는 결과물에 가깝게 만들어져요
           </p>
