@@ -4,39 +4,51 @@ import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { getCurrentPrintTask, type PrintTask } from "@/entities/print";
+import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
 import { useAuth } from "@/entities/session";
 import { Header } from "@/widgets/header";
-
-interface CreatedDesign {
-  href: string;
-  isPublished: boolean;
-  meta: string;
-  title: string;
-}
+import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
 
 const MOCK_PROFILE = {
   email: "penamjin@gmail.com",
   name: "dlskawls",
 };
 
-const MOCK_CREATED_DESIGNS: CreatedDesign[] = [
+const INITIAL_CREATED_DESIGNS: MyDesign[] = [
   {
-    href: "/artwork/6",
+    id: "plant-tray",
+    createdAt: "어제 만듦",
+    printCount: 1,
     isPublished: true,
-    meta: "어제 만듦 · 1회 출력",
+    stlUrl: "/models/mini-tray.stl",
+    dimensions: "120 × 120 × 40 mm",
+    estimatedPrintTime: "1시간 24분",
+    filamentLength: "12 m",
+    filamentWeight: "36 g",
     title: "화분 받침 트레이",
   },
   {
-    href: "/artwork/7",
+    id: "cable-hook",
+    createdAt: "3일 전 만듦",
+    printCount: 2,
     isPublished: false,
-    meta: "3일 전 만듦 · 2회 출력",
+    stlUrl: "/models/cable-holder.stl",
+    dimensions: "80 × 36 × 22 mm",
+    estimatedPrintTime: "48분",
+    filamentLength: "9 m",
+    filamentWeight: "27 g",
     title: "벽걸이 케이블 훅",
   },
   {
-    href: "/artwork/8",
+    id: "headphone-stand",
+    createdAt: "1주 전 만듦",
+    printCount: 0,
     isPublished: true,
-    meta: "1주 전 만듦 · 아직 출력 안 함",
+    stlUrl: "/models/desk-stand.stl",
+    dimensions: "120 × 120 × 40 mm",
+    estimatedPrintTime: "1시간 24분",
+    filamentLength: "12 m",
+    filamentWeight: "36 g",
     title: "헤드폰 거치대",
   },
 ];
@@ -47,6 +59,10 @@ export default function MyPage() {
   const [printTask, setPrintTask] = useState<PrintTask | null | undefined>(undefined);
   const [isPrintLoading, setIsPrintLoading] = useState(true);
   const [hasPrintLoadError, setHasPrintLoadError] = useState(false);
+  const [createdDesigns, setCreatedDesigns] = useState(INITIAL_CREATED_DESIGNS);
+  const [selectedDesign, setSelectedDesign] = useState<MyDesign | null>(null);
+
+  const closeDesignModal = useCallback(() => setSelectedDesign(null), []);
 
   const loadCurrentPrint = useCallback(async () => {
     try {
@@ -124,7 +140,7 @@ export default function MyPage() {
           </div>
         </section>
 
-        {printTask === undefined ? (
+        {printTask === undefined && (
           <PrintLoadState
             hasError={hasPrintLoadError}
             isLoading={isPrintLoading}
@@ -133,15 +149,42 @@ export default function MyPage() {
               void loadCurrentPrint();
             }}
           />
-        ) : printTask === null || printTask.status === "EMPTY" ? (
-          <EmptyPrintState />
-        ) : (
-          <>
-            <PrintStatusSection printTask={printTask} />
-            <CreatedDesignSection />
-          </>
         )}
+        {(printTask === null || printTask?.status === "EMPTY") && <EmptyPrintState />}
+        {printTask && printTask.status !== "EMPTY" && (
+          <PrintStatusSection printTask={printTask} />
+        )}
+        <CreatedDesignSection
+          designs={createdDesigns}
+          onSelect={setSelectedDesign}
+        />
       </main>
+      <DesignDetailModal
+        design={selectedDesign}
+        onClose={closeDesignModal}
+        onDelete={(designId) => {
+          setCreatedDesigns((designs) => designs.filter((design) => design.id !== designId));
+          setSelectedDesign(null);
+        }}
+        onPrint={async (artworkName) => {
+          const nextPrintTask = await createPrintTask(artworkName);
+          setPrintTask(nextPrintTask);
+        }}
+        onTogglePublished={(designId) => {
+          setCreatedDesigns((designs) =>
+            designs.map((design) =>
+              design.id === designId
+                ? { ...design, isPublished: !design.isPublished }
+                : design,
+            ),
+          );
+          setSelectedDesign((design) =>
+            design?.id === designId
+              ? { ...design, isPublished: !design.isPublished }
+              : design,
+          );
+        }}
+      />
     </div>
   );
 }
@@ -218,16 +261,24 @@ function PrintLoadState({
   );
 }
 
-function CreatedDesignSection() {
+function CreatedDesignSection({
+  designs,
+  onSelect,
+}: {
+  designs: MyDesign[];
+  onSelect: (design: MyDesign) => void;
+}) {
   return (
     <section className="mt-14 pb-12">
       <h2 className="text-xl font-bold text-gray-950">내가 만든 디자인</h2>
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {MOCK_CREATED_DESIGNS.map((design) => (
-          <Link
-            key={design.title}
-            href={design.href}
-            className="overflow-hidden rounded-2xl border border-gray-300 bg-white transition-shadow hover:shadow-md"
+        {designs.map((design) => (
+          <button
+            key={design.id}
+            type="button"
+            onClick={() => onSelect(design)}
+            aria-label={`${design.title} 상세 보기`}
+            className="overflow-hidden rounded-2xl border border-gray-300 bg-white text-left transition-shadow hover:shadow-md"
           >
             <div className="relative h-40 bg-[#f6f6f6] p-3">
               <span
@@ -244,9 +295,11 @@ function CreatedDesignSection() {
             </div>
             <div className="border-t border-gray-100 px-5 py-4">
               <h3 className="truncate text-base font-bold text-gray-950">{design.title}</h3>
-              <p className="mt-2 text-xs text-gray-400">{design.meta}</p>
+              <p className="mt-2 text-xs text-gray-400">
+                {design.createdAt} · {design.printCount > 0 ? `${design.printCount}회 출력` : "아직 출력 안 함"}
+              </p>
             </div>
-          </Link>
+          </button>
         ))}
       </div>
     </section>

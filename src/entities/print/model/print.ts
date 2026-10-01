@@ -52,10 +52,10 @@ function normalizePrintTask(value: unknown): PrintTask | null {
   };
 }
 
-export async function createPrintTask() {
+export async function createPrintTask(artworkName = PRINT_ARTWORK_NAME) {
   const response = await apiClient.post<unknown>("/api/prints", {
     userId: PRINT_USER_ID,
-    artworkName: PRINT_ARTWORK_NAME,
+    artworkName,
   });
   const printTask = normalizePrintTask(response);
 
