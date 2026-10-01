@@ -74,15 +74,7 @@ export function Header() {
           })}
         </nav>
 
-        <div className="flex items-center gap-3 justify-self-end">
-          {!isMounted || !isLoggedIn ? (
-            <Link
-              href="/login"
-              className="rounded bg-[#1e1e1e] px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            >
-              로그인
-            </Link>
-          ) : null}
+        {isMounted && isLoggedIn ? (
           <button
             type="button"
             onClick={handleProfileNavigation}
@@ -92,7 +84,14 @@ export function Header() {
           >
             <CircleUserRound className="h-8 w-8" strokeWidth={1.25} />
           </button>
-        </div>
+        ) : (
+          <Link
+            href="/login"
+            className="justify-self-end rounded bg-[#1e1e1e] px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            로그인
+          </Link>
+        )}
       </header>
       <LoginRequiredModal
         isOpen={isLoginModalOpen}
