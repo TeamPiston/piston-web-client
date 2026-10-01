@@ -2,7 +2,7 @@
 
 import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
 import { useAuth } from "@/entities/session";
 import { PistonLogo } from "@/shared/ui";
@@ -15,7 +15,8 @@ const navigationItems = [
 
 export function Header() {
   const pathname = usePathname();
-  const { isLoggedIn, logout } = useAuth();
+  const router = useRouter();
+  const { isLoggedIn } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
@@ -32,12 +33,25 @@ export function Header() {
     }
   };
 
+  const handleProfileNavigation = () => {
+    if (!isMounted || !isLoggedIn) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+
+    router.push("/mypage");
+  };
+
   return (
     <>
       <header className="sticky top-0 z-20 grid h-[100px] w-full grid-cols-3 items-center border-b border-gray-200 bg-white/85 px-12 py-4 backdrop-blur-sm">
-        <span className="justify-self-start">
+        <Link
+          href="/"
+          aria-label="PISTON 메인으로 이동"
+          className="cursor-pointer justify-self-start"
+        >
           <PistonLogo />
-        </span>
+        </Link>
 
         <nav className="flex w-full max-w-[200px] items-center justify-between justify-self-center text-sm font-medium text-gray-700">
           {navigationItems.map((item) => {
@@ -60,24 +74,25 @@ export function Header() {
           })}
         </nav>
 
-        {isMounted && isLoggedIn ? (
+        <div className="flex items-center gap-3 justify-self-end">
+          {!isMounted || !isLoggedIn ? (
+            <Link
+              href="/login"
+              className="rounded bg-[#1e1e1e] px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              로그인
+            </Link>
+          ) : null}
           <button
             type="button"
-            onClick={logout}
-            aria-label="로그아웃"
-            title="로그아웃"
-            className="justify-self-end text-gray-900 transition-colors hover:text-gray-600"
+            onClick={handleProfileNavigation}
+            aria-label="마이페이지 이동"
+            title="마이페이지"
+            className="cursor-pointer text-gray-900 transition-colors hover:text-gray-600"
           >
             <CircleUserRound className="h-8 w-8" strokeWidth={1.25} />
           </button>
-        ) : (
-          <Link
-            href="/login"
-            className="justify-self-end rounded bg-[#1e1e1e] px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            로그인
-          </Link>
-        )}
+        </div>
       </header>
       <LoginRequiredModal
         isOpen={isLoginModalOpen}
