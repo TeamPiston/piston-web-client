@@ -80,7 +80,7 @@ export function Header() {
             onClick={handleProfileNavigation}
             aria-label="마이페이지 이동"
             title="마이페이지"
-            className="cursor-pointer text-gray-900 transition-colors hover:text-gray-600"
+            className="cursor-pointer justify-self-end text-gray-900 transition-colors hover:text-gray-600"
           >
             <CircleUserRound className="h-8 w-8" strokeWidth={1.25} />
           </button>
