@@ -23,6 +23,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { FilamentColor } from "@/entities/artwork";
+import { createPrintTask } from "@/entities/print";
 import { useAuth } from "@/entities/session";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import {
@@ -289,8 +290,10 @@ function CreateWorkspace() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [isPrintBlocked, setIsPrintBlocked] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isPrintStarting, setIsPrintStarting] = useState(false);
+  const [printStartError, setPrintStartError] = useState<string | null>(null);
   const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
-  const [isPrinterConnected] = useState(false);
+  const [isPrinterConnected] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [printSuccessPhase, setPrintSuccessPhase] = useState<PrintSuccessPhase>("hidden");
@@ -469,20 +472,37 @@ function CreateWorkspace() {
     }
 
     if (!isPrinterConnected) {
+      setPrintStartError(null);
       setIsPrintModalOpen(false);
       setIsPrinterConnectionModalOpen(true);
       return;
     }
 
     setIsPrinterConnectionModalOpen(false);
+    setPrintStartError(null);
     setIsPrintModalOpen(true);
   };
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
-    setIsPrintModalOpen(false);
-    setPrintSuccessPhase("visible");
+    if (isPrintStarting) {
+      return;
+    }
 
     void colorMode;
+    setIsPrintStarting(true);
+    setPrintStartError(null);
+
+    void createPrintTask()
+      .then(() => {
+        setIsPrintModalOpen(false);
+        setPrintSuccessPhase("visible");
+      })
+      .catch(() => {
+        setPrintStartError("출력 시작에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      })
+      .finally(() => {
+        setIsPrintStarting(false);
+      });
   };
 
   const handleVersionSelect = (versionId: string) => {
@@ -557,6 +577,8 @@ function CreateWorkspace() {
     setIsGenerated(false);
     setIsPrintBlocked(false);
     setIsPrintModalOpen(false);
+    setIsPrintStarting(false);
+    setPrintStartError(null);
     setIsPrinterConnectionModalOpen(false);
     setIsLoading(false);
     setMessages([]);
@@ -701,6 +723,8 @@ function CreateWorkspace() {
         filamentColors={CREATE_FILAMENT_COLORS}
         filamentUsage={CREATE_FILAMENT_USAGE}
         onClose={() => setIsPrintModalOpen(false)}
+        errorMessage={printStartError}
+        isSubmitting={isPrintStarting}
         onConfirm={handlePrintConfirm}
       />
       <PrinterDisconnectedModal

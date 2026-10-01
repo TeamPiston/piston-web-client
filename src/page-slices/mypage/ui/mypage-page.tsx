@@ -3,11 +3,10 @@
 import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { getCurrentPrintTask, type PrintTask } from "@/entities/print";
 import { useAuth } from "@/entities/session";
 import { Header } from "@/widgets/header";
-
-type PrintStatus = "COMPLETED" | "EMPTY" | "PRINTING";
 
 interface CreatedDesign {
   href: string;
@@ -45,7 +44,41 @@ const MOCK_CREATED_DESIGNS: CreatedDesign[] = [
 export default function MyPage() {
   const router = useRouter();
   const { logout, user } = useAuth();
-  const [printStatus] = useState<PrintStatus>("PRINTING");
+  const [printTask, setPrintTask] = useState<PrintTask | null | undefined>(undefined);
+  const [isPrintLoading, setIsPrintLoading] = useState(true);
+  const [hasPrintLoadError, setHasPrintLoadError] = useState(false);
+
+  const loadCurrentPrint = useCallback(async () => {
+    try {
+      const nextPrintTask = await getCurrentPrintTask();
+      setPrintTask(nextPrintTask);
+      setHasPrintLoadError(false);
+    } catch {
+      setHasPrintLoadError(true);
+    } finally {
+      setIsPrintLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const initialLoadId = window.setTimeout(() => {
+      void loadCurrentPrint();
+    }, 0);
+
+    return () => window.clearTimeout(initialLoadId);
+  }, [loadCurrentPrint]);
+
+  useEffect(() => {
+    if (printTask?.status !== "PRINTING") {
+      return;
+    }
+
+    const pollingId = window.setInterval(() => {
+      void loadCurrentPrint();
+    }, 3000);
+
+    return () => window.clearInterval(pollingId);
+  }, [loadCurrentPrint, printTask?.status]);
 
   const displayProfile = user && user.name !== "관리자" ? user : MOCK_PROFILE;
 
@@ -91,11 +124,20 @@ export default function MyPage() {
           </div>
         </section>
 
-        {printStatus === "EMPTY" ? (
+        {printTask === undefined ? (
+          <PrintLoadState
+            hasError={hasPrintLoadError}
+            isLoading={isPrintLoading}
+            onRetry={() => {
+              setIsPrintLoading(true);
+              void loadCurrentPrint();
+            }}
+          />
+        ) : printTask === null || printTask.status === "EMPTY" ? (
           <EmptyPrintState />
         ) : (
           <>
-            <PrintStatusSection status={printStatus} />
+            <PrintStatusSection printTask={printTask} />
             <CreatedDesignSection />
           </>
         )}
@@ -104,9 +146,12 @@ export default function MyPage() {
   );
 }
 
-function PrintStatusSection({ status }: { status: Exclude<PrintStatus, "EMPTY"> }) {
-  const isCompleted = status === "COMPLETED";
-  const progress = isCompleted ? 100 : 62;
+function PrintStatusSection({ printTask }: { printTask: PrintTask }) {
+  const isCompleted = printTask.status === "COMPLETED";
+  const progress = Math.min(100, Math.max(0, printTask.progress));
+  const remainingText = isCompleted
+    ? printTask.estimatedEndTime
+    : `약 ${printTask.remainingMinutes}분 남음 · ${printTask.estimatedEndTime}`;
 
   return (
     <section className="mt-12">
@@ -123,13 +168,11 @@ function PrintStatusSection({ status }: { status: Exclude<PrintStatus, "EMPTY"> 
             <span aria-hidden="true">●</span>
             {isCompleted ? "출력 완료" : "출력 중"}
           </div>
-          <h3 className="mt-4 text-xl font-bold text-gray-950">육각형 연필꽂이</h3>
+          <h3 className="mt-4 text-xl font-bold text-gray-950">{printTask.artworkName}</h3>
           <div className="mt-4 flex items-center justify-between gap-4">
             <span className="text-lg font-bold text-gray-950">{progress}%</span>
             <span className="text-xs text-gray-500">
-              {isCompleted
-                ? "오늘 15:12 완료 · 프린터에서 꺼내 주세요"
-                : "약 32분 남음 · 오늘 15:12 완료 예정"}
+              {remainingText}
             </span>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">
@@ -143,6 +186,34 @@ function PrintStatusSection({ status }: { status: Exclude<PrintStatus, "EMPTY"> 
           </div>
         </div>
       </article>
+    </section>
+  );
+}
+
+function PrintLoadState({
+  hasError,
+  isLoading,
+  onRetry,
+}: {
+  hasError: boolean;
+  isLoading: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <section className="mt-24 flex min-h-[315px] flex-col items-center justify-center rounded-2xl bg-[#f6f6f6] px-6 text-center">
+      <h2 className="text-xl font-bold text-gray-950">
+        {hasError ? "출력 상태를 불러오지 못했어요" : "출력 상태를 불러오는 중이에요"}
+      </h2>
+      {hasError && (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={isLoading}
+          className="mt-8 h-12 rounded-lg border border-gray-300 bg-white px-6 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          다시 시도
+        </button>
+      )}
     </section>
   );
 }
