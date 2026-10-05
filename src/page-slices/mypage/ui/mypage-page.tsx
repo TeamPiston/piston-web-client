@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
-import { useAuth } from "@/entities/session";
+import { deleteCurrentAccount, useAuth } from "@/entities/session";
 import { Header } from "@/widgets/header";
+import { DeleteAccountModal } from "./delete-account-modal";
 import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
 
 const MOCK_PROFILE = {
@@ -61,8 +62,16 @@ export default function MyPage() {
   const [hasPrintLoadError, setHasPrintLoadError] = useState(false);
   const [createdDesigns, setCreatedDesigns] = useState(INITIAL_CREATED_DESIGNS);
   const [selectedDesign, setSelectedDesign] = useState<MyDesign | null>(null);
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
 
   const closeDesignModal = useCallback(() => setSelectedDesign(null), []);
+
+  const handleDeleteAccount = async () => {
+    await deleteCurrentAccount();
+    logout();
+    setIsDeleteAccountModalOpen(false);
+    router.replace("/login");
+  };
 
   const loadCurrentPrint = useCallback(async () => {
     try {
@@ -133,6 +142,7 @@ export default function MyPage() {
             </button>
             <button
               type="button"
+              onClick={() => setIsDeleteAccountModalOpen(true)}
               className="h-11 rounded-lg border border-gray-300 px-4 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
             >
               회원탈퇴
@@ -184,6 +194,11 @@ export default function MyPage() {
               : design,
           );
         }}
+      />
+      <DeleteAccountModal
+        isOpen={isDeleteAccountModalOpen}
+        onClose={() => setIsDeleteAccountModalOpen(false)}
+        onConfirm={handleDeleteAccount}
       />
     </div>
   );

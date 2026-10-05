@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { SessionContext, type SessionContextValue } from "./context";
 import type { UserProfile } from "./context";
-import { AUTH_EXPIRED_EVENT, SESSION_STORAGE_KEY } from "./config";
+import { ACCESS_TOKEN_STORAGE_KEY, AUTH_EXPIRED_EVENT, SESSION_STORAGE_KEY } from "./config";
 
 const LEGACY_MOCK_USER: UserProfile = {
   id: "admin",
@@ -66,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     }
     setUser(null);
   };
