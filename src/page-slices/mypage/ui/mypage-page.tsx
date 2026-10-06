@@ -293,8 +293,7 @@ function PrintStatusSection({
           </button>
         )}
         {isFailed && (
-          <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-            <p className="text-xs text-gray-500">{getPrintFailureSummary(printTask)}</p>
+          <div className="flex shrink-0 flex-col items-start sm:items-end">
             <button
               type="button"
               onClick={onRetry}
@@ -342,7 +341,13 @@ function PrintStatusCardContent({
       <span className="mt-4 block text-xl font-bold text-gray-950">{printTask.artworkName}</span>
       <span className="mt-4 flex items-center justify-between gap-4">
         <span className="text-lg font-bold text-gray-950">{progress}%</span>
-        {!isFailed && <span className="text-xs text-gray-500">{remainingText}</span>}
+        {isFailed ? (
+          <span className="min-w-0 text-right text-xs text-gray-500">
+            {getPrintFailureSummary(printTask)}
+          </span>
+        ) : (
+          <span className="text-xs text-gray-500">{remainingText}</span>
+        )}
       </span>
       <span className="mt-3 block h-2 overflow-hidden rounded-full bg-gray-200">
         <span
