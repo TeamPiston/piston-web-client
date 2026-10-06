@@ -27,6 +27,7 @@
       "@/pages/home": ["./src/page-slices/home/ui/home-page.tsx"],
       "@/pages/artwork-detail": ["./src/page-slices/artwork-detail/ui/artwork-detail-page.tsx"],
       "@/pages/login": ["./src/page-slices/login/ui/login-page.tsx"],
+      "@/pages/mypage": ["./src/page-slices/mypage/ui/mypage-page.tsx"],
       "@/pages/register": ["./src/page-slices/register/ui/register-page.tsx"],
       "@/pages/register-form": ["./src/page-slices/register-form/ui/register-form-page.tsx"]
     }

@@ -4,23 +4,40 @@ import { Center, OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { Suspense, useEffect, useRef, useState } from "react";
+import type { ArtworkModelScale } from "../model/artwork-model";
 import { useStlModel } from "../model/use-stl-model";
 
-function StlMesh({ url }: { url: string }) {
-  const geometry = useStlModel(url);
+interface StlMeshProps {
+  color: string;
+  scale: ArtworkModelScale;
+  stlUrl: string;
+}
+
+function StlMesh({ color, scale, stlUrl }: StlMeshProps) {
+  const geometry = useStlModel(stlUrl);
 
   return (
-    <mesh geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial color="#9ca3af" roughness={0.45} metalness={0.08} />
+    <mesh geometry={geometry} scale={scale} castShadow receiveShadow>
+      <meshStandardMaterial color={color} roughness={0.45} metalness={0.08} />
     </mesh>
   );
 }
 
 interface ArtworkModelPreviewProps {
-  url: string;
+  cameraDistance?: number;
+  color?: string;
+  scale?: ArtworkModelScale;
+  stlUrl: string;
+  variant?: "detail" | "create";
 }
 
-export function ArtworkModelPreview({ url }: ArtworkModelPreviewProps) {
+export function ArtworkModelPreview({
+  cameraDistance = 42,
+  color = "#9ca3af",
+  scale = [1, 1, 1],
+  stlUrl,
+  variant = "detail",
+}: ArtworkModelPreviewProps) {
   const previewRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -55,18 +72,21 @@ export function ArtworkModelPreview({ url }: ArtworkModelPreviewProps) {
         "relative overflow-hidden bg-[#f5f5f5]",
         isFullscreen
           ? "h-full w-full rounded-none"
-          : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
+          : variant === "create"
+            ? "h-full w-full rounded-[28px]"
+            : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
       ].join(" ")}
     >
       <Canvas
-        camera={{ fov: 42, near: 0.1, far: 200, position: [0, 14, 42] }}
+        key={cameraDistance}
+        camera={{ fov: 42, near: 0.1, far: 200, position: [0, 14, cameraDistance] }}
         shadows
       >
         <ambientLight intensity={0.75} />
         <directionalLight position={[10, 15, 8]} intensity={1.1} />
         <Suspense fallback={null}>
           <Center>
-            <StlMesh url={url} />
+            <StlMesh color={color} scale={scale} stlUrl={stlUrl} />
           </Center>
         </Suspense>
         <OrbitControls

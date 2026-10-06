@@ -103,7 +103,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
 
           <section className="mt-3 grid w-full gap-6 rounded-[28px] bg-white p-3 shadow-[0_8px_24px_rgba(0,0,0,0.08)] sm:mt-4 sm:p-4 lg:mx-auto lg:h-[600px] lg:max-w-[1200px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-8 lg:overflow-hidden lg:p-[28px] 2xl:grid-cols-[504px_504px] 2xl:gap-24">
           <div className="flex min-w-0 flex-col">
-            <ArtworkModelPreview url={stlUrl} />
+            <ArtworkModelPreview stlUrl={stlUrl} />
 
             <div className="mt-4 flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -129,7 +129,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
           </div>
 
           <div className="flex min-w-0 flex-col justify-start gap-7 py-1">
-            <div className="min-h-[250px]">
+            <div className="min-h-[255px]">
               <p className="h-full max-h-[190px] overflow-y-auto text-[13px] leading-[1.75] text-gray-950 font-normal">
                 {description}
               </p>
