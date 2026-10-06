@@ -33,6 +33,7 @@ import {
   type ArtworkModelParams,
   type ArtworkModelScale,
 } from "@/features/stl-viewer";
+import { isMockPrinterConnected, MOCK_CREATE_FIXTURES } from "@/shared/mock/mock-data";
 import { PistonLogo } from "@/shared/ui";
 import { Header, LoginRequiredModal } from "@/widgets/header";
 
@@ -40,19 +41,9 @@ const subscribeToHydration = () => () => {};
 const getClientHydrationSnapshot = () => true;
 const getServerHydrationSnapshot = () => false;
 
-const CREATE_FILAMENT_COLORS: FilamentColor[] = [
-  { name: "빨강", value: "#f04444" },
-  { name: "주황", value: "#ff7855" },
-  { name: "노랑", value: "#ffd166" },
-  { name: "초록", value: "#0dcc9a" },
-];
-
-const CREATE_FILAMENT_USAGE = {
-  length: "12m",
-  weight: "36g",
-};
-
-const CREATE_ESTIMATED_PRINT_TIME = "1시간";
+const CREATE_FILAMENT_COLORS: FilamentColor[] = MOCK_CREATE_FIXTURES.filamentColors;
+const CREATE_FILAMENT_USAGE = MOCK_CREATE_FIXTURES.filamentUsage;
+const CREATE_ESTIMATED_PRINT_TIME = MOCK_CREATE_FIXTURES.estimatedPrintTime;
 
 type MessageRole = "assistant" | "user";
 
@@ -97,26 +88,9 @@ interface ChatMessage {
 
 type PrintSuccessPhase = "fading" | "hidden" | "visible";
 
-const MOCK_PRINT_WARNING: PrintWarning = {
-  title: "이대로는 출력할 수 없어요",
-  description: "모델은 만들어졌지만 아래 항목이 프린터 규격을 벗어났어요.",
-  issues: [
-    { label: "벽 두께", current: "0.8 mm", required: "최소 1.2 mm 필요" },
-    {
-      label: "손잡이 기둥 지름",
-      current: "1.4 mm",
-      required: "최소 2 mm 필요",
-    },
-  ],
-};
-
-const CORRECTED_VERSION_ID = "v4";
-
-const MOCK_COPYRIGHT_WARNING: CopyrightWarning = {
-  title: "이 요청은 만들어 드릴 수 없어요",
-  description:
-    "저작권이 있는 캐릭터나 상표가 들어간 디자인은 생성하지 않아요. 직접 떠올린 형태를 설명해 주시면 바로 만들어 드릴게요.",
-};
+const MOCK_PRINT_WARNING: PrintWarning = MOCK_CREATE_FIXTURES.printWarning;
+const CORRECTED_VERSION_ID = MOCK_CREATE_FIXTURES.correctedVersion.id;
+const MOCK_COPYRIGHT_WARNING: CopyrightWarning = MOCK_CREATE_FIXTURES.copyrightWarning;
 
 const COPYRIGHT_KEYWORDS = [
   "피카츄",
@@ -161,52 +135,9 @@ interface AttachedImage {
 
 const MAX_ATTACHED_IMAGES = 2;
 
-const INITIAL_CHAT_HISTORIES: ChatHistory[] = [
-  { id: "pencil-holder", title: "육각형 연필꽂이" },
-  { id: "cable-clip", title: "케이블 정리 클립" },
-  { id: "monitor-stand", title: "책상 모니터 받침대" },
-  { id: "plant-tray", title: "화분 받침 트레이" },
-];
-
-const MOCK_VERSIONS: DesignVersion[] = [
-  {
-    id: "v1",
-    label: "v1",
-    description: "육각형 연필꽂이 생성",
-    meta: "5분 전",
-    stlUrl: "/pencil-holder.stl",
-    scale: [1, 1, 1],
-    color: "#9ca3af",
-    dimensions: { width: 80, height: 100, depth: 80 },
-  },
-  {
-    id: "v2",
-    label: "v2",
-    description: "바닥 지름 15mm 넓힘",
-    meta: "2분 전",
-    stlUrl: "/pencil-holder.stl",
-    scale: [1.15, 1, 1.15],
-    color: "#7c8cf8",
-    dimensions: { width: 92, height: 100, depth: 92 },
-  },
-  {
-    id: "v3",
-    label: "v3",
-    description: "안쪽을 체스 칸으로 나눔",
-    meta: "방금",
-    stlUrl: "/pencil-holder.stl",
-    scale: [1.15, 1.05, 1.15],
-    color: "#5a7bff",
-    dimensions: { width: 92, height: 105, depth: 92 },
-  },
-];
-
-const DEFAULT_MODEL_PARAMS: ResolvedArtworkModelParams = {
-  stlUrl: "/pencil-holder.stl",
-  scale: [1, 1, 1],
-  color: "#9ca3af",
-  dimensions: { width: 80, height: 100, depth: 80 },
-};
+const INITIAL_CHAT_HISTORIES: ChatHistory[] = MOCK_CREATE_FIXTURES.chatHistories;
+const MOCK_VERSIONS: DesignVersion[] = MOCK_CREATE_FIXTURES.versions;
+const DEFAULT_MODEL_PARAMS: ResolvedArtworkModelParams = MOCK_CREATE_FIXTURES.defaultModel;
 
 const resolveModelParams = (version: DesignVersion): ResolvedArtworkModelParams => ({
   stlUrl: version.stlUrl ?? DEFAULT_MODEL_PARAMS.stlUrl,
@@ -215,16 +146,7 @@ const resolveModelParams = (version: DesignVersion): ResolvedArtworkModelParams 
   dimensions: version.dimensions ?? DEFAULT_MODEL_PARAMS.dimensions,
 });
 
-const MOCK_CORRECTED_VERSION: DesignVersion = {
-  id: CORRECTED_VERSION_ID,
-  label: CORRECTED_VERSION_ID,
-  description: "규격에 맞게 두께 보정",
-  meta: "방금",
-  stlUrl: "/pencil-holder.stl",
-  scale: [1.2, 1.1, 1.2],
-  color: "#14b8a6",
-  dimensions: { width: 96, height: 110, depth: 96 },
-};
+const MOCK_CORRECTED_VERSION: DesignVersion = MOCK_CREATE_FIXTURES.correctedVersion;
 
 const getFirstNumber = (value: string) => {
   const match = value.match(/\d+(?:\.\d+)?/);
@@ -299,7 +221,7 @@ function CreateWorkspace() {
   const [isPrintStarting, setIsPrintStarting] = useState(false);
   const [printStartError, setPrintStartError] = useState<string | null>(null);
   const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
-  const [isPrinterConnected] = useState(true);
+  const isPrinterConnected = isMockPrinterConnected();
   const [currentPrintTask, setCurrentPrintTask] = useState<PrintTask | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);

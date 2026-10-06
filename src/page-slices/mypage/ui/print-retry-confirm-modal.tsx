@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PrintTask } from "@/entities/print";
+import { MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
 
 interface PrintRetryConfirmModalProps {
   onClose: () => void;
@@ -20,7 +21,7 @@ export function PrintRetryConfirmModal({
   const [hasColorFilament, setHasColorFilament] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const stoppedTime = formatStoppedTime(printTask.stoppedAt);
-  const filamentRemaining = printTask.filamentRemaining ?? "12 m / 36 g";
+  const filamentRemaining = printTask.filamentRemaining ?? MOCK_ACCOUNT_SETTINGS.filamentRemaining;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -98,7 +99,7 @@ export function PrintRetryConfirmModal({
           <ChecklistItem title="잔여물 정리" description="이전 출력물이나 잔여물이 남아 있지 않은지" />
           <ChecklistItem
             title="프린터 연결"
-            description={`${printTask.printerName ?? "MAX4_02"} · 연결됨`}
+            description={`${printTask.printerName ?? MOCK_ACCOUNT_SETTINGS.printerName} · 연결됨`}
           />
           <div className="flex items-start gap-3">
             <input

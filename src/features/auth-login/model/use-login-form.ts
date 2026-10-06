@@ -3,22 +3,12 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/entities/session";
+import { MOCK_LOGIN_CREDENTIALS, MOCK_USER_PROFILE } from "@/shared/mock/mock-data";
 
 interface LoginCredentials {
   id: string;
   password: string;
 }
-
-const MOCK_LOGIN_CREDENTIALS: LoginCredentials = {
-  id: "admin",
-  password: "1234",
-};
-
-const MOCK_USER = {
-  id: "admin",
-  email: "admin@example.com",
-  name: "관리자",
-};
 
 export function useLoginForm() {
   const router = useRouter();
@@ -50,7 +40,7 @@ export function useLoginForm() {
       return;
     }
 
-    login(MOCK_USER);
+    login(MOCK_USER_PROFILE);
     router.push("/feed");
   };
 

@@ -9,58 +9,22 @@ import {
   createPrintTask,
   getCurrentPrintTask,
   PRINT_ARTWORK_NAME,
+  retryPrintTask,
   type PrintTask,
 } from "@/entities/print";
 import { deleteCurrentAccount, useAuth } from "@/entities/session";
+import {
+  deleteMockDesign,
+  fetchMockMyDesigns,
+  MOCK_ACCOUNT_PROFILE,
+  MOCK_MY_DESIGNS,
+  toggleMockDesignPublish,
+} from "@/shared/mock/mock-data";
 import { Header } from "@/widgets/header";
 import { DeleteAccountModal } from "./delete-account-modal";
 import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
 import { PrintRetryConfirmModal } from "./print-retry-confirm-modal";
 import { PrintStatusDetailModal } from "./print-status-detail-modal";
-
-const MOCK_PROFILE = {
-  email: "penamjin@gmail.com",
-  name: "dlskawls",
-};
-
-const INITIAL_CREATED_DESIGNS: MyDesign[] = [
-  {
-    id: "plant-tray",
-    createdAt: "어제 만듦",
-    printCount: 1,
-    isPublished: true,
-    stlUrl: "/models/mini-tray.stl",
-    dimensions: "120 × 120 × 40 mm",
-    estimatedPrintTime: "1시간 24분",
-    filamentLength: "12 m",
-    filamentWeight: "36 g",
-    title: "화분 받침 트레이",
-  },
-  {
-    id: "cable-hook",
-    createdAt: "3일 전 만듦",
-    printCount: 2,
-    isPublished: false,
-    stlUrl: "/models/cable-holder.stl",
-    dimensions: "80 × 36 × 22 mm",
-    estimatedPrintTime: "48분",
-    filamentLength: "9 m",
-    filamentWeight: "27 g",
-    title: "벽걸이 케이블 훅",
-  },
-  {
-    id: "headphone-stand",
-    createdAt: "1주 전 만듦",
-    printCount: 0,
-    isPublished: true,
-    stlUrl: "/models/desk-stand.stl",
-    dimensions: "120 × 120 × 40 mm",
-    estimatedPrintTime: "1시간 24분",
-    filamentLength: "12 m",
-    filamentWeight: "36 g",
-    title: "헤드폰 거치대",
-  },
-];
 
 export default function MyPage() {
   const router = useRouter();
@@ -70,11 +34,24 @@ export default function MyPage() {
   const [isRetryModalOpen, setIsRetryModalOpen] = useState(false);
   const [isPrintLoading, setIsPrintLoading] = useState(true);
   const [hasPrintLoadError, setHasPrintLoadError] = useState(false);
-  const [createdDesigns, setCreatedDesigns] = useState(INITIAL_CREATED_DESIGNS);
+  const [createdDesigns, setCreatedDesigns] = useState<MyDesign[]>(MOCK_MY_DESIGNS);
   const [selectedDesign, setSelectedDesign] = useState<MyDesign | null>(null);
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
 
   const closeDesignModal = useCallback(() => setSelectedDesign(null), []);
+
+  useEffect(() => {
+    let isMounted = true;
+    void fetchMockMyDesigns().then((designs) => {
+      if (isMounted) {
+        setCreatedDesigns(designs);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleDeleteAccount = async () => {
     await deleteCurrentAccount();
@@ -118,7 +95,7 @@ export default function MyPage() {
     return () => window.clearInterval(pollingId);
   }, [loadCurrentPrint, printTask?.status]);
 
-  const displayProfile = user && user.name !== "관리자" ? user : MOCK_PROFILE;
+  const displayProfile = user && user.id !== "admin" ? user : MOCK_ACCOUNT_PROFILE;
   const selectedPrintDesign = selectedPrintTask
     ? createdDesigns.find((design) => design.title === selectedPrintTask.artworkName)
     : undefined;
@@ -198,6 +175,7 @@ export default function MyPage() {
         design={selectedDesign}
         onClose={closeDesignModal}
         onDelete={(designId) => {
+          void deleteMockDesign(designId);
           setCreatedDesigns((designs) => designs.filter((design) => design.id !== designId));
           setSelectedDesign(null);
         }}
@@ -206,18 +184,16 @@ export default function MyPage() {
           setPrintTask(nextPrintTask);
         }}
         onTogglePublished={(designId) => {
-          setCreatedDesigns((designs) =>
-            designs.map((design) =>
-              design.id === designId
-                ? { ...design, isPublished: !design.isPublished }
-                : design,
-            ),
-          );
-          setSelectedDesign((design) =>
-            design?.id === designId
-              ? { ...design, isPublished: !design.isPublished }
-              : design,
-          );
+          void toggleMockDesignPublish(designId).then((nextDesign) => {
+            if (!nextDesign) {
+              return;
+            }
+
+            setCreatedDesigns((designs) =>
+              designs.map((design) => design.id === designId ? nextDesign : design),
+            );
+            setSelectedDesign((design) => design?.id === designId ? nextDesign : design);
+          });
         }}
       />
       {selectedPrintTask && (
@@ -239,7 +215,7 @@ export default function MyPage() {
           printTask={printTask}
           onClose={() => setIsRetryModalOpen(false)}
           onConfirm={async () => {
-            const nextPrintTask = await createPrintTask(printTask.artworkName);
+            const nextPrintTask = await retryPrintTask(printTask);
             setPrintTask(nextPrintTask);
             setIsRetryModalOpen(false);
             setHasPrintLoadError(false);

@@ -6,6 +6,7 @@ import { ArtworkModelPreview } from "@/features/stl-viewer";
 import { DeleteDesignConfirmModal } from "./delete-design-confirm-modal";
 
 export interface MyDesign {
+  colorMode?: "color" | "monochrome";
   createdAt: string;
   dimensions: string;
   estimatedPrintTime: string;
@@ -33,7 +34,10 @@ export function DesignDetailModal({
   onPrint,
   onTogglePublished,
 }: DesignDetailModalProps) {
-  const [colorMode, setColorMode] = useState<"color" | "monochrome">("color");
+  const [colorModeSelection, setColorModeSelection] = useState<{
+    designId: string;
+    mode: "color" | "monochrome";
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -66,6 +70,10 @@ export function DesignDetailModal({
   if (!design) {
     return null;
   }
+
+  const colorMode = colorModeSelection?.designId === design.id
+    ? colorModeSelection.mode
+    : design.colorMode ?? "color";
 
   const handlePrint = async () => {
     if (isSubmitting) {
@@ -160,7 +168,7 @@ export function DesignDetailModal({
             <button
               type="button"
               aria-pressed={colorMode === "color"}
-              onClick={() => setColorMode("color")}
+              onClick={() => setColorModeSelection({ designId: design.id, mode: "color" })}
               className={[
                 "flex min-w-0 items-center gap-3 rounded-xl p-3 text-left transition-colors",
                 colorMode === "color" ? "bg-white shadow-sm" : "opacity-60",
@@ -182,7 +190,7 @@ export function DesignDetailModal({
             <button
               type="button"
               aria-pressed={colorMode === "monochrome"}
-              onClick={() => setColorMode("monochrome")}
+              onClick={() => setColorModeSelection({ designId: design.id, mode: "monochrome" })}
               className={[
                 "flex min-w-0 items-center gap-3 rounded-xl p-3 text-left transition-colors",
                 colorMode === "monochrome" ? "bg-white shadow-sm" : "opacity-60",

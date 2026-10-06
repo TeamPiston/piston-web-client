@@ -1,4 +1,11 @@
 import { apiClient } from "@/shared/api";
+import {
+  cancelMockPrint,
+  createMockPrintTask,
+  fetchMockPrintStatus,
+  retryMockPrint,
+  withMockFallback,
+} from "@/shared/mock/mock-data";
 
 export const PRINT_USER_ID = "dlskawls";
 export const PRINT_ARTWORK_NAME = "육각형 연필꽂이";
@@ -96,29 +103,60 @@ function normalizePrintTask(value: unknown): PrintTask | null {
 }
 
 export async function createPrintTask(artworkName = PRINT_ARTWORK_NAME) {
-  const response = await apiClient.post<unknown>("/api/prints", {
-    userId: PRINT_USER_ID,
-    artworkName,
-  });
-  const printTask = normalizePrintTask(response);
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<unknown>("/api/prints", {
+        userId: PRINT_USER_ID,
+        artworkName,
+      });
+      const printTask = normalizePrintTask(response);
 
-  if (!printTask) {
-    throw new Error("출력 시작 응답 형식이 올바르지 않습니다.");
-  }
+      if (!printTask) {
+        throw new Error("출력 시작 응답 형식이 올바르지 않습니다.");
+      }
 
-  return printTask;
+      return printTask;
+    },
+    () => createMockPrintTask(artworkName),
+  );
 }
 
 export async function getCurrentPrintTask() {
-  const response = await apiClient.get<unknown>("/api/prints/current");
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.get<unknown>("/api/prints/current");
+      if (response === null) {
+        return null;
+      }
 
-  if (response === null) {
-    return null;
-  }
-
-  return normalizePrintTask(response);
+      return normalizePrintTask(response);
+    },
+    fetchMockPrintStatus,
+  );
 }
 
 export async function cancelPrintTask(printTaskId: number) {
-  await apiClient.delete<void>(`/api/prints/${printTaskId}`);
+  await withMockFallback(
+    () => apiClient.delete<void>(`/api/prints/${printTaskId}`),
+    () => cancelMockPrint(printTaskId),
+  );
+}
+
+export async function retryPrintTask(printTask: PrintTask) {
+  return withMockFallback(
+    async () => {
+      const response = await apiClient.post<unknown>("/api/prints", {
+        userId: PRINT_USER_ID,
+        artworkName: printTask.artworkName,
+      });
+      const nextTask = normalizePrintTask(response);
+
+      if (!nextTask) {
+        throw new Error("재출력 시작 응답 형식이 올바르지 않습니다.");
+      }
+
+      return nextTask;
+    },
+    () => retryMockPrint(printTask.id),
+  );
 }

@@ -133,7 +133,8 @@ async function verifyFrontendContracts() {
     "MyPage: PRINTING 상태에서만 폴링하는 조건이 없습니다.",
   );
   assert(
-    myPageSource.includes('printTask.status === "EMPTY"') &&
+    (myPageSource.includes('printTask.status === "EMPTY"') ||
+      myPageSource.includes('printTask?.status === "EMPTY"')) &&
       myPageSource.includes('href="/create"') &&
       myPageSource.includes('href="/feed"'),
     "MyPage: EMPTY 상태 및 Create/Feed 링크가 없습니다.",

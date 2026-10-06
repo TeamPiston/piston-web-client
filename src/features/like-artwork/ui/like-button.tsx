@@ -4,11 +4,13 @@ import Image from "next/image";
 import { useLikeArtwork } from "../model/use-like-artwork";
 
 interface LikeButtonProps {
+  artworkId?: string;
   className?: string;
+  initialLiked?: boolean;
 }
 
-export function LikeButton({ className = "" }: LikeButtonProps) {
-  const { liked, toggleLike } = useLikeArtwork();
+export function LikeButton({ artworkId, className = "", initialLiked = false }: LikeButtonProps) {
+  const { liked, toggleLike } = useLikeArtwork(initialLiked, artworkId);
 
   return (
     <button

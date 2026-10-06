@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import type { PrintTask } from "@/entities/print";
+import { MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
 
 interface PrintStatusDetailModalProps {
   filamentRemaining: string;
@@ -123,7 +124,7 @@ export function PrintStatusDetailModal({
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500">프린터 이름</dt>
             <dd className="text-right font-semibold text-gray-900">
-              {printTask.printerName || "MAX4_02"}
+              {printTask.printerName || MOCK_ACCOUNT_SETTINGS.printerName}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
