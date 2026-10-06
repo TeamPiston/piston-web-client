@@ -27,6 +27,7 @@ interface ArtworkModelPreviewProps {
   cameraDistance?: number;
   color?: string;
   scale?: ArtworkModelScale;
+  showFullscreenControl?: boolean;
   stlUrl: string;
   variant?: "detail" | "detail-compact" | "create";
 }
@@ -35,6 +36,7 @@ export function ArtworkModelPreview({
   cameraDistance = 42,
   color = "#9ca3af",
   scale = [1, 1, 1],
+  showFullscreenControl = true,
   stlUrl,
   variant = "detail",
 }: ArtworkModelPreviewProps) {
@@ -69,14 +71,14 @@ export function ArtworkModelPreview({
     <div
       ref={previewRef}
       className={[
-        "relative overflow-hidden bg-[#f5f5f5]",
+        "relative overflow-hidden",
         isFullscreen
-          ? "h-full w-full rounded-none"
+          ? "h-full w-full rounded-none bg-[#f5f5f5]"
           : variant === "create"
-            ? "h-full w-full rounded-[28px]"
+            ? "h-full w-full rounded-[28px] bg-[#f5f5f5]"
             : variant === "detail-compact"
-              ? "h-[clamp(10rem,30vh,15rem)] w-full rounded-xl"
-              : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
+              ? "h-full w-full rounded-xl bg-transparent"
+              : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] bg-[#f5f5f5] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
       ].join(" ")}
     >
       <Canvas
@@ -100,19 +102,21 @@ export function ArtworkModelPreview({
         />
       </Canvas>
 
-      <button
-        type="button"
-        onClick={handleFullscreen}
-        aria-label={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
-        title={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
-        className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-sm transition hover:bg-white"
-      >
-        {isFullscreen ? (
-          <Minimize2 className="h-5 w-5" aria-hidden="true" />
-        ) : (
-          <Maximize2 className="h-5 w-5" aria-hidden="true" />
-        )}
-      </button>
+      {showFullscreenControl && (
+        <button
+          type="button"
+          onClick={handleFullscreen}
+          aria-label={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
+          title={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
+          className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-sm transition hover:bg-white"
+        >
+          {isFullscreen ? (
+            <Minimize2 className="h-5 w-5" aria-hidden="true" />
+          ) : (
+            <Maximize2 className="h-5 w-5" aria-hidden="true" />
+          )}
+        </button>
+      )}
     </div>
   );
 }
