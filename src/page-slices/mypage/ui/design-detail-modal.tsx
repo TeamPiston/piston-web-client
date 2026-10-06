@@ -3,6 +3,7 @@
 import { Download, Move3d, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
+import { DeleteDesignConfirmModal } from "./delete-design-confirm-modal";
 
 export interface MyDesign {
   createdAt: string;
@@ -35,6 +36,7 @@ export function DesignDetailModal({
   const [colorMode, setColorMode] = useState<"color" | "monochrome">("color");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!design) {
@@ -43,7 +45,11 @@ export function DesignDetailModal({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onClose();
+        if (isDeleteConfirmOpen) {
+          setIsDeleteConfirmOpen(false);
+        } else {
+          onClose();
+        }
       }
     };
 
@@ -55,7 +61,7 @@ export function DesignDetailModal({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [design, onClose]);
+  }, [design, isDeleteConfirmOpen, onClose]);
 
   if (!design) {
     return null;
@@ -79,6 +85,11 @@ export function DesignDetailModal({
     }
   };
 
+  const handleDelete = () => {
+    onDelete(design.id);
+    setIsDeleteConfirmOpen(false);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 sm:p-6"
@@ -92,7 +103,7 @@ export function DesignDetailModal({
       <section
         aria-labelledby="design-detail-title"
         aria-modal="true"
-        className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[620px] overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:p-6"
+        className="relative max-h-[90vh] w-full max-w-[620px] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-2xl bg-white p-3 shadow-2xl sm:p-4"
         role="dialog"
       >
         <button
@@ -100,20 +111,20 @@ export function DesignDetailModal({
           onClick={onClose}
           aria-label="디자인 상세 닫기"
           title="닫기"
-          className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-sm transition-colors hover:text-gray-950 sm:right-6 sm:top-6"
+          className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-sm transition-colors hover:text-gray-950"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
 
-        <div className="relative rounded-2xl bg-gray-100 p-3 sm:p-5">
-          <ArtworkModelPreview stlUrl={design.stlUrl} variant="detail" />
-          <div className="pointer-events-none absolute bottom-5 right-5 flex items-center gap-1 rounded-full bg-white/90 px-3 py-2 text-[11px] text-gray-500 shadow-sm">
+        <div className="relative rounded-xl bg-gray-100 p-2">
+          <ArtworkModelPreview stlUrl={design.stlUrl} variant="detail-compact" />
+          <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1.5 text-[11px] text-gray-500 shadow-sm">
             <Move3d className="h-3.5 w-3.5" aria-hidden="true" />
             드래그하여 회전 · 확대
           </div>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-3">
           <h2 id="design-detail-title" className="pr-10 text-lg font-bold text-gray-950">
             {design.title}
           </h2>
@@ -122,7 +133,7 @@ export function DesignDetailModal({
           </p>
         </div>
 
-        <div className="mt-5 flex items-center justify-between gap-4 rounded-xl bg-gray-50 p-4">
+        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl bg-gray-50 p-3">
           <div className="min-w-0">
             <p className="text-sm font-bold text-gray-950">Feed에 공개</p>
             <p className="mt-1 text-xs leading-5 text-gray-400">
@@ -149,7 +160,7 @@ export function DesignDetailModal({
           </button>
         </div>
 
-        <fieldset className="mt-5">
+        <fieldset className="mt-3">
           <legend className="mb-2 text-sm font-bold text-gray-950">출력 색상</legend>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -157,7 +168,7 @@ export function DesignDetailModal({
               aria-pressed={colorMode === "color"}
               onClick={() => setColorMode("color")}
               className={[
-                "rounded-lg border p-3 text-left transition-colors",
+                "rounded-lg border p-2 text-left transition-colors",
                 colorMode === "color" ? "border-[#5a7bff] bg-blue-50" : "border-gray-200 bg-white",
               ].join(" ")}
             >
@@ -169,7 +180,7 @@ export function DesignDetailModal({
               aria-pressed={colorMode === "monochrome"}
               onClick={() => setColorMode("monochrome")}
               className={[
-                "rounded-lg border p-3 text-left transition-colors",
+                "rounded-lg border p-2 text-left transition-colors",
                 colorMode === "monochrome" ? "border-[#5a7bff] bg-blue-50" : "border-gray-200 bg-white",
               ].join(" ")}
             >
@@ -182,7 +193,7 @@ export function DesignDetailModal({
           </p>
         </fieldset>
 
-        <dl className="mt-5 space-y-2 rounded-xl bg-gray-50 p-4 text-sm">
+        <dl className="mt-3 space-y-2 rounded-xl bg-gray-50 p-3 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500">크기</dt>
             <dd className="text-right font-medium text-gray-950">{design.dimensions}</dd>
@@ -205,10 +216,10 @@ export function DesignDetailModal({
           </p>
         )}
 
-        <div className="mt-5 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <button
             type="button"
-            onClick={() => onDelete(design.id)}
+            onClick={() => setIsDeleteConfirmOpen(true)}
             className="h-11 rounded-lg border border-red-200 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
           >
             삭제
@@ -231,6 +242,11 @@ export function DesignDetailModal({
           </button>
         </div>
       </section>
+      <DeleteDesignConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

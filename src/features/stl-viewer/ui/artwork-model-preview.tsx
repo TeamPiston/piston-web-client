@@ -28,7 +28,7 @@ interface ArtworkModelPreviewProps {
   color?: string;
   scale?: ArtworkModelScale;
   stlUrl: string;
-  variant?: "detail" | "create";
+  variant?: "detail" | "detail-compact" | "create";
 }
 
 export function ArtworkModelPreview({
@@ -74,7 +74,9 @@ export function ArtworkModelPreview({
           ? "h-full w-full rounded-none"
           : variant === "create"
             ? "h-full w-full rounded-[28px]"
-            : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
+            : variant === "detail-compact"
+              ? "h-[clamp(10rem,30vh,15rem)] w-full rounded-xl"
+              : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
       ].join(" ")}
     >
       <Canvas
