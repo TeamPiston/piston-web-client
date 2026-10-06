@@ -28,6 +28,7 @@ interface ArtworkModelPreviewProps {
   color?: string;
   scale?: ArtworkModelScale;
   showFullscreenControl?: boolean;
+  static?: boolean;
   stlUrl: string;
   variant?: "detail" | "detail-compact" | "create";
 }
@@ -37,6 +38,7 @@ export function ArtworkModelPreview({
   color = "#9ca3af",
   scale = [1, 1, 1],
   showFullscreenControl = true,
+  static: isStatic = false,
   stlUrl,
   variant = "detail",
 }: ArtworkModelPreviewProps) {
@@ -72,6 +74,7 @@ export function ArtworkModelPreview({
       ref={previewRef}
       className={[
         "relative overflow-hidden",
+        isStatic && "pointer-events-none",
         isFullscreen
           ? "h-full w-full rounded-none bg-[#f5f5f5]"
           : variant === "create"
@@ -82,8 +85,16 @@ export function ArtworkModelPreview({
       ].join(" ")}
     >
       <Canvas
-        key={cameraDistance}
-        camera={{ fov: 42, near: 0.1, far: 200, position: [0, 14, cameraDistance] }}
+        key={`${cameraDistance}-${isStatic ? "static" : "interactive"}`}
+        camera={{
+          fov: 42,
+          near: 0.1,
+          far: 200,
+          position: isStatic
+            ? [cameraDistance * 0.55, cameraDistance * 0.45, cameraDistance * 0.65]
+            : [0, 14, cameraDistance],
+        }}
+        frameloop={isStatic ? "demand" : "always"}
         shadows
       >
         <ambientLight intensity={0.75} />
@@ -97,6 +108,10 @@ export function ArtworkModelPreview({
           makeDefault
           enableDamping
           dampingFactor={0.05}
+          enableRotate={!isStatic}
+          enableZoom={!isStatic}
+          enablePan={!isStatic}
+          autoRotate={false}
           minDistance={10}
           maxDistance={90}
         />

@@ -20,6 +20,7 @@ import {
   MOCK_MY_DESIGNS,
   toggleMockDesignPublish,
 } from "@/shared/mock/mock-data";
+import { ArtworkModelPreview } from "@/features/stl-viewer";
 import { Header } from "@/widgets/header";
 import { DeleteAccountModal } from "./delete-account-modal";
 import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
@@ -104,6 +105,14 @@ export default function MyPage() {
     (selectedPrintTask?.artworkName === PRINT_ARTWORK_NAME
       ? "/models/pencil-holder.stl"
       : "/models/cube.stl");
+  const printDesign = printTask
+    ? createdDesigns.find((design) => design.title === printTask.artworkName)
+    : undefined;
+  const printModelUrl = printTask?.modelUrl ??
+    printDesign?.stlUrl ??
+    (printTask?.artworkName === PRINT_ARTWORK_NAME
+      ? "/models/pencil-holder.stl"
+      : "/models/cube.stl");
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
@@ -161,6 +170,7 @@ export default function MyPage() {
         {(printTask === null || printTask?.status === "EMPTY") && <EmptyPrintState />}
         {printTask && printTask.status !== "EMPTY" && (
           <PrintStatusSection
+            modelUrl={printModelUrl}
             printTask={printTask}
             onSelect={() => setSelectedPrintTask(printTask)}
             onRetry={() => setIsRetryModalOpen(true)}
@@ -232,10 +242,12 @@ export default function MyPage() {
 }
 
 function PrintStatusSection({
+  modelUrl,
   onSelect,
   onRetry,
   printTask,
 }: {
+  modelUrl: string;
   onSelect: () => void;
   onRetry: () => void;
   printTask: PrintTask;
@@ -260,7 +272,14 @@ function PrintStatusSection({
     <section className="mt-12">
       <h2 className="text-xl font-bold text-gray-950">내 출력</h2>
       <article className="mt-6 flex w-full flex-col gap-6 rounded-2xl border border-gray-300 bg-white p-6 sm:flex-row sm:items-center sm:p-7">
-        <span className="h-40 w-full shrink-0 rounded-xl bg-[#f6f6f6] sm:w-40" aria-hidden="true" />
+        <div className="h-40 w-full shrink-0 overflow-hidden rounded-xl bg-[#f6f6f6] sm:w-40" aria-hidden="true">
+          <ArtworkModelPreview
+            stlUrl={modelUrl}
+            variant="detail-compact"
+            showFullscreenControl={false}
+            static
+          />
+        </div>
         {isFailed ? (
           <div className="min-w-0 flex-1">{content}</div>
         ) : (
@@ -416,10 +435,18 @@ function CreatedDesignSection({
             aria-label={`${design.title} 상세 보기`}
             className="overflow-hidden rounded-2xl border border-gray-300 bg-white text-left transition-shadow hover:shadow-md"
           >
-            <div className="relative h-40 bg-[#f6f6f6] p-3">
+            <div className="relative h-40 overflow-hidden bg-[#f6f6f6] p-3">
+              <div className="absolute inset-0">
+                <ArtworkModelPreview
+                  stlUrl={design.stlUrl}
+                  variant="detail-compact"
+                  showFullscreenControl={false}
+                  static
+                />
+              </div>
               <span
                 className={[
-                  "inline-flex items-center gap-1 rounded-full border bg-white px-3 py-1 text-xs font-medium",
+                  "relative z-10 inline-flex items-center gap-1 rounded-full border bg-white px-3 py-1 text-xs font-medium",
                   design.isPublished
                     ? "border-blue-100 text-[#5a7bff]"
                     : "border-gray-200 text-gray-500",
