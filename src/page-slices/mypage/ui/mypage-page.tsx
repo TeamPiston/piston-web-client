@@ -15,6 +15,7 @@ import { deleteCurrentAccount, useAuth } from "@/entities/session";
 import { Header } from "@/widgets/header";
 import { DeleteAccountModal } from "./delete-account-modal";
 import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
+import { PrintRetryConfirmModal } from "./print-retry-confirm-modal";
 import { PrintStatusDetailModal } from "./print-status-detail-modal";
 
 const MOCK_PROFILE = {
@@ -66,6 +67,7 @@ export default function MyPage() {
   const { logout, user } = useAuth();
   const [printTask, setPrintTask] = useState<PrintTask | null | undefined>(undefined);
   const [selectedPrintTask, setSelectedPrintTask] = useState<PrintTask | null>(null);
+  const [isRetryModalOpen, setIsRetryModalOpen] = useState(false);
   const [isPrintLoading, setIsPrintLoading] = useState(true);
   const [hasPrintLoadError, setHasPrintLoadError] = useState(false);
   const [createdDesigns, setCreatedDesigns] = useState(INITIAL_CREATED_DESIGNS);
@@ -184,6 +186,7 @@ export default function MyPage() {
           <PrintStatusSection
             printTask={printTask}
             onSelect={() => setSelectedPrintTask(printTask)}
+            onRetry={() => setIsRetryModalOpen(true)}
           />
         )}
         <CreatedDesignSection
@@ -231,6 +234,18 @@ export default function MyPage() {
           }}
         />
       )}
+      {printTask && isRetryModalOpen && isFailedPrint(printTask.status) && (
+        <PrintRetryConfirmModal
+          printTask={printTask}
+          onClose={() => setIsRetryModalOpen(false)}
+          onConfirm={async () => {
+            const nextPrintTask = await createPrintTask(printTask.artworkName);
+            setPrintTask(nextPrintTask);
+            setIsRetryModalOpen(false);
+            setHasPrintLoadError(false);
+          }}
+        />
+      )}
       <DeleteAccountModal
         isOpen={isDeleteAccountModalOpen}
         onClose={() => setIsDeleteAccountModalOpen(false)}
@@ -242,57 +257,140 @@ export default function MyPage() {
 
 function PrintStatusSection({
   onSelect,
+  onRetry,
   printTask,
 }: {
   onSelect: () => void;
+  onRetry: () => void;
   printTask: PrintTask;
 }) {
+  const isFailed = isFailedPrint(printTask.status);
   const isCompleted = printTask.status === "COMPLETED";
   const progress = Math.min(100, Math.max(0, printTask.progress));
   const remainingText = isCompleted
     ? printTask.estimatedEndTime
     : `약 ${printTask.remainingMinutes}분 남음 · ${printTask.estimatedEndTime}`;
+  const content = (
+    <PrintStatusCardContent
+      isCompleted={isCompleted}
+      isFailed={isFailed}
+      printTask={printTask}
+      progress={progress}
+      remainingText={remainingText}
+    />
+  );
 
   return (
     <section className="mt-12">
       <h2 className="text-xl font-bold text-gray-950">내 출력</h2>
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-label={`${printTask.artworkName} 출력 현황 상세 보기`}
-        className="mt-6 flex w-full flex-col gap-6 rounded-2xl border border-gray-300 bg-white p-6 text-left transition-colors hover:border-gray-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5C7CFF] sm:flex-row sm:items-center sm:p-7"
-      >
+      <article className="mt-6 flex w-full flex-col gap-6 rounded-2xl border border-gray-300 bg-white p-6 sm:flex-row sm:items-center sm:p-7">
         <span className="h-40 w-full shrink-0 rounded-xl bg-[#f6f6f6] sm:w-40" aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          <span
-            className={[
-              "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold",
-              isCompleted ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500",
-            ].join(" ")}
+        {isFailed ? (
+          <div className="min-w-0 flex-1">{content}</div>
+        ) : (
+          <button
+            type="button"
+            onClick={onSelect}
+            aria-label={`${printTask.artworkName} 출력 현황 상세 보기`}
+            className="min-w-0 flex-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5C7CFF]"
           >
-            <span aria-hidden="true">●</span>
-            {isCompleted ? "출력 완료" : "출력 중"}
-          </span>
-          <span className="mt-4 block text-xl font-bold text-gray-950">{printTask.artworkName}</span>
-          <span className="mt-4 flex items-center justify-between gap-4">
-            <span className="text-lg font-bold text-gray-950">{progress}%</span>
-            <span className="text-xs text-gray-500">
-              {remainingText}
-            </span>
-          </span>
-          <span className="mt-3 block h-2 overflow-hidden rounded-full bg-gray-200">
-            <span
-              className={[
-                "h-full rounded-full transition-[width]",
-                isCompleted ? "bg-emerald-400" : "bg-[#5a7bff]",
-              ].join(" ")}
-              style={{ width: `${progress}%` }}
-            />
-          </span>
-        </span>
-      </button>
+            {content}
+          </button>
+        )}
+        {isFailed && (
+          <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+            <p className="text-xs text-gray-500">{getPrintFailureSummary(printTask)}</p>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              다시 출력하기
+            </button>
+          </div>
+        )}
+      </article>
     </section>
   );
+}
+
+function PrintStatusCardContent({
+  isCompleted,
+  isFailed,
+  printTask,
+  progress,
+  remainingText,
+}: {
+  isCompleted: boolean;
+  isFailed: boolean;
+  printTask: PrintTask;
+  progress: number;
+  remainingText: string;
+}) {
+  const isCancelled = printTask.status === "CANCELLED" || printTask.status === "CANCELED";
+  const badgeText = isFailed
+    ? isCancelled ? "출력 취소" : "출력 실패"
+    : isCompleted ? "출력 완료" : "출력 중";
+  const badgeClass = isFailed
+    ? "bg-red-50 text-red-500"
+    : isCompleted ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500";
+  const progressClass = isFailed
+    ? "bg-red-500"
+    : isCompleted ? "bg-emerald-400" : "bg-[#5a7bff]";
+
+  return (
+    <span className="block min-w-0">
+      <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${badgeClass}`}>
+        <span aria-hidden="true">●</span>
+        {badgeText}
+      </span>
+      <span className="mt-4 block text-xl font-bold text-gray-950">{printTask.artworkName}</span>
+      <span className="mt-4 flex items-center justify-between gap-4">
+        <span className="text-lg font-bold text-gray-950">{progress}%</span>
+        {!isFailed && <span className="text-xs text-gray-500">{remainingText}</span>}
+      </span>
+      <span className="mt-3 block h-2 overflow-hidden rounded-full bg-gray-200">
+        <span
+          className={`block h-full rounded-full transition-[width] ${progressClass}`}
+          style={{ width: `${progress}%` }}
+        />
+      </span>
+    </span>
+  );
+}
+
+function isFailedPrint(status: PrintTask["status"]) {
+  return status === "FAILED" || status === "ERROR" || status === "CANCELLED" || status === "CANCELED";
+}
+
+function getPrintFailureSummary(printTask: PrintTask) {
+  const reason = printTask.failureReason ??
+    (printTask.status === "CANCELLED" || printTask.status === "CANCELED" ? "출력 취소" : "출력 실패");
+  const stoppedAt = formatStoppedTime(printTask.stoppedAt);
+
+  return `${reason} · ${stoppedAt ? `${stoppedAt} 중단` : "중단 시각 정보 없음"}`;
+}
+
+function formatStoppedTime(value?: string) {
+  if (!value) {
+    return null;
+  }
+
+  const timeMatch = value.match(/(?:^|T)(\d{2}:\d{2})/);
+  if (timeMatch) {
+    return timeMatch[1];
+  }
+
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(timestamp);
 }
 
 function PrintLoadState({

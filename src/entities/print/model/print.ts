@@ -3,7 +3,14 @@ import { apiClient } from "@/shared/api";
 export const PRINT_USER_ID = "dlskawls";
 export const PRINT_ARTWORK_NAME = "육각형 연필꽂이";
 
-export type PrintStatus = "PRINTING" | "COMPLETED" | "EMPTY";
+export type PrintStatus =
+  | "PRINTING"
+  | "COMPLETED"
+  | "FAILED"
+  | "ERROR"
+  | "CANCELLED"
+  | "CANCELED"
+  | "EMPTY";
 
 export interface PrintTask {
   id: number;
@@ -13,6 +20,8 @@ export interface PrintTask {
   printerName?: string;
   printingMethod?: string;
   filamentRemaining?: string;
+  failureReason?: string;
+  stoppedAt?: string;
   status: PrintStatus;
   progress: number;
   remainingMinutes: number;
@@ -44,7 +53,15 @@ function normalizePrintTask(value: unknown): PrintTask | null {
   }
 
   const status = candidate.status;
-  if (status !== "PRINTING" && status !== "COMPLETED" && status !== "EMPTY") {
+  if (
+    status !== "PRINTING" &&
+    status !== "COMPLETED" &&
+    status !== "FAILED" &&
+    status !== "ERROR" &&
+    status !== "CANCELLED" &&
+    status !== "CANCELED" &&
+    status !== "EMPTY"
+  ) {
     return null;
   }
 
@@ -56,6 +73,20 @@ function normalizePrintTask(value: unknown): PrintTask | null {
     printerName: optionalString(candidate.printerName),
     printingMethod: optionalString(candidate.printingMethod),
     filamentRemaining: optionalString(candidate.filamentRemaining),
+    failureReason: optionalString(
+      candidate.failureReason ??
+        candidate.failureMessage ??
+        candidate.errorReason ??
+        candidate.errorMessage ??
+        candidate.stopReason,
+    ),
+    stoppedAt: optionalString(
+      candidate.stoppedAt ??
+        candidate.failedAt ??
+        candidate.failureAt ??
+        candidate.endedAt ??
+        candidate.updatedAt,
+    ),
     status,
     progress: Number(candidate.progress ?? 0),
     remainingMinutes: Number(candidate.remainingMinutes ?? 0),
