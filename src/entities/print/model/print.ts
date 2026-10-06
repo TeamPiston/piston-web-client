@@ -9,6 +9,10 @@ export interface PrintTask {
   id: number;
   userId: string;
   artworkName: string;
+  modelUrl?: string;
+  printerName?: string;
+  printingMethod?: string;
+  filamentRemaining?: string;
   status: PrintStatus;
   progress: number;
   remainingMinutes: number;
@@ -18,6 +22,10 @@ export interface PrintTask {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" ? value : undefined;
 }
 
 function unwrapResponse(value: unknown) {
@@ -44,6 +52,10 @@ function normalizePrintTask(value: unknown): PrintTask | null {
     id: Number(candidate.id ?? 0),
     userId: String(candidate.userId ?? PRINT_USER_ID),
     artworkName: String(candidate.artworkName ?? PRINT_ARTWORK_NAME),
+    modelUrl: optionalString(candidate.modelUrl ?? candidate.stlUrl),
+    printerName: optionalString(candidate.printerName),
+    printingMethod: optionalString(candidate.printingMethod),
+    filamentRemaining: optionalString(candidate.filamentRemaining),
     status,
     progress: Number(candidate.progress ?? 0),
     remainingMinutes: Number(candidate.remainingMinutes ?? 0),
@@ -74,4 +86,8 @@ export async function getCurrentPrintTask() {
   }
 
   return normalizePrintTask(response);
+}
+
+export async function cancelPrintTask(printTaskId: number) {
+  await apiClient.delete<void>(`/api/prints/${printTaskId}`);
 }

@@ -4,11 +4,18 @@ import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
+import {
+  cancelPrintTask,
+  createPrintTask,
+  getCurrentPrintTask,
+  PRINT_ARTWORK_NAME,
+  type PrintTask,
+} from "@/entities/print";
 import { deleteCurrentAccount, useAuth } from "@/entities/session";
 import { Header } from "@/widgets/header";
 import { DeleteAccountModal } from "./delete-account-modal";
 import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
+import { PrintStatusDetailModal } from "./print-status-detail-modal";
 
 const MOCK_PROFILE = {
   email: "penamjin@gmail.com",
@@ -58,6 +65,7 @@ export default function MyPage() {
   const router = useRouter();
   const { logout, user } = useAuth();
   const [printTask, setPrintTask] = useState<PrintTask | null | undefined>(undefined);
+  const [selectedPrintTask, setSelectedPrintTask] = useState<PrintTask | null>(null);
   const [isPrintLoading, setIsPrintLoading] = useState(true);
   const [hasPrintLoadError, setHasPrintLoadError] = useState(false);
   const [createdDesigns, setCreatedDesigns] = useState(INITIAL_CREATED_DESIGNS);
@@ -77,6 +85,9 @@ export default function MyPage() {
     try {
       const nextPrintTask = await getCurrentPrintTask();
       setPrintTask(nextPrintTask);
+      setSelectedPrintTask((selectedTask) =>
+        selectedTask && selectedTask.id === nextPrintTask?.id ? nextPrintTask : null,
+      );
       setHasPrintLoadError(false);
     } catch {
       setHasPrintLoadError(true);
@@ -106,6 +117,14 @@ export default function MyPage() {
   }, [loadCurrentPrint, printTask?.status]);
 
   const displayProfile = user && user.name !== "관리자" ? user : MOCK_PROFILE;
+  const selectedPrintDesign = selectedPrintTask
+    ? createdDesigns.find((design) => design.title === selectedPrintTask.artworkName)
+    : undefined;
+  const selectedPrintModelUrl = selectedPrintTask?.modelUrl ??
+    selectedPrintDesign?.stlUrl ??
+    (selectedPrintTask?.artworkName === PRINT_ARTWORK_NAME
+      ? "/models/pencil-holder.stl"
+      : "/models/cube.stl");
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
@@ -162,7 +181,10 @@ export default function MyPage() {
         )}
         {(printTask === null || printTask?.status === "EMPTY") && <EmptyPrintState />}
         {printTask && printTask.status !== "EMPTY" && (
-          <PrintStatusSection printTask={printTask} />
+          <PrintStatusSection
+            printTask={printTask}
+            onSelect={() => setSelectedPrintTask(printTask)}
+          />
         )}
         <CreatedDesignSection
           designs={createdDesigns}
@@ -195,6 +217,20 @@ export default function MyPage() {
           );
         }}
       />
+      {selectedPrintTask && (
+        <PrintStatusDetailModal
+          printTask={selectedPrintTask}
+          modelUrl={selectedPrintModelUrl}
+          filamentRemaining={selectedPrintTask.filamentRemaining ?? "정보 없음"}
+          onClose={() => setSelectedPrintTask(null)}
+          onCancel={async () => {
+            await cancelPrintTask(selectedPrintTask.id);
+            setPrintTask(null);
+            setSelectedPrintTask(null);
+            setHasPrintLoadError(false);
+          }}
+        />
+      )}
       <DeleteAccountModal
         isOpen={isDeleteAccountModalOpen}
         onClose={() => setIsDeleteAccountModalOpen(false)}
@@ -204,7 +240,13 @@ export default function MyPage() {
   );
 }
 
-function PrintStatusSection({ printTask }: { printTask: PrintTask }) {
+function PrintStatusSection({
+  onSelect,
+  printTask,
+}: {
+  onSelect: () => void;
+  printTask: PrintTask;
+}) {
   const isCompleted = printTask.status === "COMPLETED";
   const progress = Math.min(100, Math.max(0, printTask.progress));
   const remainingText = isCompleted
@@ -214,10 +256,15 @@ function PrintStatusSection({ printTask }: { printTask: PrintTask }) {
   return (
     <section className="mt-12">
       <h2 className="text-xl font-bold text-gray-950">내 출력</h2>
-      <article className="mt-6 flex flex-col gap-6 rounded-2xl border border-gray-300 bg-white p-6 sm:flex-row sm:items-center sm:p-7">
-        <div className="h-40 w-full shrink-0 rounded-xl bg-[#f6f6f6] sm:w-40" />
-        <div className="min-w-0 flex-1">
-          <div
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-label={`${printTask.artworkName} 출력 현황 상세 보기`}
+        className="mt-6 flex w-full flex-col gap-6 rounded-2xl border border-gray-300 bg-white p-6 text-left transition-colors hover:border-gray-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5C7CFF] sm:flex-row sm:items-center sm:p-7"
+      >
+        <span className="h-40 w-full shrink-0 rounded-xl bg-[#f6f6f6] sm:w-40" aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span
             className={[
               "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold",
               isCompleted ? "bg-emerald-50 text-emerald-500" : "bg-blue-50 text-blue-500",
@@ -225,25 +272,25 @@ function PrintStatusSection({ printTask }: { printTask: PrintTask }) {
           >
             <span aria-hidden="true">●</span>
             {isCompleted ? "출력 완료" : "출력 중"}
-          </div>
-          <h3 className="mt-4 text-xl font-bold text-gray-950">{printTask.artworkName}</h3>
-          <div className="mt-4 flex items-center justify-between gap-4">
+          </span>
+          <span className="mt-4 block text-xl font-bold text-gray-950">{printTask.artworkName}</span>
+          <span className="mt-4 flex items-center justify-between gap-4">
             <span className="text-lg font-bold text-gray-950">{progress}%</span>
             <span className="text-xs text-gray-500">
               {remainingText}
             </span>
-          </div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">
-            <div
+          </span>
+          <span className="mt-3 block h-2 overflow-hidden rounded-full bg-gray-200">
+            <span
               className={[
                 "h-full rounded-full transition-[width]",
                 isCompleted ? "bg-emerald-400" : "bg-[#5a7bff]",
               ].join(" ")}
               style={{ width: `${progress}%` }}
             />
-          </div>
-        </div>
-      </article>
+          </span>
+        </span>
+      </button>
     </section>
   );
 }

@@ -1,4 +1,5 @@
 export {
+  cancelPrintTask,
   createPrintTask,
   getCurrentPrintTask,
   PRINT_ARTWORK_NAME,
