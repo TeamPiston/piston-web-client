@@ -137,7 +137,7 @@ export function RegisterForm() {
             }`}
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">
-            {id.length}/12
+            {id.length} / 12
           </span>
         </div>
       </div>
@@ -175,7 +175,7 @@ export function RegisterForm() {
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
             <span className="text-xs text-gray-400 font-medium select-none">
-              {password.length}/20
+              {password.length} / 20
             </span>
           </div>
         </div>

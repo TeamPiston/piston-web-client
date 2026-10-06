@@ -799,7 +799,7 @@ function ChatPanel({
         onClick={onToggleHistory}
         aria-label="대화 메뉴 열기"
         title="대화 메뉴"
-        className="absolute left-6 top-6 flex h-12 w-12 items-center justify-center rounded-lg border border-gray-300 text-gray-950 transition-colors hover:bg-gray-50"
+        className="absolute left-6 top-6 flex h-12 w-12 items-center justify-center rounded-lg border border-gray-300 text-gray-950 transition-colors hover:bg-gray-50 cursor-pointer"
       >
         <Menu className="h-6 w-6" aria-hidden="true" />
       </button>
@@ -888,7 +888,7 @@ function ChatPanel({
                       onClick={() => onRemoveAttachment(image.id)}
                       aria-label={`${image.name} 첨부 이미지 삭제`}
                       title="첨부 이미지 삭제"
-                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 cursor-pointer"
                     >
                       <X className="h-3 w-3" aria-hidden="true" />
                     </button>
@@ -902,7 +902,7 @@ function ChatPanel({
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="참고 이미지 첨부"
                 title="참고 이미지 첨부"
-                className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
+                className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff] cursor-pointer"
               >
                 <Plus className="h-7 w-7" strokeWidth={1.8} aria-hidden="true" />
               </button>
@@ -923,7 +923,7 @@ function ChatPanel({
                 disabled={isLoading}
                 aria-label="메시지 전송"
                 title="메시지 전송"
-                className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff] disabled:cursor-not-allowed disabled:text-gray-300"
+                className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff] disabled:cursor-not-allowed disabled:text-gray-300 cursor-pointer"
               >
                 <CornerDownLeft className="h-6 w-6" strokeWidth={1.8} aria-hidden="true" />
               </button>
@@ -977,7 +977,7 @@ function HistorySidebar({
           onClick={onClose}
           aria-label="채팅 히스토리 닫기"
           title="닫기"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 cursor-pointer"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -986,7 +986,7 @@ function HistorySidebar({
       <button
         type="button"
         onClick={onNewChat}
-        className="mt-6 flex h-11 items-center justify-center gap-2 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
+        className="mt-6 flex h-11 items-center justify-center gap-2 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] cursor-pointer"
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
         새 채팅
@@ -1008,7 +1008,7 @@ function HistorySidebar({
                   onEditTitle(history);
                 }
               }}
-              className="rounded-lg px-3 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+              className="rounded-lg px-3 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-50 cursor-pointer"
             >
               {isEditing ? (
                 <input
@@ -1082,7 +1082,7 @@ function PrintWarningCard({ onAutoFix, warning }: PrintWarningCardProps) {
       <button
         type="button"
         onClick={() => onAutoFix(warning)}
-        className="mt-3 h-11 w-full rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-950 transition-colors hover:bg-gray-50"
+        className="mt-3 h-11 w-full rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-950 transition-colors hover:bg-gray-50 cursor-pointer"
       >
         규격에 맞게 자동 수정
       </button>

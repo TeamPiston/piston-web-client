@@ -142,24 +142,24 @@ export function DesignDetailModal({
               공개하면 다른 사용자가 프롬프트와 결과물을 볼 수 있어요.
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={design.isPublished}
-            aria-label="Feed 공개 여부"
-            onClick={() => onTogglePublished(design.id)}
-            className={[
-              "relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors",
-              design.isPublished ? "bg-[#5C7CFF]" : "bg-gray-300",
-            ].join(" ")}
-          >
-            <span
+            <button
+              type="button"
+              role="switch"
+              aria-checked={design.isPublished}
+              aria-label="Feed 공개 여부"
+              onClick={() => onTogglePublished(design.id)}
               className={[
-                "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
-                design.isPublished ? "translate-x-[22px]" : "translate-x-0.5",
+                "relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200",
+                design.isPublished ? "bg-[#5C7CFF]" : "bg-gray-300",
               ].join(" ")}
-            />
-          </button>
+            >
+              <span
+                className={[
+                  "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                  design.isPublished ? "translate-x-0.3" : "-translate-x-5",
+                ].join(" ")}
+              />
+            </button>
         </div>
 
         <fieldset className="mt-5">
@@ -240,7 +240,7 @@ export function DesignDetailModal({
           <button
             type="button"
             onClick={() => setIsDeleteConfirmOpen(true)}
-            className="h-12 rounded-xl border border-red-200 bg-white text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
+            className="h-12 rounded-xl border border-red-200 bg-white text-sm font-medium text-red-500 transition-colors hover:bg-red-50 cursor-pointer"
           >
             삭제
           </button>
@@ -256,7 +256,7 @@ export function DesignDetailModal({
             type="button"
             onClick={() => void handlePrint()}
             disabled={isSubmitting}
-            className="h-12 rounded-xl bg-[#5C7CFF] text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-12 rounded-xl bg-[#5C7CFF] text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
           >
             {isSubmitting ? "요청 중..." : "출력하기"}
           </button>
