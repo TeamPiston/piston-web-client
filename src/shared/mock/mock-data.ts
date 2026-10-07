@@ -8,6 +8,28 @@ export interface Printer {
   connectionStatus: PrinterConnectionStatus;
 }
 
+export type PrinterConnectionTestResult =
+  | {
+      status: "connected";
+      model: string;
+      nozzleTemperature: number;
+      bedTemperature: number;
+      activity: string;
+    }
+  | { status: "disconnected"; message: string };
+
+export function getMockPrinterConnectionTestResult(
+  model: string,
+): PrinterConnectionTestResult {
+  return {
+    status: "connected",
+    model,
+    nozzleTemperature: 32,
+    bedTemperature: 29,
+    activity: "대기 중",
+  };
+}
+
 export const MOCK_PRINTERS: Printer[] = [
   {
     id: "printer-max4-02",

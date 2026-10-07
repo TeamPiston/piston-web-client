@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import type { Printer } from "@/shared/mock/mock-data";
+import type {
+  Printer,
+  PrinterConnectionStatus,
+  PrinterConnectionTestResult,
+} from "@/shared/mock/mock-data";
 
 export type PrinterDraft = Pick<Printer, "name" | "model" | "ipAddress">;
 
 interface PrinterFormModalProps {
   printer: Printer | null;
   onClose: () => void;
-  onSave: (draft: PrinterDraft) => void;
-  onTestConnection: (draft: PrinterDraft) => string;
+  onSave: (draft: PrinterDraft, testedStatus: PrinterConnectionStatus | null) => void;
+  onTestConnection: (draft: PrinterDraft) => PrinterConnectionTestResult;
 }
 
 const PRINTER_MODELS = ["QIDI X-Max 4", "QIDI X-Plus 4", "QIDI Q1 Pro"];
@@ -25,16 +29,18 @@ export function PrinterFormModal({
   onTestConnection,
 }: PrinterFormModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const modelSelectRef = useRef<HTMLSelectElement>(null);
   const ipInputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const ipInputId = useId();
   const feedbackId = useId();
   const [draft, setDraft] = useState<PrinterDraft>(() => ({
     name: printer?.name ?? "",
-    model: printer?.model ?? PRINTER_MODELS[0],
+    model: printer?.model ?? "",
     ipAddress: printer?.ipAddress ?? "",
   }));
-  const [connectionFeedback, setConnectionFeedback] = useState("");
+  const [connectionFeedback, setConnectionFeedback] =
+    useState<PrinterConnectionTestResult | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -54,11 +60,17 @@ export function PrinterFormModal({
 
   const savePrinter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSave({ ...draft, name: draft.name.trim(), ipAddress: draft.ipAddress.trim() });
+    onSave(
+      { ...draft, name: draft.name.trim(), ipAddress: draft.ipAddress.trim() },
+      connectionFeedback?.status ?? null,
+    );
   };
 
   const testConnection = () => {
-    if (ipInputRef.current?.reportValidity()) {
+    if (
+      modelSelectRef.current?.reportValidity() &&
+      ipInputRef.current?.reportValidity()
+    ) {
       setConnectionFeedback(onTestConnection(draft));
     }
   };
@@ -88,6 +100,11 @@ export function PrinterFormModal({
       <h2 id={titleId} className="text-xl font-bold text-gray-950">
         {printer ? "프린터 수정" : "프린터 추가"}
       </h2>
+      {!printer && (
+        <p className="mt-1 text-sm leading-5 text-gray-500">
+          프린터와 같은 와이파이에 연결된 상태에서 등록해 주세요.
+        </p>
+      )}
       <form className="mt-6 flex flex-col gap-5" onSubmit={savePrinter}>
         <label className="flex flex-col gap-2 text-sm font-bold text-gray-950">
           프린터 이름
@@ -96,6 +113,7 @@ export function PrinterFormModal({
             pattern={".*\\S.*"}
             title="프린터 이름을 입력해 주세요."
             maxLength={100}
+            placeholder="교실 프린터"
             value={draft.name}
             onChange={(event) =>
               setDraft((current) => ({ ...current, name: event.target.value }))
@@ -106,14 +124,17 @@ export function PrinterFormModal({
         <label className="flex flex-col gap-2 text-sm font-bold text-gray-950">
           프린터 모델
           <select
+            ref={modelSelectRef}
+            required
             value={draft.model}
             onChange={(event) => {
               setDraft((current) => ({ ...current, model: event.target.value }));
-              setConnectionFeedback("");
+              setConnectionFeedback(null);
             }}
             className={`${INPUT_CLASSES} font-normal`}
           >
-            {!PRINTER_MODELS.includes(draft.model) && (
+            <option value="" disabled>프린터 모델 선택</option>
+            {draft.model && !PRINTER_MODELS.includes(draft.model) && (
               <option value={draft.model}>{draft.model}</option>
             )}
             {PRINTER_MODELS.map((model) => (
@@ -134,12 +155,12 @@ export function PrinterFormModal({
               pattern={IP_ADDRESS_PATTERN}
               title="올바른 IPv4 주소를 입력해 주세요. 예: 192.168.0.24"
               maxLength={15}
-              placeholder="192.168.0.24"
+              placeholder={printer ? "192.168.0.24" : "192.168.0.31"}
               aria-describedby={connectionFeedback ? feedbackId : undefined}
               value={draft.ipAddress}
               onChange={(event) => {
                 setDraft((current) => ({ ...current, ipAddress: event.target.value }));
-                setConnectionFeedback("");
+                setConnectionFeedback(null);
               }}
               className={`${INPUT_CLASSES} flex-1`}
             />
@@ -151,12 +172,32 @@ export function PrinterFormModal({
               연결 테스트
             </button>
           </div>
-          {connectionFeedback && (
-            <p id={feedbackId} role="status" className="mt-2 text-sm leading-5 text-gray-600">
-              {connectionFeedback}
-            </p>
-          )}
         </div>
+        {connectionFeedback && (
+          connectionFeedback.status === "connected" ? (
+            <div
+              id={feedbackId}
+              role="status"
+              className="flex gap-3 rounded-xl border border-emerald-400 bg-[#f5f5f5] p-5"
+            >
+              <span
+                aria-hidden="true"
+                className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-400"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-emerald-500">프린터를 찾았어요</p>
+                <p className="mt-2 text-sm leading-5 text-gray-500">
+                  {connectionFeedback.model} · 노즐 {connectionFeedback.nozzleTemperature}°C
+                  {" / "}베드 {connectionFeedback.bedTemperature}°C · {connectionFeedback.activity}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p id={feedbackId} role="status" className="text-sm leading-5 text-gray-600">
+              {connectionFeedback.message}
+            </p>
+          )
+        )}
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -169,7 +210,7 @@ export function PrinterFormModal({
             type="submit"
             className="h-[58px] rounded-lg bg-[#5a7bff] text-base font-medium text-white transition-colors hover:bg-[#4a6ee5]"
           >
-            저장하기
+            {printer ? "저장하기" : "등록하기"}
           </button>
         </div>
       </form>

@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import {
+  getMockPrinterConnectionTestResult,
   getPrintersWithFallback,
   type Printer,
+  type PrinterConnectionStatus,
+  type PrinterConnectionTestResult,
 } from "@/shared/mock/mock-data";
 import { PrinterFormModal, type PrinterDraft } from "./printer-form-modal";
 
@@ -30,7 +33,10 @@ export function PrinterManagementPage() {
     setEditingPrinter(null);
   };
 
-  const savePrinter = (nextPrinter: PrinterDraft) => {
+  const savePrinter = (
+    nextPrinter: PrinterDraft,
+    testedStatus: PrinterConnectionStatus | null,
+  ) => {
     if (editingPrinter) {
       setPrinters((currentPrinters) =>
         currentPrinters.map((printer) =>
@@ -39,10 +45,11 @@ export function PrinterManagementPage() {
                 ...printer,
                 ...nextPrinter,
                 connectionStatus:
-                  printer.ipAddress === nextPrinter.ipAddress &&
+                  testedStatus ??
+                  (printer.ipAddress === nextPrinter.ipAddress &&
                   printer.model === nextPrinter.model
                     ? printer.connectionStatus
-                    : "disconnected",
+                    : "disconnected"),
               }
             : printer,
         ),
@@ -54,7 +61,7 @@ export function PrinterManagementPage() {
         {
           id: `printer-${Date.now()}`,
           ...nextPrinter,
-          connectionStatus: "disconnected",
+          connectionStatus: testedStatus ?? "disconnected",
         },
       ]);
       setAnnouncement(`${nextPrinter.name} 프린터를 추가했습니다.`);
@@ -63,18 +70,27 @@ export function PrinterManagementPage() {
     closeForm();
   };
 
-  const testPrinterConnection = (draft: PrinterDraft) => {
+  const testPrinterConnection = (draft: PrinterDraft): PrinterConnectionTestResult => {
+    if (!editingPrinter) {
+      return getMockPrinterConnectionTestResult(draft.model);
+    }
     const printer = printers.find(
       (currentPrinter) =>
         currentPrinter.ipAddress === draft.ipAddress.trim() &&
         currentPrinter.model === draft.model,
     );
     if (!printer) {
-      return "이 IP 주소의 연결 정보가 없습니다. 실제 연결 테스트는 서버 연동 후 사용할 수 있어요.";
+      return {
+        status: "disconnected",
+        message: "이 IP 주소의 연결 정보가 없습니다. 실제 연결 테스트는 서버 연동 후 사용할 수 있어요.",
+      };
     }
     return printer.connectionStatus === "connected"
-      ? "예시 연결 결과: 연결됨"
-      : "예시 연결 결과: 연결 끊김. 같은 와이파이와 IP 주소를 확인해 주세요.";
+      ? getMockPrinterConnectionTestResult(draft.model)
+      : {
+          status: "disconnected",
+          message: "예시 연결 결과: 연결 끊김. 같은 와이파이와 IP 주소를 확인해 주세요.",
+        };
   };
 
   const deletePrinter = (printer: Printer) => {
