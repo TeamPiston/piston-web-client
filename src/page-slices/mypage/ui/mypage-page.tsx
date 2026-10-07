@@ -55,11 +55,19 @@ export default function MyPage() {
 function MyPageContent() {
   const searchParams = useSearchParams();
   const isPrinterTab = searchParams.get("tab") === "printer";
+  const isEmptyPreview = searchParams.get("empty") === "true";
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
       <Header />
-      {isPrinterTab ? <PrinterManagementPage /> : <MyProfilePage />}
+      {isPrinterTab ? (
+        <PrinterManagementPage
+          key={isEmptyPreview ? "empty-printers" : "default-printers"}
+          initialPrinters={isEmptyPreview ? [] : undefined}
+        />
+      ) : (
+        <MyProfilePage />
+      )}
     </div>
   );
 }

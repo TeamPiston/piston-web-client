@@ -10,13 +10,18 @@ import {
 } from "@/shared/mock/mock-data";
 import { PrinterFormModal, type PrinterDraft } from "./printer-form-modal";
 
-export function PrinterManagementPage() {
+interface PrinterManagementPageProps {
+  initialPrinters?: Printer[];
+}
+
+export function PrinterManagementPage({ initialPrinters }: PrinterManagementPageProps) {
   const [printers, setPrinters] = useState<Printer[]>(() =>
-    getPrintersWithFallback(),
+    getPrintersWithFallback(initialPrinters),
   );
   const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  const isEmpty = printers.length === 0;
 
   const openAddForm = () => {
     setEditingPrinter(null);
@@ -117,8 +122,20 @@ export function PrinterManagementPage() {
         </button>
       </div>
 
-      <section aria-label="등록된 프린터" className="mt-8 flex flex-col gap-4">
-        {printers.map((printer) => (
+      <section
+        aria-label="등록된 프린터"
+        className={`${isEmpty ? "mt-9" : "mt-8"} flex flex-col gap-4`}
+      >
+        {isEmpty ? (
+          <div className="flex min-h-[232px] items-center justify-center rounded-2xl bg-[#f5f5f5] px-6 py-10 text-center">
+            <div>
+              <h2 className="text-xl font-bold text-gray-950">등록된 프린터가 없어요</h2>
+              <p className="mt-2 text-sm leading-5 text-gray-500">
+                프린터를 추가하면 만든 디자인을 바로 출력할 수 있어요.
+              </p>
+            </div>
+          </div>
+        ) : printers.map((printer) => (
           <article
             key={printer.id}
             className={[
@@ -187,11 +204,6 @@ export function PrinterManagementPage() {
             </div>
           </article>
         ))}
-        {printers.length === 0 && (
-          <p className="rounded-xl border border-dashed border-gray-300 px-5 py-8 text-center text-sm text-gray-500">
-            등록된 프린터가 없습니다. 프린터를 추가해 주세요.
-          </p>
-        )}
       </section>
 
       {announcement && (
@@ -200,7 +212,9 @@ export function PrinterManagementPage() {
         </p>
       )}
 
-      <section className="mt-8 rounded-2xl border border-gray-300 bg-white p-6 sm:p-8">
+      <section
+        className={`${isEmpty ? "mt-8 sm:mt-[168px]" : "mt-8"} rounded-2xl border border-gray-300 bg-white p-6 sm:p-8`}
+      >
         <h2 className="text-base font-bold text-gray-950">
           연결하기 전에 확인해 주세요
         </h2>
