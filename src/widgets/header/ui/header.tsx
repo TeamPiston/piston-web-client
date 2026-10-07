@@ -36,7 +36,7 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 grid h-[100px] w-full grid-cols-[1fr_auto] items-center border-b border-gray-200 bg-white/85 px-4 py-4 backdrop-blur-sm sm:grid-cols-3 sm:px-8 lg:px-12">
+      <header className="sticky top-0 z-20 grid h-[var(--header-height)] w-full shrink-0 grid-cols-[1fr_auto] items-center border-b border-gray-200 bg-white/85 px-4 py-4 backdrop-blur-sm sm:grid-cols-3 sm:px-8 lg:px-12">
         <Link
           href="/"
           aria-label="PISTON 메인으로 이동"

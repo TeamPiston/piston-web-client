@@ -23,22 +23,22 @@ export default function FeedPage() {
     : "opacity-100";
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
-      <div className="flex min-h-screen w-full flex-col">
+    <div className="mx-auto min-h-screen w-full max-w-[1920px] overflow-x-clip bg-[#fbfbfb] xl:h-dvh xl:min-h-0 xl:overflow-hidden">
+      <div className="flex min-h-screen w-full flex-col xl:h-full xl:min-h-0">
         <Header />
 
         <main
           aria-busy={isLoading}
-          className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center px-8 py-8"
+          className="mx-auto flex min-h-[calc(100dvh-var(--header-height))] w-full max-w-6xl flex-1 flex-col items-center px-4 py-6 sm:px-8 xl:h-[calc(100dvh-var(--header-height))] xl:min-h-0 xl:flex-none xl:overflow-y-auto"
         >
           <FeedSearchInput value={query} onChange={setQuery} />
 
           {!hasEmptyResults && (
-            <div className="grid w-full items-start">
+            <div className="grid w-full shrink-0 items-start">
               <div
                 aria-hidden={!isLoading}
                 className={[
-                  "col-start-1 row-start-1 grid w-full grid-cols-1 justify-items-center gap-8 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3",
+                  "col-start-1 row-start-1 grid w-full grid-cols-1 justify-items-center gap-6 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3",
                   isLoading ? "opacity-100" : "pointer-events-none opacity-0",
                 ].join(" ")}
               >
@@ -50,7 +50,7 @@ export default function FeedPage() {
               <div
                 aria-hidden={isLoading}
                 className={[
-                  "col-start-1 row-start-1 grid w-full grid-cols-1 justify-items-center gap-8 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3",
+                  "col-start-1 row-start-1 grid w-full grid-cols-1 justify-items-center gap-6 transition-opacity duration-300 sm:grid-cols-2 lg:grid-cols-3",
                   contentStateClass,
                 ].join(" ")}
               >

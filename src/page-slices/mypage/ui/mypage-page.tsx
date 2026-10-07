@@ -58,7 +58,7 @@ function MyPageContent() {
   const isEmptyPreview = searchParams.get("empty") === "true";
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
+    <div className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col overflow-x-clip bg-[#fbfbfb] xl:h-dvh xl:min-h-0 xl:overflow-hidden">
       <Header />
       {isPrinterTab ? (
         <PrinterManagementPage
@@ -81,7 +81,7 @@ function MyProfilePage() {
 
   return (
     <>
-      <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col px-4 py-10 sm:px-8 lg:px-0">
+      <main className="mx-auto flex min-h-[calc(100dvh-var(--header-height))] w-full max-w-[1264px] flex-1 flex-col px-4 py-10 sm:px-8 xl:h-[calc(100dvh-var(--header-height))] xl:min-h-0 xl:flex-none xl:overflow-y-auto">
         <section className="flex flex-col gap-6 rounded-2xl border border-gray-300 bg-white px-6 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-10">
           <div className="flex min-w-0 items-center gap-6">
             <CircleUserRound

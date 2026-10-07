@@ -117,8 +117,8 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col px-4 py-10 sm:px-8 lg:px-0">
-      <div className="flex items-center justify-between gap-4">
+    <main className="mx-auto flex min-h-[calc(100dvh-var(--header-height))] w-full max-w-[1264px] flex-1 flex-col px-4 py-10 sm:px-8 xl:h-[calc(100dvh-var(--header-height))] xl:min-h-0 xl:flex-none xl:overflow-y-auto">
+      <div className="flex shrink-0 items-center justify-between gap-4">
         <h1 className="text-xl font-bold text-gray-950">프린터 관리</h1>
         <button
           type="button"
@@ -131,7 +131,7 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
 
       <section
         aria-label="등록된 프린터"
-        className={`${isEmpty ? "mt-9" : "mt-8"} flex flex-col gap-4`}
+        className={`${isEmpty ? "mt-9" : "mt-8"} flex shrink-0 flex-col gap-4`}
       >
         {isEmpty ? (
           <div className="flex min-h-[232px] items-center justify-center rounded-2xl bg-[#f5f5f5] px-6 py-10 text-center">
@@ -220,7 +220,7 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
       )}
 
       <section
-        className={`${isEmpty ? "mt-8 sm:mt-[168px]" : "mt-8"} rounded-2xl border border-gray-300 bg-white p-6 sm:p-8`}
+        className={`${isEmpty ? "mt-8 sm:mt-[168px]" : "mt-8"} shrink-0 rounded-2xl border border-gray-300 bg-white p-6 sm:p-8`}
       >
         <h2 className="text-base font-bold text-gray-950">
           연결하기 전에 확인해 주세요

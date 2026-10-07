@@ -264,13 +264,13 @@ export default function CreateWorkspaceEntry() {
 
   if (!isMounted || !isLoggedIn) {
     return (
-      <>
+      <div className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col bg-white">
         <Header />
         <LoginRequiredModal
           isOpen={isMounted && !isLoggedIn}
           onClose={handleAuthModalClose}
         />
-      </>
+      </div>
     );
   }
 
@@ -617,11 +617,11 @@ function CreateWorkspace() {
   };
 
   return (
-    <>
+    <div className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col overflow-x-clip bg-white xl:h-dvh xl:min-h-0 xl:overflow-hidden">
       <Header />
-      <main className="relative min-h-[calc(100vh-100px)] overflow-hidden bg-white xl:h-[calc(100vh-100px)]">
-        <div className="grid min-h-[calc(100vh-100px)] xl:h-full xl:grid-cols-[360px_minmax(0,1fr)_360px]">
-          <aside className="relative hidden border-r border-gray-200 bg-white xl:block">
+      <main className="relative min-h-[calc(100dvh-var(--header-height))] w-full flex-1 bg-white xl:h-[calc(100dvh-var(--header-height))] xl:min-h-0 xl:flex-none xl:overflow-hidden">
+        <div className="grid min-h-[calc(100dvh-var(--header-height))] xl:h-full xl:min-h-0 xl:grid-cols-[280px_minmax(0,1fr)_280px] xl:grid-rows-[minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_360px]">
+          <aside className="relative hidden min-h-0 border-r border-gray-200 bg-white xl:block">
             {isHistoryOpen && (
               <HistorySidebar
                 chatHistories={chatHistories}
@@ -638,7 +638,7 @@ function CreateWorkspace() {
             )}
           </aside>
 
-          <section className="grid min-h-[calc(100vh-100px)] min-w-0 lg:grid-cols-2">
+          <section className="grid min-h-[calc(100dvh-var(--header-height))] min-w-0 lg:grid-cols-2 xl:min-h-0 xl:grid-rows-[minmax(0,1fr)]">
             <ChatPanel
               attachedImage={attachedImage}
               draft={draft}
@@ -709,7 +709,7 @@ function CreateWorkspace() {
         onClose={() => setIsPrinterConnectionModalOpen(false)}
         onOpenPrinterManagement={() => router.push("/mypage?tab=printer")}
       />
-    </>
+    </div>
   );
 }
 
@@ -749,7 +749,7 @@ function ChatPanel({
   onToggleHistory,
 }: ChatPanelProps) {
   return (
-    <section className="relative flex min-h-[720px] min-w-0 flex-col border-r border-gray-200 bg-white px-6 pb-[52px] pt-20 xl:min-h-0 xl:px-[60px]">
+    <section className="relative flex min-h-[720px] min-w-0 flex-col border-r border-gray-200 bg-white px-6 pb-[52px] pt-20 xl:min-h-0 xl:overflow-hidden 2xl:px-[60px]">
       <button
         type="button"
         onClick={onToggleHistory}
@@ -805,7 +805,7 @@ function ChatPanel({
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="w-full">
+        <form onSubmit={onSubmit} className="w-full shrink-0">
           <div className="flex min-h-[60px] flex-col rounded-xl border border-[#5a7bff] bg-white px-4 py-2 shadow-sm">
             <input
               ref={fileInputRef}
@@ -903,7 +903,7 @@ function HistorySidebar({
   onTitleKeyDown,
 }: HistorySidebarProps) {
   return (
-    <aside className="flex h-full w-full flex-col rounded-r-2xl bg-white px-5 py-6 shadow-lg">
+    <aside className="flex h-full min-h-0 w-full flex-col rounded-r-2xl bg-white px-5 py-6 shadow-lg">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-bold text-gray-950">채팅</h2>
         <button
@@ -920,7 +920,7 @@ function HistorySidebar({
       <button
         type="button"
         onClick={onNewChat}
-        className="mt-6 flex h-11 items-center justify-center gap-2 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
+        className="mt-6 flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
         새 채팅
@@ -1095,7 +1095,7 @@ function PreviewPanel({
 }: PreviewPanelProps) {
   return (
     <section className="flex min-h-[720px] min-w-0 flex-col items-center bg-white px-6 pb-8 pt-20 lg:pt-[120px] xl:min-h-0">
-      <div className="relative h-[600px] w-full max-w-[432px]">
+      <div className="relative h-[600px] w-full max-w-[432px] xl:min-h-0 xl:max-h-[600px] xl:flex-1">
         {printSuccessPhase !== "hidden" && (
           <div
             role="status"
@@ -1152,7 +1152,7 @@ function PreviewPanel({
         )}
       </div>
 
-      <div className="mt-5 grid w-full max-w-[432px] grid-cols-[minmax(0,1fr)_48px] gap-7">
+      <div className="mt-5 grid w-full max-w-[432px] shrink-0 grid-cols-[minmax(0,1fr)_48px] gap-4 sm:gap-7">
         <button
           type="button"
           onClick={onPrint}
@@ -1183,7 +1183,7 @@ function PreviewPanel({
           </button>
         )}
       </div>
-      <p className="mt-4 max-w-[432px] text-center text-xs leading-5 text-gray-400">
+      <p className="mt-4 max-w-[432px] shrink-0 text-center text-xs leading-5 text-gray-400">
         생성한 디자인은 기본으로 비공개예요.
         <br />
         Feed에 올리려면 마이페이지에서 공개로 바꿔 주세요.
@@ -1312,14 +1312,14 @@ function VersionHistory({
   versions,
 }: VersionHistoryProps) {
   return (
-    <aside className="min-h-[420px] border-l border-gray-200 bg-white px-5 py-7 xl:min-h-0">
+    <aside className="flex min-h-[420px] min-w-0 flex-col border-l border-gray-200 bg-white px-5 py-7 xl:min-h-0">
       <h2 className="text-sm font-bold text-gray-950">버전</h2>
       {!isGenerated ? (
         <p className="mt-4 text-xs leading-5 text-gray-400">
           아직 기록이 없어요. 디자인을 만들면 여기에 쌓여요.
         </p>
       ) : (
-        <div className="mt-4 flex flex-col gap-3">
+        <div className="mt-4 flex min-h-0 flex-col gap-3 xl:flex-1 xl:overflow-y-auto">
           {[...versions].reverse().map((version) => {
             const isSelected = selectedVersionId === version.id;
 
@@ -1329,7 +1329,7 @@ function VersionHistory({
                 type="button"
                 onClick={() => onSelectVersion(version.id)}
                 className={[
-                  "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors",
+                  "flex w-full shrink-0 items-start gap-3 rounded-xl border p-3 text-left transition-colors",
                   isSelected
                     ? "border-transparent bg-[#eef2ff]"
                     : "border-gray-200 bg-white hover:bg-gray-50",
@@ -1349,7 +1349,7 @@ function VersionHistory({
         </div>
       )}
       {isGenerated && (
-        <p className="mt-6 flex items-center gap-2 text-xs text-gray-400">
+        <p className="mt-6 flex shrink-0 items-center gap-2 text-xs text-gray-400">
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           수정할 때마다 자동으로 저장돼요.
         </p>
