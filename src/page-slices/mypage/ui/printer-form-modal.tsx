@@ -41,9 +41,14 @@ export function PrinterFormModal({
   }));
   const [connectionFeedback, setConnectionFeedback] =
     useState<PrinterConnectionTestResult | null>(null);
+  const isRegistrationBlocked = !printer && connectionFeedback?.status !== "connected";
 
   const savePrinter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isRegistrationBlocked) {
+      return;
+    }
+
     onSave(
       { ...draft, name: draft.name.trim(), ipAddress: draft.ipAddress.trim() },
       connectionFeedback?.status ?? null,
@@ -156,6 +161,22 @@ export function PrinterFormModal({
                 </p>
               </div>
             </div>
+          ) : !printer ? (
+            <div
+              id={feedbackId}
+              role="alert"
+              className="rounded-xl border border-red-400 bg-[#f5f5f5] p-5"
+            >
+              <p className="text-sm font-bold text-red-500">프린터를 찾을 수 없어요</p>
+              <p className="mt-2 text-sm leading-5 text-gray-500">
+                아래를 확인하고 다시 시도해 주세요.
+              </p>
+              <ul className="mt-2 list-disc space-y-2 pl-4 text-xs leading-5 text-gray-950 marker:text-gray-500">
+                <li>프린터와 이 컴퓨터가 같은 와이파이에 연결되어 있는지</li>
+                <li>IP 주소를 정확히 입력했는지</li>
+                <li>프린터 전원이 켜져 있고 절전 상태가 아닌지</li>
+              </ul>
+            </div>
           ) : (
             <p id={feedbackId} role="status" className="text-sm leading-5 text-gray-600">
               {connectionFeedback.message}
@@ -172,7 +193,8 @@ export function PrinterFormModal({
           </button>
           <button
             type="submit"
-            className="h-[58px] rounded-lg bg-[#5a7bff] text-base font-medium text-white transition-colors hover:bg-[#4a6ee5]"
+            disabled={isRegistrationBlocked}
+            className="h-[58px] rounded-lg bg-[#5a7bff] text-base font-medium text-white transition-colors enabled:hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300"
           >
             {printer ? "저장하기" : "등록하기"}
           </button>

@@ -44,6 +44,10 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
     nextPrinter: PrinterDraft,
     testedStatus: PrinterConnectionStatus | null,
   ) => {
+    if (!editingPrinter && testedStatus !== "connected") {
+      return;
+    }
+
     if (editingPrinter) {
       setPrinters((currentPrinters) =>
         currentPrinters.map((printer) =>
@@ -79,7 +83,7 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
 
   const testPrinterConnection = (draft: PrinterDraft): PrinterConnectionTestResult => {
     if (!editingPrinter) {
-      return getMockPrinterConnectionTestResult(draft.model);
+      return getMockPrinterConnectionTestResult(draft.model, draft.ipAddress);
     }
     const printer = printers.find(
       (currentPrinter) =>
@@ -93,7 +97,7 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
       };
     }
     return printer.connectionStatus === "connected"
-      ? getMockPrinterConnectionTestResult(draft.model)
+      ? getMockPrinterConnectionTestResult(draft.model, draft.ipAddress)
       : {
           status: "disconnected",
           message: "예시 연결 결과: 연결 끊김. 같은 와이파이와 IP 주소를 확인해 주세요.",
