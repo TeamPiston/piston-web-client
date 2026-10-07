@@ -6,6 +6,7 @@ interface PrinterModalShellProps {
   children: ReactNode;
   labelledBy: string;
   describedBy?: string;
+  size?: "sm" | "md";
   onClose: () => void;
 }
 
@@ -13,6 +14,7 @@ export function PrinterModalShell({
   children,
   labelledBy,
   describedBy,
+  size = "md",
   onClose,
 }: PrinterModalShellProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -38,7 +40,7 @@ export function PrinterModalShell({
       ref={dialogRef}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-[560px] overflow-y-auto rounded-[20px] bg-[#fbfbfb] p-6 shadow-2xl backdrop:bg-black/40 sm:p-8"
+      className={`${size === "sm" ? "max-w-[440px]" : "max-w-[560px]"} m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto rounded-[20px] bg-[#fbfbfb] p-6 shadow-2xl backdrop:bg-black/40 sm:p-8`}
       onCancel={(event) => {
         event.preventDefault();
         onClose();

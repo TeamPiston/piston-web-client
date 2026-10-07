@@ -20,6 +20,7 @@ export function PrinterDeleteModal({
 
   return (
     <PrinterModalShell
+      size="sm"
       labelledBy={titleId}
       describedBy={descriptionId}
       onClose={onClose}
