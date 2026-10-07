@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import type {
   Printer,
   PrinterConnectionStatus,
   PrinterConnectionTestResult,
 } from "@/shared/mock/mock-data";
+import { PrinterModalShell } from "./printer-modal-shell";
 
 export type PrinterDraft = Pick<Printer, "name" | "model" | "ipAddress">;
 
@@ -28,7 +29,6 @@ export function PrinterFormModal({
   onSave,
   onTestConnection,
 }: PrinterFormModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const modelSelectRef = useRef<HTMLSelectElement>(null);
   const ipInputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
@@ -41,22 +41,6 @@ export function PrinterFormModal({
   }));
   const [connectionFeedback, setConnectionFeedback] =
     useState<PrinterConnectionTestResult | null>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    dialog?.showModal();
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      dialog?.close();
-      document.body.style.overflow = previousOverflow;
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
-        previousFocus.focus();
-      }
-    };
-  }, []);
 
   const savePrinter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -76,27 +60,7 @@ export function PrinterFormModal({
   };
 
   return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby={titleId}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-[560px] overflow-y-auto rounded-[20px] bg-[#fbfbfb] p-6 shadow-2xl backdrop:bg-black/40 sm:p-8"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target !== event.currentTarget) {
-          return;
-        }
-        const bounds = event.currentTarget.getBoundingClientRect();
-        if (
-          event.clientX < bounds.left || event.clientX > bounds.right ||
-          event.clientY < bounds.top || event.clientY > bounds.bottom
-        ) {
-          onClose();
-        }
-      }}
-    >
+    <PrinterModalShell labelledBy={titleId} onClose={onClose}>
       <h2 id={titleId} className="text-xl font-bold text-gray-950">
         {printer ? "프린터 수정" : "프린터 추가"}
       </h2>
@@ -214,6 +178,6 @@ export function PrinterFormModal({
           </button>
         </div>
       </form>
-    </dialog>
+    </PrinterModalShell>
   );
 }

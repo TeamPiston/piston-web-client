@@ -9,6 +9,7 @@ import {
   type PrinterConnectionTestResult,
 } from "@/shared/mock/mock-data";
 import { PrinterFormModal, type PrinterDraft } from "./printer-form-modal";
+import { PrinterDeleteModal } from "./printer-delete-modal";
 
 interface PrinterManagementPageProps {
   initialPrinters?: Printer[];
@@ -19,6 +20,7 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
     getPrintersWithFallback(initialPrinters),
   );
   const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null);
+  const [deletingPrinter, setDeletingPrinter] = useState<Printer | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const isEmpty = printers.length === 0;
@@ -98,15 +100,16 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
         };
   };
 
-  const deletePrinter = (printer: Printer) => {
-    if (!window.confirm(`${printer.name} 프린터를 삭제할까요?`)) {
+  const deletePrinter = (printerId: string) => {
+    if (!deletingPrinter || deletingPrinter.id !== printerId) {
       return;
     }
 
     setPrinters((currentPrinters) =>
-      currentPrinters.filter((currentPrinter) => currentPrinter.id !== printer.id),
+      currentPrinters.filter((currentPrinter) => currentPrinter.id !== printerId),
     );
-    setAnnouncement(`${printer.name} 프린터를 삭제했습니다.`);
+    setAnnouncement(`${deletingPrinter.name} 프린터를 삭제했습니다.`);
+    setDeletingPrinter(null);
   };
 
   return (
@@ -196,7 +199,7 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
               </button>
               <button
                 type="button"
-                onClick={() => deletePrinter(printer)}
+                onClick={() => setDeletingPrinter(printer)}
                 className="h-10 flex-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 sm:flex-none"
               >
                 삭제
@@ -258,6 +261,13 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
           onClose={closeForm}
           onSave={savePrinter}
           onTestConnection={testPrinterConnection}
+        />
+      )}
+      {deletingPrinter && (
+        <PrinterDeleteModal
+          printer={deletingPrinter}
+          onClose={() => setDeletingPrinter(null)}
+          onConfirm={deletePrinter}
         />
       )}
     </main>
