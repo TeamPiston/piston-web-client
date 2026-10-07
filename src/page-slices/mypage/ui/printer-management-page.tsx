@@ -1,68 +1,49 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import {
   getPrintersWithFallback,
   type Printer,
 } from "@/shared/mock/mock-data";
-
-interface PrinterDraft {
-  name: string;
-  model: string;
-  ipAddress: string;
-}
-
-const EMPTY_DRAFT: PrinterDraft = {
-  name: "",
-  model: "QIDI X-Max 4",
-  ipAddress: "",
-};
-
-const PRINTER_MODELS = ["QIDI X-Max 4", "QIDI X-Plus 4", "QIDI Q1 Pro"];
+import { PrinterFormModal, type PrinterDraft } from "./printer-form-modal";
 
 export function PrinterManagementPage() {
   const [printers, setPrinters] = useState<Printer[]>(() =>
     getPrintersWithFallback(),
   );
-  const [draft, setDraft] = useState<PrinterDraft>(EMPTY_DRAFT);
-  const [editingPrinterId, setEditingPrinterId] = useState<string | null>(null);
+  const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
 
   const openAddForm = () => {
-    setEditingPrinterId(null);
-    setDraft(EMPTY_DRAFT);
+    setEditingPrinter(null);
     setIsFormOpen(true);
   };
 
   const openEditForm = (printer: Printer) => {
-    setEditingPrinterId(printer.id);
-    setDraft({
-      name: printer.name,
-      model: printer.model,
-      ipAddress: printer.ipAddress,
-    });
+    setEditingPrinter(printer);
     setIsFormOpen(true);
   };
 
   const closeForm = () => {
     setIsFormOpen(false);
-    setEditingPrinterId(null);
+    setEditingPrinter(null);
   };
 
-  const savePrinter = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const nextPrinter = {
-      name: draft.name.trim(),
-      model: draft.model,
-      ipAddress: draft.ipAddress.trim(),
-    };
-
-    if (editingPrinterId) {
+  const savePrinter = (nextPrinter: PrinterDraft) => {
+    if (editingPrinter) {
       setPrinters((currentPrinters) =>
         currentPrinters.map((printer) =>
-          printer.id === editingPrinterId
-            ? { ...printer, ...nextPrinter }
+          printer.id === editingPrinter.id
+            ? {
+                ...printer,
+                ...nextPrinter,
+                connectionStatus:
+                  printer.ipAddress === nextPrinter.ipAddress &&
+                  printer.model === nextPrinter.model
+                    ? printer.connectionStatus
+                    : "disconnected",
+              }
             : printer,
         ),
       );
@@ -80,6 +61,20 @@ export function PrinterManagementPage() {
     }
 
     closeForm();
+  };
+
+  const testPrinterConnection = (draft: PrinterDraft) => {
+    const printer = printers.find(
+      (currentPrinter) =>
+        currentPrinter.ipAddress === draft.ipAddress.trim() &&
+        currentPrinter.model === draft.model,
+    );
+    if (!printer) {
+      return "이 IP 주소의 연결 정보가 없습니다. 실제 연결 테스트는 서버 연동 후 사용할 수 있어요.";
+    }
+    return printer.connectionStatus === "connected"
+      ? "예시 연결 결과: 연결됨"
+      : "예시 연결 결과: 연결 끊김. 같은 와이파이와 IP 주소를 확인해 주세요.";
   };
 
   const deletePrinter = (printer: Printer) => {
@@ -227,94 +222,13 @@ export function PrinterManagementPage() {
       </section>
 
       {isFormOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeForm();
-            }
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="printer-form-title"
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
-          >
-            <h2 id="printer-form-title" className="text-lg font-bold text-gray-950">
-              {editingPrinterId ? "프린터 수정" : "프린터 추가"}
-            </h2>
-            <form className="mt-5 flex flex-col gap-4" onSubmit={savePrinter}>
-              <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
-                프린터 이름
-                <input
-                  required
-                  value={draft.name}
-                  onChange={(event) =>
-                    setDraft((currentDraft) => ({
-                      ...currentDraft,
-                      name: event.target.value,
-                    }))
-                  }
-                  className="h-11 rounded-lg border border-gray-300 px-3 font-normal text-gray-950 outline-none focus:border-[#5a7bff]"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
-                모델
-                <select
-                  value={draft.model}
-                  onChange={(event) =>
-                    setDraft((currentDraft) => ({
-                      ...currentDraft,
-                      model: event.target.value,
-                    }))
-                  }
-                  className="h-11 rounded-lg border border-gray-300 bg-white px-3 font-normal text-gray-950 outline-none focus:border-[#5a7bff]"
-                >
-                  {!PRINTER_MODELS.includes(draft.model) && (
-                    <option value={draft.model}>{draft.model}</option>
-                  )}
-                  {PRINTER_MODELS.map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
-                IP 주소
-                <input
-                  required
-                  inputMode="decimal"
-                  placeholder="192.168.0.24"
-                  value={draft.ipAddress}
-                  onChange={(event) =>
-                    setDraft((currentDraft) => ({
-                      ...currentDraft,
-                      ipAddress: event.target.value,
-                    }))
-                  }
-                  className="h-11 rounded-lg border border-gray-300 px-3 font-normal text-gray-950 outline-none focus:border-[#5a7bff]"
-                />
-              </label>
-              <div className="mt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  className="h-10 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  className="h-10 rounded-lg bg-[#5a7bff] px-4 text-sm font-semibold text-white hover:bg-[#4a6ee5]"
-                >
-                  저장
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
+        <PrinterFormModal
+          key={editingPrinter?.id ?? "new-printer"}
+          printer={editingPrinter}
+          onClose={closeForm}
+          onSave={savePrinter}
+          onTestConnection={testPrinterConnection}
+        />
       )}
     </main>
   );
