@@ -2,10 +2,12 @@
 
 import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { useState } from "react";
 import { useAuth } from "@/entities/session";
 import { Header } from "@/widgets/header";
+import { PrinterManagementPage } from "./printer-management-page";
 
 type PrintStatus = "COMPLETED" | "EMPTY" | "PRINTING";
 
@@ -43,6 +45,26 @@ const MOCK_CREATED_DESIGNS: CreatedDesign[] = [
 ];
 
 export default function MyPage() {
+  return (
+    <Suspense fallback={null}>
+      <MyPageContent />
+    </Suspense>
+  );
+}
+
+function MyPageContent() {
+  const searchParams = useSearchParams();
+  const isPrinterTab = searchParams.get("tab") === "printer";
+
+  return (
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
+      <Header />
+      {isPrinterTab ? <PrinterManagementPage /> : <MyProfilePage />}
+    </div>
+  );
+}
+
+function MyProfilePage() {
   const router = useRouter();
   const { logout, user } = useAuth();
   const [printStatus] = useState<PrintStatus>("PRINTING");
@@ -50,8 +72,7 @@ export default function MyPage() {
   const displayProfile = user && user.name !== "관리자" ? user : MOCK_PROFILE;
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
-      <Header />
+    <>
       <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col px-4 py-10 sm:px-8 lg:px-0">
         <section className="flex flex-col gap-6 rounded-2xl border border-gray-300 bg-white px-6 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-10">
           <div className="flex min-w-0 items-center gap-6">
@@ -100,7 +121,7 @@ export default function MyPage() {
           </>
         )}
       </main>
-    </div>
+    </>
   );
 }
 

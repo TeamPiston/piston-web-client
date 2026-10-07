@@ -1,0 +1,32 @@
+export type PrinterConnectionStatus = "connected" | "disconnected";
+
+export interface Printer {
+  id: string;
+  name: string;
+  model: string;
+  ipAddress: string;
+  connectionStatus: PrinterConnectionStatus;
+}
+
+export const MOCK_PRINTERS: Printer[] = [
+  {
+    id: "printer-max4-02",
+    name: "MAX4_02",
+    model: "QIDI X-Max 4",
+    ipAddress: "192.168.0.24",
+    connectionStatus: "connected",
+  },
+  {
+    id: "printer-classroom",
+    name: "교실 프린터",
+    model: "QIDI X-Max 4",
+    ipAddress: "192.168.0.31",
+    connectionStatus: "disconnected",
+  },
+];
+
+export function getPrintersWithFallback(
+  printers?: Printer[] | null,
+): Printer[] {
+  return printers ?? MOCK_PRINTERS;
+}
