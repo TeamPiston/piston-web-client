@@ -79,20 +79,12 @@ export function Header() {
             <CircleUserRound className="h-9 w-9" strokeWidth={1.6} aria-hidden="true" />
           </Link>
         ) : (
-          <div className="col-start-2 row-start-1 flex items-center gap-2 justify-self-end sm:col-start-3">
-            <Link
-              href="/login"
-              className="rounded-lg bg-[#1e1e1e] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            >
-              로그인
-            </Link>
-            <Link
-              href="/register"
-              className="hidden px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:text-gray-950 sm:inline-flex"
-            >
-              회원가입
-            </Link>
-          </div>
+          <Link
+            href="/login"
+            className="col-start-2 row-start-1 justify-self-end rounded-lg bg-[#1e1e1e] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 sm:col-start-3"
+          >
+            로그인
+          </Link>
         )}
       </header>
       <LoginRequiredModal
