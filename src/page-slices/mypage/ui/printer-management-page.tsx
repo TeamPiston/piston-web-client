@@ -1,10 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import {
-  getPrintersWithFallback,
-  type Printer,
-} from "@/shared/mock/mock-data";
+import { usePrinter, type Printer } from "@/entities/printer";
 
 interface PrinterDraft {
   name: string;
@@ -21,9 +18,7 @@ const EMPTY_DRAFT: PrinterDraft = {
 const PRINTER_MODELS = ["QIDI X-Max 4", "QIDI X-Plus 4", "QIDI Q1 Pro"];
 
 export function PrinterManagementPage() {
-  const [printers, setPrinters] = useState<Printer[]>(() =>
-    getPrintersWithFallback(),
-  );
+  const { printers, setPrinters } = usePrinter();
   const [draft, setDraft] = useState<PrinterDraft>(EMPTY_DRAFT);
   const [editingPrinterId, setEditingPrinterId] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -80,6 +75,18 @@ export function PrinterManagementPage() {
     }
 
     closeForm();
+  };
+
+  const checkPrinterConnection = (printer: Printer) => {
+    // TODO: Replace the mock connection result with the connection-check API.
+    setPrinters((currentPrinters) =>
+      currentPrinters.map((currentPrinter) =>
+        currentPrinter.id === printer.id
+          ? { ...currentPrinter, connectionStatus: "connected" }
+          : currentPrinter,
+      ),
+    );
+    setAnnouncement(`${printer.name} 프린터는 연결됨 상태입니다.`);
   };
 
   const deletePrinter = (printer: Printer) => {
@@ -150,11 +157,7 @@ export function PrinterManagementPage() {
             <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
               <button
                 type="button"
-                onClick={() =>
-                  setAnnouncement(
-                    `${printer.name} 프린터는 ${printer.connectionStatus === "connected" ? "연결됨" : "연결 끊김"} 상태입니다.`,
-                  )
-                }
+                onClick={() => checkPrinterConnection(printer)}
                 className="h-10 flex-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50 sm:flex-none"
               >
                 연결 확인

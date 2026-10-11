@@ -4,12 +4,10 @@ import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useState } from "react";
+import { usePrinter, type PrintStatus } from "@/entities/printer";
 import { useAuth } from "@/entities/session";
 import { Header } from "@/widgets/header";
 import { PrinterManagementPage } from "./printer-management-page";
-
-type PrintStatus = "COMPLETED" | "EMPTY" | "PRINTING";
 
 interface CreatedDesign {
   href: string;
@@ -54,12 +52,12 @@ export default function MyPage() {
 
 function MyPageContent() {
   const searchParams = useSearchParams();
-  const isPrinterTab = searchParams.get("tab") === "printer";
+  const activeTab = searchParams.get("tab") === "printer" ? "printer" : "profile";
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
       <Header />
-      {isPrinterTab ? <PrinterManagementPage /> : <MyProfilePage />}
+      {activeTab === "printer" ? <PrinterManagementPage /> : <MyProfilePage />}
     </div>
   );
 }
@@ -67,7 +65,7 @@ function MyPageContent() {
 function MyProfilePage() {
   const router = useRouter();
   const { logout, user } = useAuth();
-  const [printStatus] = useState<PrintStatus>("PRINTING");
+  const { printStatus, printJob } = usePrinter();
 
   const displayProfile = user && user.name !== "관리자" ? user : MOCK_PROFILE;
 
@@ -115,19 +113,21 @@ function MyProfilePage() {
         {printStatus === "EMPTY" ? (
           <EmptyPrintState />
         ) : (
-          <>
-            <PrintStatusSection status={printStatus} />
-            <CreatedDesignSection />
-          </>
+          <PrintStatusSection status={printStatus} title={printJob?.title ?? "3D 디자인"} />
         )}
+        <CreatedDesignSection />
       </main>
     </>
   );
 }
 
-function PrintStatusSection({ status }: { status: Exclude<PrintStatus, "EMPTY"> }) {
+function PrintStatusSection({ status, title }: {
+  status: Exclude<PrintStatus, "EMPTY">;
+  title: string;
+}) {
   const isCompleted = status === "COMPLETED";
-  const progress = isCompleted ? 100 : 62;
+  // TODO: Fetch print progress and completion status from the print-job API.
+  const progress = isCompleted ? 100 : 0;
 
   return (
     <section className="mt-12">
@@ -144,13 +144,13 @@ function PrintStatusSection({ status }: { status: Exclude<PrintStatus, "EMPTY"> 
             <span aria-hidden="true">●</span>
             {isCompleted ? "출력 완료" : "출력 중"}
           </div>
-          <h3 className="mt-4 text-xl font-bold text-gray-950">육각형 연필꽂이</h3>
+          <h3 className="mt-4 text-xl font-bold text-gray-950">{title}</h3>
           <div className="mt-4 flex items-center justify-between gap-4">
             <span className="text-lg font-bold text-gray-950">{progress}%</span>
             <span className="text-xs text-gray-500">
               {isCompleted
-                ? "오늘 15:12 완료 · 프린터에서 꺼내 주세요"
-                : "약 32분 남음 · 오늘 15:12 완료 예정"}
+                ? "출력 완료 · 프린터에서 꺼내 주세요"
+                : "출력 진행 중"}
             </span>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">

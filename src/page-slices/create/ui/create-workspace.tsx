@@ -23,6 +23,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { FilamentColor } from "@/entities/artwork";
+import { usePrinter } from "@/entities/printer";
 import { useAuth } from "@/entities/session";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import {
@@ -285,6 +286,7 @@ export default function CreateWorkspaceEntry() {
 
 function CreateWorkspace() {
   const router = useRouter();
+  const { connectedPrinter, isPrinterConnected, startPrint } = usePrinter();
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopMediaQuery,
     getDesktopSnapshot,
@@ -301,7 +303,6 @@ function CreateWorkspace() {
   const [isPrintBlocked, setIsPrintBlocked] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
-  const [isPrinterConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [printSuccessPhase, setPrintSuccessPhase] = useState<PrintSuccessPhase>("hidden");
@@ -496,10 +497,30 @@ function CreateWorkspace() {
   };
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
+    if (!isGenerated || isPrintBlocked) {
+      return;
+    }
+
+    const didStartPrint = connectedPrinter ? startPrint({
+      colorMode,
+      printerId: connectedPrinter.id,
+      stlUrl: currentModelParams.stlUrl,
+      title: versions.find((version) => version.id === selectedVersionId)?.description ?? "3D 디자인",
+    }) : false;
+    if (!didStartPrint) {
+      setIsPrintModalOpen(false);
+      setIsPrinterConnectionModalOpen(true);
+      return;
+    }
+
     setIsPrintModalOpen(false);
     setPrintSuccessPhase("visible");
+  };
 
-    void colorMode;
+  const handleOpenPrinterManagement = () => {
+    setIsPrintModalOpen(false);
+    setIsPrinterConnectionModalOpen(false);
+    router.push("/mypage?tab=printer");
   };
 
   const handleVersionSelect = (versionId: string) => {
@@ -719,17 +740,19 @@ function CreateWorkspace() {
       <PrintSettingsModal
         isOpen={isPrintModalOpen}
         isPrinterConnected={isPrinterConnected}
+        printer={connectedPrinter}
         estimatedPrintTime={CREATE_ESTIMATED_PRINT_TIME}
         filamentColors={CREATE_FILAMENT_COLORS}
         filamentUsage={CREATE_FILAMENT_USAGE}
         onClose={() => setIsPrintModalOpen(false)}
         onConfirm={handlePrintConfirm}
+        onOpenPrinterManagement={handleOpenPrinterManagement}
       />
       <PrinterDisconnectedModal
         isOpen={isPrinterConnectionModalOpen}
         stlUrl={currentModelParams.stlUrl}
         onClose={() => setIsPrinterConnectionModalOpen(false)}
-        onOpenPrinterManagement={() => router.push("/mypage?tab=printer")}
+        onOpenPrinterManagement={handleOpenPrinterManagement}
       />
     </>
   );
