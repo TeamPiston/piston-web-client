@@ -118,8 +118,6 @@ const MOCK_PRINT_WARNING: PrintWarning = {
   ],
 };
 
-const CORRECTED_VERSION_ID = "v4";
-
 const MOCK_COPYRIGHT_WARNING: CopyrightWarning = {
   title: "이 요청은 만들어 드릴 수 없어요",
   description:
@@ -220,9 +218,7 @@ const resolveModelParams = (version: DesignVersion): ResolvedArtworkModelParams 
   dimensions: version.dimensions ?? DEFAULT_MODEL_PARAMS.dimensions,
 });
 
-const MOCK_CORRECTED_VERSION: DesignVersion = {
-  id: CORRECTED_VERSION_ID,
-  label: CORRECTED_VERSION_ID,
+const MOCK_CORRECTED_VERSION: Omit<DesignVersion, "id" | "label"> = {
   description: "규격에 맞게 두께 보정",
   meta: "방금",
   stlUrl: "/pencil-holder.stl",
@@ -318,6 +314,7 @@ function CreateWorkspace() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
   const historyTitleInputRef = useRef<HTMLInputElement>(null);
+  const nextVersionNumberRef = useRef(1);
   const loadingTimeoutRef = useRef<number | null>(null);
   const isCancelingHistoryEditRef = useRef(false);
 
@@ -369,6 +366,20 @@ function CreateWorkspace() {
     };
   }, [printSuccessPhase]);
 
+  const appendVersion = (version: Omit<DesignVersion, "id" | "label">) => {
+    const versionId = `v${nextVersionNumberRef.current++}`;
+    const nextVersion: DesignVersion = {
+      ...version,
+      id: versionId,
+      label: versionId,
+    };
+
+    setVersions((currentVersions) => [...currentVersions, nextVersion]);
+    setSelectedVersionId(versionId);
+    setCurrentModelParams(resolveModelParams(nextVersion));
+    setIsGenerated(true);
+  };
+
   const appendMockResponse = (userContent: string, prompt: string) => {
     const normalizedPrompt = prompt.toLowerCase();
     const hasCopyrightIssue = COPYRIGHT_KEYWORDS.some((keyword) =>
@@ -406,8 +417,6 @@ function CreateWorkspace() {
       { id: timestamp, role: "user", content: userContent },
     ]);
     setIsLoading(true);
-    setIsGenerated(false);
-    setIsPrintBlocked(false);
     setIsPrintModalOpen(false);
     setIsPrinterConnectionModalOpen(false);
 
@@ -417,14 +426,13 @@ function CreateWorkspace() {
       setMessages((currentMessages) => [...currentMessages, assistantMessage]);
 
       if (hasCopyrightIssue) {
-        setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
         return;
       }
 
-      setVersions(MOCK_VERSIONS);
-      setSelectedVersionId("v3");
-      setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
-      setIsGenerated(true);
+      const generatedVersions = nextVersionNumberRef.current === 1
+        ? MOCK_VERSIONS
+        : [MOCK_VERSIONS[2]];
+      generatedVersions.forEach(appendVersion);
       setIsPrintBlocked(hasPrintIssue);
     }, 1800);
   };
@@ -469,13 +477,7 @@ function CreateWorkspace() {
       },
     ]);
     setIsPrintBlocked(false);
-    setVersions((currentVersions) => [
-      ...currentVersions.filter((version) => version.id !== CORRECTED_VERSION_ID),
-      MOCK_CORRECTED_VERSION,
-    ]);
-    setSelectedVersionId(CORRECTED_VERSION_ID);
-    setCurrentModelParams(resolveModelParams(MOCK_CORRECTED_VERSION));
-    setIsGenerated(true);
+    appendVersion(MOCK_CORRECTED_VERSION);
   };
 
   const handlePrintOpen = () => {
@@ -583,6 +585,7 @@ function CreateWorkspace() {
     setPrintSuccessPhase("hidden");
     setSelectedVersionId("v3");
     setVersions([]);
+    nextVersionNumberRef.current = 1;
     setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
     setCameraDistance(42);
     setIsHistoryOpen(false);
