@@ -63,14 +63,12 @@ export function PrinterManagementPage() {
       );
       setAnnouncement(`${nextPrinter.name} 프린터 정보를 수정했습니다.`);
     } else {
-      setPrinters((currentPrinters) => [
-        ...currentPrinters,
-        {
-          id: `printer-${Date.now()}`,
-          ...nextPrinter,
-          connectionStatus: "disconnected",
-        },
-      ]);
+      const newPrinter: Printer = {
+        id: crypto.randomUUID(),
+        ...nextPrinter,
+        connectionStatus: "disconnected",
+      };
+      setPrinters((currentPrinters) => [...currentPrinters, newPrinter]);
       setAnnouncement(`${nextPrinter.name} 프린터를 추가했습니다.`);
     }
 

@@ -33,7 +33,6 @@ import type {
   ChatMessage,
   DesignVersion,
   PrintSuccessPhase,
-  PrintWarning,
   ResolvedArtworkModelParams,
 } from "../model/types";
 import { ChatPanel } from "./components/chat-panel";
@@ -89,6 +88,7 @@ export default function CreateWorkspace() {
   const nextVersionNumberRef = useRef(1);
   const loadingTimeoutRef = useRef<number | null>(null);
   const isCancelingHistoryEditRef = useRef(false);
+  const autoFixedMessageIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (editingHistoryId) {
@@ -160,10 +160,10 @@ export default function CreateWorkspace() {
     const hasPrintIssue = !hasCopyrightIssue && ["얇게", "최대한 얇게", "얇은"].some(
       (keyword) => prompt.includes(keyword),
     );
-    const timestamp = Date.now();
+    const assistantMessageId = crypto.randomUUID();
     const assistantMessage: ChatMessage = hasCopyrightIssue
       ? {
-          id: timestamp + 1,
+          id: assistantMessageId,
           role: "assistant",
           content: MOCK_COPYRIGHT_WARNING.title,
           copyrightWarning: MOCK_COPYRIGHT_WARNING,
@@ -171,23 +171,25 @@ export default function CreateWorkspace() {
         }
       : hasPrintIssue
         ? {
-            id: timestamp + 1,
+            id: assistantMessageId,
             role: "assistant",
             content: MOCK_PRINT_WARNING.title,
             hasPrintIssue: true,
             printWarning: MOCK_PRINT_WARNING,
           }
         : {
-            id: timestamp + 1,
+            id: assistantMessageId,
             role: "assistant",
             content:
               "육각형 연필꽂이를 생성했어요. 높이와 바닥 지름을 조정하면서 원하는 형태로 다듬어 보세요.",
           };
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { id: timestamp, role: "user", content: userContent },
-    ]);
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: userContent,
+    };
+    setMessages((currentMessages) => [...currentMessages, userMessage]);
     setIsLoading(true);
     setIsPrintModalOpen(false);
     setIsPrinterConnectionModalOpen(false);
@@ -234,19 +236,37 @@ export default function CreateWorkspace() {
     }
   };
 
-  const handleAutoFix = (warning: PrintWarning) => {
-    const timestamp = Date.now();
-    const correction = createPrintCorrection(warning);
+  const handleAutoFix = (messageId: string) => {
+    const warningMessage = [...messages].reverse().find((message) => message.hasPrintIssue);
+    if (
+      isLoading ||
+      !isPrintBlocked ||
+      warningMessage?.id !== messageId ||
+      !warningMessage.printWarning ||
+      warningMessage.isPrintIssueResolved ||
+      autoFixedMessageIdsRef.current.has(messageId)
+    ) {
+      return;
+    }
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { id: timestamp, role: "user", content: "규격에 맞게 자동 수정" },
+    // Block repeat events before React commits the disabled button state.
+    autoFixedMessageIdsRef.current.add(messageId);
+    const correction = createPrintCorrection(warningMessage.printWarning);
+    const correctionMessages: ChatMessage[] = [
+      { id: crypto.randomUUID(), role: "user", content: "규격에 맞게 자동 수정" },
       {
-        id: timestamp + 1,
+        id: crypto.randomUUID(),
         role: "assistant",
         content: correction.title,
         printCorrection: correction,
       },
+    ];
+
+    setMessages((currentMessages) => [
+      ...currentMessages.map((message) =>
+        message.id === messageId ? { ...message, isPrintIssueResolved: true } : message,
+      ),
+      ...correctionMessages,
     ]);
     setIsPrintBlocked(false);
     appendVersion(MOCK_CORRECTED_VERSION);
@@ -381,6 +401,7 @@ export default function CreateWorkspace() {
     setIsPrinterConnectionModalOpen(false);
     setIsLoading(false);
     setMessages([]);
+    autoFixedMessageIdsRef.current.clear();
     setAttachedImage(null);
     setPrintSuccessPhase("hidden");
     setSelectedVersionId("v3");
@@ -468,6 +489,7 @@ export default function CreateWorkspace() {
               fileInputRef={fileInputRef}
               isGenerated={isGenerated}
               isLoading={isLoading}
+              isPrintBlocked={isPrintBlocked}
               messages={messages}
               onDraftChange={setDraft}
               onFileChange={handleFileChange}

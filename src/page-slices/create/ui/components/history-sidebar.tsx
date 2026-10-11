@@ -65,8 +65,19 @@ export function HistorySidebar({
               tabIndex={0}
               onDoubleClick={() => onEditTitle(history)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && !isEditing) {
-                  onEditTitle(history);
+                if (
+                  isEditing ||
+                  event.target !== event.currentTarget ||
+                  event.nativeEvent.isComposing
+                ) {
+                  return;
+                }
+
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  if (!event.repeat) {
+                    onEditTitle(history);
+                  }
                 }
               }}
               className="rounded-lg px-3 py-3 text-sm text-gray-700 transition-colors hover:bg-gray-50"

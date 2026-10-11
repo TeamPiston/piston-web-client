@@ -21,11 +21,12 @@ export function AiLoadingCard() {
 }
 
 interface PrintWarningCardProps {
-  onAutoFix: (warning: PrintWarning) => void;
+  isDisabled: boolean;
+  onAutoFix: () => void;
   warning: PrintWarning;
 }
 
-export function PrintWarningCard({ onAutoFix, warning }: PrintWarningCardProps) {
+export function PrintWarningCard({ isDisabled, onAutoFix, warning }: PrintWarningCardProps) {
   return (
     <div className="max-w-[92%] rounded-2xl border border-red-400 bg-white p-4 text-gray-950">
       <div className="flex items-center gap-2 text-sm font-semibold text-red-500">
@@ -52,8 +53,9 @@ export function PrintWarningCard({ onAutoFix, warning }: PrintWarningCardProps) 
       </div>
       <button
         type="button"
-        onClick={() => onAutoFix(warning)}
-        className="mt-3 h-11 w-full rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-950 transition-colors hover:bg-gray-50"
+        onClick={onAutoFix}
+        disabled={isDisabled}
+        className="mt-3 h-11 w-full rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-950 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400"
       >
         규격에 맞게 자동 수정
       </button>

@@ -3,7 +3,7 @@
 import { CornerDownLeft, Menu, Plus, X } from "lucide-react";
 import Image from "next/image";
 import type { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent } from "react";
-import type { AttachedImage, ChatMessage, PrintWarning } from "../../model/types";
+import type { AttachedImage, ChatMessage } from "../../model/types";
 import {
   AiLoadingCard,
   CopyrightWarningCard,
@@ -18,8 +18,9 @@ interface ChatPanelProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isGenerated: boolean;
   isLoading: boolean;
+  isPrintBlocked: boolean;
   messages: ChatMessage[];
-  onAutoFix: (warning: PrintWarning) => void;
+  onAutoFix: (messageId: string) => void;
   onDraftChange: (value: string) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onInputKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -36,6 +37,7 @@ export function ChatPanel({
   fileInputRef,
   isGenerated,
   isLoading,
+  isPrintBlocked,
   messages,
   onAutoFix,
   onDraftChange,
@@ -46,6 +48,8 @@ export function ChatPanel({
   onSubmit,
   onToggleHistory,
 }: ChatPanelProps) {
+  const latestPrintWarningId = [...messages].reverse().find((message) => message.hasPrintIssue)?.id;
+
   return (
     <section className="relative flex min-h-[720px] min-w-0 flex-col border-r border-gray-200 bg-white px-6 pb-[52px] pt-20 xl:min-h-0 xl:px-[60px]">
       <button
@@ -78,7 +82,16 @@ export function ChatPanel({
                 ) : message.printCorrection ? (
                   <PrintCorrectionCard correction={message.printCorrection} />
                 ) : message.hasPrintIssue && message.printWarning ? (
-                  <PrintWarningCard warning={message.printWarning} onAutoFix={onAutoFix} />
+                  <PrintWarningCard
+                    warning={message.printWarning}
+                    isDisabled={
+                      isLoading ||
+                      !isPrintBlocked ||
+                      message.isPrintIssueResolved === true ||
+                      message.id !== latestPrintWarningId
+                    }
+                    onAutoFix={() => onAutoFix(message.id)}
+                  />
                 ) : (
                   <p
                     className={[

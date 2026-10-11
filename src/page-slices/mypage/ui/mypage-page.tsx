@@ -10,6 +10,7 @@ import { Header } from "@/widgets/header";
 import { PrinterManagementPage } from "./printer-management-page";
 
 interface CreatedDesign {
+  id: string;
   href: string;
   isPublished: boolean;
   meta: string;
@@ -17,24 +18,27 @@ interface CreatedDesign {
 }
 
 const MOCK_PROFILE = {
-  email: "penamjin@gmail.com",
+  email: "user@example.com",
   name: "dlskawls",
 };
 
 const MOCK_CREATED_DESIGNS: CreatedDesign[] = [
   {
+    id: "6",
     href: "/artwork/6",
     isPublished: true,
     meta: "어제 만듦 · 1회 출력",
     title: "화분 받침 트레이",
   },
   {
+    id: "7",
     href: "/artwork/7",
     isPublished: false,
     meta: "3일 전 만듦 · 2회 출력",
     title: "벽걸이 케이블 훅",
   },
   {
+    id: "8",
     href: "/artwork/8",
     isPublished: true,
     meta: "1주 전 만듦 · 아직 출력 안 함",
@@ -67,7 +71,7 @@ function MyProfilePage() {
   const { logout, user } = useAuth();
   const { printStatus, printJob } = usePrinter();
 
-  const displayProfile = user && user.name !== "관리자" ? user : MOCK_PROFILE;
+  const displayProfile = user ?? MOCK_PROFILE;
 
   return (
     <>
@@ -175,7 +179,7 @@ function CreatedDesignSection() {
       <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {MOCK_CREATED_DESIGNS.map((design) => (
           <Link
-            key={design.title}
+            key={design.id}
             href={design.href}
             className="overflow-hidden rounded-2xl border border-gray-300 bg-white transition-shadow hover:shadow-md"
           >

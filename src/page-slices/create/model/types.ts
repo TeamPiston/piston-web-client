@@ -36,9 +36,10 @@ export interface CopyrightWarning {
 
 export interface ChatMessage {
   content: string;
-  id: number;
+  id: string;
   copyrightWarning?: CopyrightWarning;
   hasPrintIssue?: boolean;
+  isPrintIssueResolved?: boolean;
   isCopyrightIssue?: boolean;
   printCorrection?: PrintCorrection;
   printWarning?: PrintWarning;
