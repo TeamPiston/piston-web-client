@@ -38,6 +38,16 @@ const subscribeToHydration = () => () => {};
 const getClientHydrationSnapshot = () => true;
 const getServerHydrationSnapshot = () => false;
 
+const DESKTOP_MEDIA_QUERY = "(min-width: 80rem)";
+const subscribeToDesktopMediaQuery = (onChange: () => void) => {
+  const mediaQuery = window.matchMedia(DESKTOP_MEDIA_QUERY);
+  mediaQuery.addEventListener("change", onChange);
+
+  return () => mediaQuery.removeEventListener("change", onChange);
+};
+const getDesktopSnapshot = () => window.matchMedia(DESKTOP_MEDIA_QUERY).matches;
+const getServerDesktopSnapshot = () => false;
+
 const CREATE_FILAMENT_COLORS: FilamentColor[] = [
   { name: "빨강", value: "#f04444" },
   { name: "주황", value: "#ff7855" },
@@ -279,6 +289,11 @@ export default function CreateWorkspaceEntry() {
 
 function CreateWorkspace() {
   const router = useRouter();
+  const isDesktop = useSyncExternalStore(
+    subscribeToDesktopMediaQuery,
+    getDesktopSnapshot,
+    getServerDesktopSnapshot,
+  );
   const [draft, setDraft] = useState("");
   const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
   const selectedFileName = attachedImage ? attachedImage.name : null;
@@ -311,7 +326,7 @@ function CreateWorkspace() {
       historyTitleInputRef.current?.focus();
       historyTitleInputRef.current?.select();
     }
-  }, [editingHistoryId]);
+  }, [editingHistoryId, isDesktop, isHistoryOpen]);
 
   useEffect(() => {
     return () => {
@@ -626,7 +641,7 @@ function CreateWorkspace() {
       <main className="relative min-h-[calc(100vh-100px)] overflow-hidden bg-white xl:h-[calc(100vh-100px)]">
         <div className="grid min-h-[calc(100vh-100px)] xl:h-full xl:grid-cols-[360px_minmax(0,1fr)_360px]">
           <aside className="relative hidden border-r border-gray-200 bg-white xl:block">
-            {isHistoryOpen && (
+            {isDesktop && isHistoryOpen && (
               <HistorySidebar
                 chatHistories={chatHistories}
                 editingHistoryId={editingHistoryId}
@@ -679,7 +694,7 @@ function CreateWorkspace() {
           />
         </div>
 
-        {isHistoryOpen && (
+        {!isDesktop && isHistoryOpen && (
           <div className="absolute inset-0 z-30 bg-black/10 xl:hidden">
             <div className="h-full w-[min(360px,calc(100vw-28px))]">
               <HistorySidebar
