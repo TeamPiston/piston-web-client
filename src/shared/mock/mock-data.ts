@@ -486,7 +486,7 @@ export async function withMockFallback<T>(
   try {
     return await apiOperation();
   } catch (error) {
-    if (isUnauthorizedError(error)) {
+    if (process.env.NODE_ENV === "production" || isHttpError(error)) {
       throw error;
     }
 
@@ -494,12 +494,14 @@ export async function withMockFallback<T>(
   }
 }
 
-function isUnauthorizedError(error: unknown) {
+function isHttpError(error: unknown) {
   return (
     typeof error === "object" &&
     error !== null &&
     "status" in error &&
-    (error as { status?: unknown }).status === 401
+    typeof error.status === "number" &&
+    error.status >= 400 &&
+    error.status < 600
   );
 }
 
