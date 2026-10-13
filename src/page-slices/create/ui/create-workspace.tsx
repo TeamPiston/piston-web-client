@@ -449,6 +449,7 @@ function CreateWorkspace() {
       return;
     }
 
+    // TODO: 백엔드 API 연동 시 colorMode를 요청 body에 포함하여 전달
     void colorMode;
     setIsPrintStarting(true);
     setPrintStartError(null);
