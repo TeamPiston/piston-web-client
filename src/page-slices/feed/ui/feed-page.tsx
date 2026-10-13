@@ -1,19 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArtworkCard, ArtworkCardSkeleton, MOCK_ARTWORKS } from "@/entities/artwork";
+import { ArtworkCard, ArtworkCardSkeleton } from "@/entities/artwork";
 import { EmptyResult, FeedSearchInput, useFeedSearch } from "@/features/feed-search";
 import { LikeButton } from "@/features/like-artwork";
+import { fetchMockFeedPosts, type MockFeedPost } from "@/shared/mock/mock-data";
 import { Header } from "@/widgets/header";
 
 export default function FeedPage() {
   const [isLoading, setIsLoading] = useState(true);
-  const { query, setQuery, filteredItems } = useFeedSearch(MOCK_ARTWORKS);
+  const [artworks, setArtworks] = useState<MockFeedPost[]>([]);
+  const { query, setQuery, filteredItems } = useFeedSearch(artworks);
 
   useEffect(() => {
-    const loadingTimer = window.setTimeout(() => setIsLoading(false), 500);
+    let isMounted = true;
+    void fetchMockFeedPosts()
+      .then((posts) => {
+        if (isMounted) {
+          setArtworks(posts);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
 
-    return () => window.clearTimeout(loadingTimer);
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const searchQuery = query.trim();
@@ -55,7 +70,16 @@ export default function FeedPage() {
                 ].join(" ")}
               >
                 {filteredItems.map((artwork) => (
-                  <ArtworkCard key={artwork.id} artwork={artwork} likeSlot={<LikeButton />} />
+                  <ArtworkCard
+                    key={artwork.id}
+                    artwork={artwork}
+                    likeSlot={
+                      <LikeButton
+                        artworkId={artwork.id}
+                        initialLiked={artwork.likedByCurrentUser}
+                      />
+                    }
+                  />
                 ))}
               </div>
             </div>

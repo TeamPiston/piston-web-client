@@ -3,20 +3,25 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FilamentColor } from "@/entities/artwork";
+import type { Printer } from "@/entities/printer";
 
 type PrintColorMode = "color" | "monochrome";
 
 interface PrintSettingsModalProps {
   isOpen: boolean;
   isPrinterConnected?: boolean;
+  printer?: Printer | null;
   estimatedPrintTime: string;
   filamentColors: FilamentColor[];
   filamentUsage: {
     length: string;
     weight: string;
   };
+  errorMessage?: string | null;
+  isSubmitting?: boolean;
   onClose: () => void;
   onConfirm: (settings: { colorMode: string }) => void;
+  onOpenPrinterManagement: () => void;
 }
 
 const printChecklist = [
@@ -29,11 +34,15 @@ const printChecklist = [
 export function PrintSettingsModal({
   isOpen,
   isPrinterConnected = false,
+  printer,
   estimatedPrintTime,
   filamentColors,
   filamentUsage,
+  errorMessage = null,
+  isSubmitting = false,
   onClose,
   onConfirm,
+  onOpenPrinterManagement,
 }: PrintSettingsModalProps) {
   const [colorMode, setColorMode] = useState<PrintColorMode>("color");
 
@@ -103,9 +112,9 @@ export function PrintSettingsModal({
               <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3">
                 <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-gray-950">MAX4_02</p>
+                  <p className="text-sm font-bold text-gray-950">{printer?.name}</p>
                   <p className="mt-1 truncate text-xs text-gray-400">
-                    QIDI X-Max 4 · 192.168.0.24 · 연결됨
+                    {printer?.model} · {printer?.ipAddress} · 연결됨
                   </p>
                 </div>
               </div>
@@ -120,6 +129,7 @@ export function PrintSettingsModal({
                 </div>
                 <button
                   type="button"
+                  onClick={onOpenPrinterManagement}
                   className="shrink-0 rounded-lg bg-[#5a7bff] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
                 >
                   프린터 등록
@@ -205,12 +215,17 @@ export function PrintSettingsModal({
             <button
               type="button"
               onClick={() => onConfirm({ colorMode })}
-              disabled={!isPrinterConnected}
+              disabled={!isPrinterConnected || isSubmitting}
               className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300"
             >
-              출력 시작하기
+              {isSubmitting ? "출력 시작 중..." : "출력 시작하기"}
             </button>
           </div>
+          {errorMessage && (
+            <p className="mt-3 text-center text-xs font-medium text-red-500" role="alert">
+              {errorMessage}
+            </p>
+          )}
         </div>
       </section>
     </div>

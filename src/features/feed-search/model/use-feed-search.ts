@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Artwork } from "@/entities/artwork";
 
-export function useFeedSearch(items: Artwork[]) {
+export function useFeedSearch<T extends Artwork>(items: T[]) {
   const [query, setQuery] = useState("");
 
   const filteredItems = items.filter((artwork) => {

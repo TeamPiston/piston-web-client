@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { PrinterProvider, usePrinter } from "@/entities/printer";
 import {
   getMockPrinterConnectionTestResult,
-  getPrintersWithFallback,
   type Printer,
   type PrinterConnectionStatus,
   type PrinterConnectionTestResult,
@@ -16,9 +16,19 @@ interface PrinterManagementPageProps {
 }
 
 export function PrinterManagementPage({ initialPrinters }: PrinterManagementPageProps) {
-  const [printers, setPrinters] = useState<Printer[]>(() =>
-    getPrintersWithFallback(initialPrinters),
-  );
+  if (initialPrinters !== undefined) {
+    return (
+      <PrinterProvider initialPrinters={initialPrinters}>
+        <PrinterManagementContent />
+      </PrinterProvider>
+    );
+  }
+
+  return <PrinterManagementContent />;
+}
+
+function PrinterManagementContent() {
+  const { printers, setPrinters } = usePrinter();
   const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null);
   const [deletingPrinter, setDeletingPrinter] = useState<Printer | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -70,7 +80,7 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
       setPrinters((currentPrinters) => [
         ...currentPrinters,
         {
-          id: `printer-${Date.now()}`,
+          id: crypto.randomUUID(),
           ...nextPrinter,
           connectionStatus: testedStatus ?? "disconnected",
         },
@@ -102,6 +112,20 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
           status: "disconnected",
           message: "예시 연결 결과: 연결 끊김. 같은 와이파이와 IP 주소를 확인해 주세요.",
         };
+  };
+
+  const checkPrinterConnection = (printer: Printer) => {
+    const result = getMockPrinterConnectionTestResult(printer.model, printer.ipAddress);
+    setPrinters((currentPrinters) =>
+      currentPrinters.map((currentPrinter) =>
+        currentPrinter.id === printer.id
+          ? { ...currentPrinter, connectionStatus: result.status }
+          : currentPrinter,
+      ),
+    );
+    setAnnouncement(result.status === "connected"
+      ? `${printer.name} 프린터는 연결됨 상태입니다.`
+      : `${printer.name}: ${result.message}`);
   };
 
   const deletePrinter = (printerId: string) => {
@@ -185,11 +209,7 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
             <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
               <button
                 type="button"
-                onClick={() =>
-                  setAnnouncement(
-                    `${printer.name} 프린터는 ${printer.connectionStatus === "connected" ? "연결됨" : "연결 끊김"} 상태입니다.`,
-                  )
-                }
+                onClick={() => checkPrinterConnection(printer)}
                 className="h-10 flex-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50 sm:flex-none"
               >
                 연결 확인

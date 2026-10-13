@@ -3,13 +3,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { SessionContext, type SessionContextValue } from "./context";
 import type { UserProfile } from "./context";
-import { AUTH_EXPIRED_EVENT, SESSION_STORAGE_KEY } from "./config";
-
-const LEGACY_MOCK_USER: UserProfile = {
-  id: "admin",
-  email: "admin@example.com",
-  name: "관리자",
-};
+import { ACCESS_TOKEN_STORAGE_KEY, AUTH_EXPIRED_EVENT, SESSION_STORAGE_KEY } from "./config";
+import { MOCK_USER_PROFILE } from "@/shared/mock/mock-data";
 
 function isUserProfile(value: unknown): value is UserProfile {
   if (!value || typeof value !== "object") {
@@ -31,7 +26,7 @@ function getStoredUser(): UserProfile | null {
 
   const storedSession = window.localStorage.getItem(SESSION_STORAGE_KEY);
   if (storedSession === "true") {
-    return LEGACY_MOCK_USER;
+    return MOCK_USER_PROFILE;
   }
 
   if (!storedSession) {
@@ -66,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
     }
     setUser(null);
   };
