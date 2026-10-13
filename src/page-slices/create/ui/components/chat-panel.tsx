@@ -2,7 +2,7 @@
 
 import { CornerDownLeft, Menu, Plus, X } from "lucide-react";
 import Image from "next/image";
-import type { ChangeEvent, ClipboardEvent, FormEvent, KeyboardEvent } from "react";
+import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, KeyboardEvent } from "react";
 import type { AttachedImage, ChatMessage } from "../../model/types";
 import {
   AiLoadingCard,
@@ -12,35 +12,41 @@ import {
 } from "./chat-message-cards";
 
 interface ChatPanelProps {
-  attachedImage: AttachedImage | null;
+  attachedImages: AttachedImage[];
   draft: string;
   draftTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isGenerated: boolean;
   isLoading: boolean;
+  isLimitExceeded: boolean;
   isPrintBlocked: boolean;
   messages: ChatMessage[];
   onAutoFix: (messageId: string) => void;
   onDraftChange: (value: string) => void;
+  onDragOver: (event: DragEvent<HTMLFormElement>) => void;
+  onDrop: (event: DragEvent<HTMLFormElement>) => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onInputKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
-  onRemoveAttachment: () => void;
+  onRemoveAttachment: (imageId: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onToggleHistory: () => void;
 }
 
 export function ChatPanel({
-  attachedImage,
+  attachedImages,
   draft,
   draftTextareaRef,
   fileInputRef,
   isGenerated,
   isLoading,
+  isLimitExceeded,
   isPrintBlocked,
   messages,
   onAutoFix,
   onDraftChange,
+  onDragOver,
+  onDrop,
   onFileChange,
   onInputKeyDown,
   onPaste,
@@ -116,8 +122,11 @@ export function ChatPanel({
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="w-full">
-          <div className="flex min-h-[60px] flex-col rounded-xl border border-[#5a7bff] bg-white px-4 py-2 shadow-sm">
+        <form onSubmit={onSubmit} onDragOver={onDragOver} onDrop={onDrop} className="w-full">
+          <div className={[
+            "flex min-h-[60px] flex-col rounded-xl bg-white px-4 py-2 shadow-sm",
+            isLimitExceeded ? "border-2 border-red-400" : "border border-[#5a7bff]",
+          ].join(" ")}>
             <input
               ref={fileInputRef}
               type="file"
@@ -125,25 +134,32 @@ export function ChatPanel({
               onChange={onFileChange}
               className="sr-only"
             />
-            {attachedImage && (
-              <div className="group relative mb-3 h-24 w-24 overflow-hidden rounded-lg bg-gray-200">
-                <Image
-                  src={attachedImage.url}
-                  alt="첨부 이미지 미리보기"
-                  width={96}
-                  height={96}
-                  unoptimized
-                  className="h-full w-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={onRemoveAttachment}
-                  aria-label="첨부 이미지 삭제"
-                  title="첨부 이미지 삭제"
-                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
+            {attachedImages.length > 0 && (
+              <div className="mb-3 flex gap-2">
+                {attachedImages.map((image) => (
+                  <div
+                    key={image.id}
+                    className="group relative h-16 w-16 overflow-hidden rounded-lg bg-gray-200"
+                  >
+                    <Image
+                      src={image.url}
+                      alt={`첨부 이미지 미리보기: ${image.name}`}
+                      width={64}
+                      height={64}
+                      unoptimized
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveAttachment(image.id)}
+                      aria-label={`${image.name} 첨부 이미지 삭제`}
+                      title="첨부 이미지 삭제"
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+                    >
+                      <X className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
             <div className="flex min-h-10 items-end gap-3">
@@ -179,6 +195,11 @@ export function ChatPanel({
               </button>
             </div>
           </div>
+          {isLimitExceeded && (
+            <p className="mt-2 text-center text-xs text-red-500">
+              사진은 최대 2장까지 첨부할 수 있어요
+            </p>
+          )}
           <p className="mt-3 text-center text-xs text-gray-400">
             참고 이미지가 자세할수록 원하는 결과물에 가깝게 만들어져요
           </p>

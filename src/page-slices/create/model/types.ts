@@ -68,6 +68,7 @@ export interface ChatHistory {
 }
 
 export interface AttachedImage {
+  id: string;
   name: string;
   url: string;
 }

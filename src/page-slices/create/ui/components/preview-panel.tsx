@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Minus, Move3d, Plus } from "lucide-react";
+import { Download, Minus, Move3d, Plus, RotateCw } from "lucide-react";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import { PistonLogo } from "@/shared/ui";
 import type { PrintSuccessPhase, ResolvedArtworkModelParams } from "../../model/types";
@@ -9,8 +9,11 @@ interface PreviewPanelProps {
   cameraDistance: number;
   isGenerated: boolean;
   isPrintBlocked: boolean;
+  isPrintCheckFailed: boolean;
+  isPrintStatusChecking: boolean;
   modelParams: ResolvedArtworkModelParams;
   onPrint: () => void;
+  onRetryPrintCheck: () => void;
   printSuccessPhase: PrintSuccessPhase;
   onZoom: (direction: "in" | "out") => void;
 }
@@ -19,8 +22,11 @@ export function PreviewPanel({
   cameraDistance,
   isGenerated,
   isPrintBlocked,
+  isPrintCheckFailed,
+  isPrintStatusChecking,
   modelParams,
   onPrint,
+  onRetryPrintCheck,
   printSuccessPhase,
   onZoom,
 }: PreviewPanelProps) {
@@ -87,10 +93,10 @@ export function PreviewPanel({
         <button
           type="button"
           onClick={onPrint}
-          disabled={!isGenerated || isPrintBlocked}
+          disabled={!isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}
           className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white"
         >
-          {isGenerated ? "출력하기" : "디자인을 생성해 주세요."}
+          {isPrintStatusChecking ? "프린터 상태 확인 중..." : isGenerated ? "출력하기" : "디자인을 생성해 주세요."}
         </button>
         {isGenerated ? (
           <a
@@ -114,6 +120,22 @@ export function PreviewPanel({
           </button>
         )}
       </div>
+      {isGenerated && isPrintCheckFailed && (
+        <div className="mt-4 w-full max-w-[432px] text-center">
+          <p role="alert" className="text-sm leading-6 text-red-600">
+            현재 프린터 상태를 확인할 수 없어 출력을 시작할 수 없습니다
+          </p>
+          <button
+            type="button"
+            onClick={onRetryPrintCheck}
+            disabled={isPrintBlocked || isPrintStatusChecking}
+            className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-950 transition-colors hover:bg-gray-50"
+          >
+            <RotateCw className={`h-4 w-4${isPrintStatusChecking ? " animate-spin" : ""}`} aria-hidden="true" />
+            다시 시도
+          </button>
+        </div>
+      )}
       <p className="mt-4 max-w-[432px] text-center text-xs leading-5 text-gray-400">
         생성한 디자인은 기본으로 비공개예요.
         <br />

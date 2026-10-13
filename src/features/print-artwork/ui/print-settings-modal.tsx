@@ -17,6 +17,8 @@ interface PrintSettingsModalProps {
     length: string;
     weight: string;
   };
+  errorMessage?: string | null;
+  isSubmitting?: boolean;
   onClose: () => void;
   onConfirm: (settings: { colorMode: string }) => void;
   onOpenPrinterManagement: () => void;
@@ -36,6 +38,8 @@ export function PrintSettingsModal({
   estimatedPrintTime,
   filamentColors,
   filamentUsage,
+  errorMessage = null,
+  isSubmitting = false,
   onClose,
   onConfirm,
   onOpenPrinterManagement,
@@ -211,12 +215,17 @@ export function PrintSettingsModal({
             <button
               type="button"
               onClick={() => onConfirm({ colorMode })}
-              disabled={!isPrinterConnected}
+              disabled={!isPrinterConnected || isSubmitting}
               className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300"
             >
-              출력 시작하기
+              {isSubmitting ? "출력 시작 중..." : "출력 시작하기"}
             </button>
           </div>
+          {errorMessage && (
+            <p className="mt-3 text-center text-xs font-medium text-red-500" role="alert">
+              {errorMessage}
+            </p>
+          )}
         </div>
       </section>
     </div>

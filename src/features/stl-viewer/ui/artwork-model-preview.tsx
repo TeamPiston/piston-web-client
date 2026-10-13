@@ -81,14 +81,18 @@ interface ArtworkModelPreviewProps {
   cameraDistance?: number;
   color?: string;
   scale?: ArtworkModelScale;
+  showFullscreenControl?: boolean;
+  static?: boolean;
   stlUrl: string;
-  variant?: "detail" | "create";
+  variant?: "detail" | "detail-compact" | "create";
 }
 
 export function ArtworkModelPreview({
   cameraDistance = 42,
   color = "#9ca3af",
   scale = [1, 1, 1],
+  showFullscreenControl = true,
+  static: isStatic = false,
   stlUrl,
   variant = "detail",
 }: ArtworkModelPreviewProps) {
@@ -98,7 +102,9 @@ export function ArtworkModelPreview({
     fov: 42,
     near: 0.1,
     far: 200,
-    position: [0, 14, cameraDistance] as [number, number, number],
+    position: (isStatic
+      ? [cameraDistance * 0.55, cameraDistance * 0.45, cameraDistance * 0.65]
+      : [0, 14, cameraDistance]) as [number, number, number],
   }));
 
   useEffect(() => {
@@ -129,15 +135,22 @@ export function ArtworkModelPreview({
     <div
       ref={previewRef}
       className={[
-        "relative overflow-hidden bg-[#f5f5f5]",
+        "relative overflow-hidden",
+        isStatic && "pointer-events-none",
         isFullscreen
-          ? "h-full w-full rounded-none"
+          ? "h-full w-full rounded-none bg-[#f5f5f5]"
           : variant === "create"
-            ? "h-full w-full rounded-[28px]"
-            : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
+            ? "h-full w-full rounded-[28px] bg-[#f5f5f5]"
+            : variant === "detail-compact"
+              ? "h-full w-full rounded-xl bg-transparent"
+              : "aspect-[4/3] min-h-[280px] w-full rounded-[22px] bg-[#f5f5f5] sm:min-h-[340px] lg:aspect-auto lg:h-[328px] lg:min-h-0 lg:w-[504px] lg:rounded-[46px]",
       ].join(" ")}
     >
-      <Canvas camera={initialCamera} shadows>
+      <Canvas
+        camera={initialCamera}
+        frameloop={isStatic ? "demand" : "always"}
+        shadows
+      >
         <ambientLight intensity={0.75} />
         <directionalLight position={[10, 15, 8]} intensity={1.1} />
         <Suspense fallback={null}>
@@ -145,22 +158,24 @@ export function ArtworkModelPreview({
             <StlMesh color={color} scale={scale} stlUrl={stlUrl} />
           </Center>
         </Suspense>
-        <PreviewOrbitControls cameraDistance={cameraDistance} />
+        {!isStatic && <PreviewOrbitControls cameraDistance={cameraDistance} />}
       </Canvas>
 
-      <button
-        type="button"
-        onClick={handleFullscreen}
-        aria-label={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
-        title={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
-        className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-sm transition hover:bg-white"
-      >
-        {isFullscreen ? (
-          <Minimize2 className="h-5 w-5" aria-hidden="true" />
-        ) : (
-          <Maximize2 className="h-5 w-5" aria-hidden="true" />
-        )}
-      </button>
+      {showFullscreenControl && (
+        <button
+          type="button"
+          onClick={handleFullscreen}
+          aria-label={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
+          title={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
+          className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-sm transition hover:bg-white"
+        >
+          {isFullscreen ? (
+            <Minimize2 className="h-5 w-5" aria-hidden="true" />
+          ) : (
+            <Maximize2 className="h-5 w-5" aria-hidden="true" />
+          )}
+        </button>
+      )}
     </div>
   );
 }

@@ -9,9 +9,12 @@ import {
   useSyncExternalStore,
   type ChangeEvent,
   type ClipboardEvent,
+  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
+import { isMockPrinterConnected } from "@/shared/mock/mock-data";
 import { usePrinter } from "@/entities/printer";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import { Header } from "@/widgets/header";
@@ -38,8 +41,11 @@ import type {
 import { ChatPanel } from "./components/chat-panel";
 import { HistorySidebar } from "./components/history-sidebar";
 import { PreviewPanel } from "./components/preview-panel";
+import { PrintInProgressModal } from "./components/print-in-progress-modal";
 import { PrinterDisconnectedModal } from "./components/printer-disconnected-modal";
 import { VersionHistory } from "./components/version-history";
+
+const MAX_ATTACHED_IMAGES = 2;
 
 const DESKTOP_MEDIA_QUERY = "(min-width: 80rem)";
 
@@ -56,15 +62,17 @@ const getServerDesktopSnapshot = () => false;
 
 export default function CreateWorkspace() {
   const router = useRouter();
-  const { connectedPrinter, isPrinterConnected, startPrint } = usePrinter();
+  const { connectedPrinter, isPrinterConnected: hasConnectedPrinter } = usePrinter();
+  const isPrinterConnected = hasConnectedPrinter && isMockPrinterConnected();
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopMediaQuery,
     getDesktopSnapshot,
     getServerDesktopSnapshot,
   );
   const [draft, setDraft] = useState("");
-  const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
-  const selectedFileName = attachedImage ? attachedImage.name : null;
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [isLimitExceeded, setIsLimitExceeded] = useState(false);
+  const attachedImagesRef = useRef<AttachedImage[]>([]);
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
   const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
@@ -72,6 +80,12 @@ export default function CreateWorkspace() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [isPrintBlocked, setIsPrintBlocked] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isPrintInProgressModalOpen, setIsPrintInProgressModalOpen] = useState(false);
+  const [isPrintStatusChecking, setIsPrintStatusChecking] = useState(false);
+  const [isPrintCheckFailed, setIsPrintCheckFailed] = useState(false);
+  const [isPrintStarting, setIsPrintStarting] = useState(false);
+  const [printStartError, setPrintStartError] = useState<string | null>(null);
+  const [currentPrintTask, setCurrentPrintTask] = useState<PrintTask | null>(null);
   const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -98,12 +112,14 @@ export default function CreateWorkspace() {
   }, [editingHistoryId, isDesktop, isHistoryOpen]);
 
   useEffect(() => {
+    attachedImagesRef.current = attachedImages;
+  }, [attachedImages]);
+
+  useEffect(() => {
     return () => {
-      if (attachedImage) {
-        URL.revokeObjectURL(attachedImage.url);
-      }
+      attachedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.url));
     };
-  }, [attachedImage]);
+  }, []);
 
   useEffect(() => {
     const textarea = draftTextareaRef.current;
@@ -219,17 +235,20 @@ export default function CreateWorkspace() {
     }
 
     const prompt = draft.trim();
-    if (!prompt && !attachedImage) {
+    if (!prompt && attachedImages.length === 0) {
       return;
     }
 
-    const userContent = attachedImage && selectedFileName
-      ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${selectedFileName}`
+    const imageNames = attachedImages.map((image) => image.name).join(", ");
+    const userContent = imageNames
+      ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${imageNames}`
       : prompt;
 
     appendMockResponse(userContent, prompt);
     setDraft("");
-    setAttachedImage(null);
+    attachedImages.forEach((image) => URL.revokeObjectURL(image.url));
+    setAttachedImages([]);
+    setIsLimitExceeded(false);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -273,39 +292,67 @@ export default function CreateWorkspace() {
   };
 
   const handlePrintOpen = () => {
-    if (!isGenerated || isPrintBlocked) {
+    if (!isGenerated || isPrintBlocked || isPrintStatusChecking) {
       return;
     }
 
-    if (!isPrinterConnected) {
-      setIsPrintModalOpen(false);
-      setIsPrinterConnectionModalOpen(true);
-      return;
-    }
+    setIsPrintStatusChecking(true);
 
-    setIsPrinterConnectionModalOpen(false);
-    setIsPrintModalOpen(true);
+    void getCurrentPrintTask()
+      .then((printTask) => {
+        setCurrentPrintTask(printTask);
+        setIsPrintCheckFailed(false);
+
+        if (printTask?.status === "PRINTING") {
+          setIsPrintModalOpen(false);
+          setIsPrinterConnectionModalOpen(false);
+          setIsPrintInProgressModalOpen(true);
+          return;
+        }
+
+        if (!isPrinterConnected) {
+          setPrintStartError(null);
+          setIsPrintModalOpen(false);
+          setIsPrinterConnectionModalOpen(true);
+          return;
+        }
+
+        setIsPrinterConnectionModalOpen(false);
+        setPrintStartError(null);
+        setIsPrintModalOpen(true);
+      })
+      .catch(() => {
+        setIsPrintCheckFailed(true);
+        setIsPrintModalOpen(false);
+        setIsPrintInProgressModalOpen(false);
+        setIsPrinterConnectionModalOpen(false);
+      })
+      .finally(() => {
+        setIsPrintStatusChecking(false);
+      });
   };
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
-    if (!isGenerated || isPrintBlocked) {
+    if (isPrintStarting || isPrintCheckFailed || isPrintStatusChecking || !isPrintModalOpen) {
       return;
     }
 
-    const didStartPrint = connectedPrinter ? startPrint({
-      colorMode,
-      printerId: connectedPrinter.id,
-      stlUrl: currentModelParams.stlUrl,
-      title: versions.find((version) => version.id === selectedVersionId)?.description ?? "3D 디자인",
-    }) : false;
-    if (!didStartPrint) {
-      setIsPrintModalOpen(false);
-      setIsPrinterConnectionModalOpen(true);
-      return;
-    }
+    // TODO: 백엔드 API 연동 시 colorMode를 요청 body에 포함하여 전달
+    void colorMode;
+    setIsPrintStarting(true);
+    setPrintStartError(null);
 
-    setIsPrintModalOpen(false);
-    setPrintSuccessPhase("visible");
+    void createPrintTask()
+      .then(() => {
+        setIsPrintModalOpen(false);
+        setPrintSuccessPhase("visible");
+      })
+      .catch(() => {
+        setPrintStartError("출력 시작에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      })
+      .finally(() => {
+        setIsPrintStarting(false);
+      });
   };
 
   const handlePrintModalClose = useCallback(() => {
@@ -332,40 +379,72 @@ export default function CreateWorkspace() {
     setCurrentModelParams(resolveModelParams(nextVersion));
   };
 
-  const attachImage = (file: File) => {
-    if (!file.type.startsWith("image/")) {
+  const addImages = (files: File[]) => {
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
       return;
     }
 
-    setAttachedImage({
+    const availableSlots = MAX_ATTACHED_IMAGES - attachedImages.length;
+    if (availableSlots <= 0) {
+      setIsLimitExceeded(true);
+      return;
+    }
+
+    const filesToAdd = imageFiles.slice(0, availableSlots);
+    const nextImages = filesToAdd.map((file) => ({
+      id: crypto.randomUUID(),
       name: file.name || "붙여넣은 이미지",
       url: URL.createObjectURL(file),
-    });
+    }));
+
+    setAttachedImages((currentImages) => [...currentImages, ...nextImages]);
+    setIsLimitExceeded(imageFiles.length > availableSlots);
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const [file] = Array.from(event.target.files ?? []);
-    if (file) {
-      attachImage(file);
-    }
+    addImages(Array.from(event.target.files ?? []));
+    event.target.value = "";
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const imageFile = Array.from(event.clipboardData.files).find((file) =>
+    const imageFiles = Array.from(event.clipboardData.files).filter((file) =>
       file.type.startsWith("image/"),
     );
 
-    if (imageFile) {
+    if (imageFiles.length > 0) {
       event.preventDefault();
-      attachImage(imageFile);
+      addImages(imageFiles);
     }
   };
 
-  const handleRemoveAttachment = () => {
-    setAttachedImage(null);
+  const handleDrop = (event: DragEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    addImages(Array.from(event.dataTransfer.files));
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLFormElement>) => {
+    event.preventDefault();
+  };
+
+  const handleRemoveAttachment = (imageId: string) => {
+    const imageToRemove = attachedImages.find((image) => image.id === imageId);
+    if (imageToRemove) {
+      URL.revokeObjectURL(imageToRemove.url);
+    }
+
+    setAttachedImages((currentImages) =>
+      currentImages.filter((image) => image.id !== imageId),
+    );
+    setIsLimitExceeded(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    setIsLimitExceeded(false);
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -402,7 +481,15 @@ export default function CreateWorkspace() {
     setIsLoading(false);
     setMessages([]);
     autoFixedMessageIdsRef.current.clear();
-    setAttachedImage(null);
+    attachedImages.forEach((image) => URL.revokeObjectURL(image.url));
+    setAttachedImages([]);
+    setIsLimitExceeded(false);
+    setIsPrintInProgressModalOpen(false);
+    setIsPrintStatusChecking(false);
+    setIsPrintCheckFailed(false);
+    setIsPrintStarting(false);
+    setPrintStartError(null);
+    setCurrentPrintTask(null);
     setPrintSuccessPhase("hidden");
     setSelectedVersionId("v3");
     setVersions([]);
@@ -483,7 +570,8 @@ export default function CreateWorkspace() {
 
           <section className="grid min-h-[calc(100vh-100px)] min-w-0 lg:grid-cols-2">
             <ChatPanel
-              attachedImage={attachedImage}
+              attachedImages={attachedImages}
+              isLimitExceeded={isLimitExceeded}
               draft={draft}
               draftTextareaRef={draftTextareaRef}
               fileInputRef={fileInputRef}
@@ -491,7 +579,9 @@ export default function CreateWorkspace() {
               isLoading={isLoading}
               isPrintBlocked={isPrintBlocked}
               messages={messages}
-              onDraftChange={setDraft}
+              onDraftChange={handleDraftChange}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
               onFileChange={handleFileChange}
               onInputKeyDown={handleInputKeyDown}
               onAutoFix={handleAutoFix}
@@ -504,6 +594,9 @@ export default function CreateWorkspace() {
               cameraDistance={cameraDistance}
               isGenerated={isGenerated}
               isPrintBlocked={isPrintBlocked}
+              isPrintCheckFailed={isPrintCheckFailed}
+              isPrintStatusChecking={isPrintStatusChecking}
+              onRetryPrintCheck={handlePrintOpen}
               modelParams={currentModelParams}
               onPrint={handlePrintOpen}
               printSuccessPhase={printSuccessPhase}
@@ -539,7 +632,9 @@ export default function CreateWorkspace() {
         )}
       </main>
       <PrintSettingsModal
-        isOpen={isPrintModalOpen}
+        isOpen={isPrintModalOpen && !isPrintCheckFailed && !isPrintStatusChecking}
+        errorMessage={printStartError}
+        isSubmitting={isPrintStarting}
         isPrinterConnected={isPrinterConnected}
         printer={connectedPrinter}
         estimatedPrintTime={CREATE_ESTIMATED_PRINT_TIME}
@@ -549,6 +644,14 @@ export default function CreateWorkspace() {
         onConfirm={handlePrintConfirm}
         onOpenPrinterManagement={handleOpenPrinterManagement}
       />
+      {currentPrintTask?.status === "PRINTING" && (
+        <PrintInProgressModal
+          isOpen={isPrintInProgressModalOpen}
+          printTask={currentPrintTask}
+          onClose={() => setIsPrintInProgressModalOpen(false)}
+          onOpenMyPage={() => router.push("/mypage")}
+        />
+      )}
       <PrinterDisconnectedModal
         isOpen={isPrinterConnectionModalOpen}
         stlUrl={currentModelParams.stlUrl}
