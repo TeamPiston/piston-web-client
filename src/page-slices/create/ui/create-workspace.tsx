@@ -7,6 +7,7 @@ import {
   Minus,
   Move3d,
   Plus,
+  RotateCw,
   Sparkles,
   X,
 } from "lucide-react";
@@ -218,6 +219,7 @@ function CreateWorkspace() {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isPrintInProgressModalOpen, setIsPrintInProgressModalOpen] = useState(false);
   const [isPrintStatusChecking, setIsPrintStatusChecking] = useState(false);
+  const [isPrintCheckFailed, setIsPrintCheckFailed] = useState(false);
   const [isPrintStarting, setIsPrintStarting] = useState(false);
   const [printStartError, setPrintStartError] = useState<string | null>(null);
   const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
@@ -411,6 +413,7 @@ function CreateWorkspace() {
     void getCurrentPrintTask()
       .then((printTask) => {
         setCurrentPrintTask(printTask);
+        setIsPrintCheckFailed(false);
 
         if (printTask?.status === "PRINTING") {
           setIsPrintModalOpen(false);
@@ -431,18 +434,10 @@ function CreateWorkspace() {
         setIsPrintModalOpen(true);
       })
       .catch(() => {
-        setCurrentPrintTask(null);
-
-        if (!isPrinterConnected) {
-          setPrintStartError(null);
-          setIsPrintModalOpen(false);
-          setIsPrinterConnectionModalOpen(true);
-          return;
-        }
-
+        setIsPrintCheckFailed(true);
+        setIsPrintModalOpen(false);
+        setIsPrintInProgressModalOpen(false);
         setIsPrinterConnectionModalOpen(false);
-        setPrintStartError(null);
-        setIsPrintModalOpen(true);
       })
       .finally(() => {
         setIsPrintStatusChecking(false);
@@ -450,7 +445,7 @@ function CreateWorkspace() {
   };
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
-    if (isPrintStarting) {
+    if (isPrintStarting || isPrintCheckFailed || isPrintStatusChecking || !isPrintModalOpen) {
       return;
     }
 
@@ -577,6 +572,7 @@ function CreateWorkspace() {
     setIsPrintModalOpen(false);
     setIsPrintInProgressModalOpen(false);
     setIsPrintStatusChecking(false);
+    setIsPrintCheckFailed(false);
     setIsPrintStarting(false);
     setPrintStartError(null);
     setIsPrinterConnectionModalOpen(false);
@@ -688,8 +684,11 @@ function CreateWorkspace() {
               cameraDistance={cameraDistance}
               isGenerated={isGenerated}
               isPrintBlocked={isPrintBlocked}
+              isPrintCheckFailed={isPrintCheckFailed}
+              isPrintStatusChecking={isPrintStatusChecking}
               modelParams={currentModelParams}
               onPrint={handlePrintOpen}
+              onRetryPrintCheck={handlePrintOpen}
               printSuccessPhase={printSuccessPhase}
               onZoom={handleZoom}
             />
@@ -723,7 +722,7 @@ function CreateWorkspace() {
         )}
       </main>
       <PrintSettingsModal
-        isOpen={isPrintModalOpen}
+        isOpen={isPrintModalOpen && !isPrintCheckFailed && !isPrintStatusChecking}
         isPrinterConnected={isPrinterConnected}
         estimatedPrintTime={CREATE_ESTIMATED_PRINT_TIME}
         filamentColors={CREATE_FILAMENT_COLORS}
@@ -1144,8 +1143,11 @@ interface PreviewPanelProps {
   cameraDistance: number;
   isGenerated: boolean;
   isPrintBlocked: boolean;
+  isPrintCheckFailed: boolean;
+  isPrintStatusChecking: boolean;
   modelParams: ResolvedArtworkModelParams;
   onPrint: () => void;
+  onRetryPrintCheck: () => void;
   printSuccessPhase: PrintSuccessPhase;
   onZoom: (direction: "in" | "out") => void;
 }
@@ -1154,8 +1156,11 @@ function PreviewPanel({
   cameraDistance,
   isGenerated,
   isPrintBlocked,
+  isPrintCheckFailed,
+  isPrintStatusChecking,
   modelParams,
   onPrint,
+  onRetryPrintCheck,
   printSuccessPhase,
   onZoom,
 }: PreviewPanelProps) {
@@ -1222,10 +1227,10 @@ function PreviewPanel({
         <button
           type="button"
           onClick={onPrint}
-          disabled={!isGenerated || isPrintBlocked}
+          disabled={!isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}
           className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white"
         >
-          {isGenerated ? "출력하기" : "디자인을 생성해 주세요."}
+          {isPrintStatusChecking ? "프린터 상태 확인 중..." : isGenerated ? "출력하기" : "디자인을 생성해 주세요."}
         </button>
         {isGenerated ? (
           <a
@@ -1249,6 +1254,22 @@ function PreviewPanel({
           </button>
         )}
       </div>
+      {isGenerated && isPrintCheckFailed && (
+        <div className="mt-4 w-full max-w-[432px] text-center">
+          <p role="alert" className="text-sm leading-6 text-red-600">
+            현재 프린터 상태를 확인할 수 없어 출력을 시작할 수 없습니다
+          </p>
+          <button
+            type="button"
+            onClick={onRetryPrintCheck}
+            disabled={isPrintBlocked || isPrintStatusChecking}
+            className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-950 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RotateCw className={`h-4 w-4${isPrintStatusChecking ? " animate-spin" : ""}`} aria-hidden="true" />
+            다시 시도
+          </button>
+        </div>
+      )}
       <p className="mt-4 max-w-[432px] text-center text-xs leading-5 text-gray-400">
         생성한 디자인은 기본으로 비공개예요.
         <br />
