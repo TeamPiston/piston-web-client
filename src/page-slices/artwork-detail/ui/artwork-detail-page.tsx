@@ -4,6 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ArtworkDetail, FilamentColor } from "@/entities/artwork";
+import { usePrinter } from "@/entities/printer";
 import { LikeButton } from "@/features/like-artwork";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
@@ -26,6 +27,7 @@ const FALLBACK_FILAMENT_COLORS: FilamentColor[] = [
 
 export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   const router = useRouter();
+  const { connectedPrinter, isPrinterConnected, startPrint } = usePrinter();
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
@@ -43,13 +45,17 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   };
   const estimatedPrintTime = artwork.estimatedPrintTime ?? "1시간";
   const isQueued = printStatus === "printing";
-  const [isPrinterConnected] = useState(true);
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
     setIsPrintModalOpen(false);
 
-    void colorMode;
-    setPrintStatus(isPrinterConnected ? "printing" : "failed");
+    const didStartPrint = connectedPrinter ? startPrint({
+      colorMode,
+      printerId: connectedPrinter.id,
+      stlUrl,
+      title: artwork.title,
+    }) : false;
+    setPrintStatus(didStartPrint ? "printing" : "failed");
   };
 
   const handleBack = () => {
@@ -186,11 +192,16 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
       <PrintSettingsModal
         isOpen={isPrintModalOpen}
         isPrinterConnected={isPrinterConnected}
+        printer={connectedPrinter}
         estimatedPrintTime={estimatedPrintTime}
         filamentColors={filamentColors}
         filamentUsage={filamentUsage}
         onClose={() => setIsPrintModalOpen(false)}
         onConfirm={handlePrintConfirm}
+        onOpenPrinterManagement={() => {
+          setIsPrintModalOpen(false);
+          router.push("/mypage?tab=printer");
+        }}
       />
     </>
   );

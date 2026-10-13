@@ -65,8 +65,9 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", fetchImpl }) {
 }
 
 async function verifyFrontendContracts() {
-  const [createSource, myPageSource] = await Promise.all([
+  const [createSource, previewSource, myPageSource] = await Promise.all([
     readFile(resolve(ROOT_DIR, "src/page-slices/create/ui/create-workspace.tsx"), "utf8"),
+    readFile(resolve(ROOT_DIR, "src/page-slices/create/ui/components/preview-panel.tsx"), "utf8"),
     readFile(resolve(ROOT_DIR, "src/page-slices/mypage/ui/mypage-page.tsx"), "utf8"),
   ]);
   assert(createSource.includes("createPrintTask()"), "Create: missing print creation");
@@ -74,10 +75,16 @@ async function verifyFrontendContracts() {
     'setPrintSuccessPhase("visible")',
     'setPrintSuccessPhase("fading"), 3500',
     'setPrintSuccessPhase("hidden"), 4000',
-    "출력이 시작되었습니다.",
-    "마이페이지에서 출력 상황을 확인해 주세요!",
   ]) {
     assert(createSource.includes(statement), "Create: missing success overlay contract: " + statement);
+  }
+  for (const statement of [
+    "출력이 시작되었습니다.",
+    "마이페이지에서 출력 상황을 확인해 주세요!",
+    'disabled={!isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}',
+    "onClick={onRetryPrintCheck}",
+  ]) {
+    assert(previewSource.includes(statement), "Create preview: missing contract: " + statement);
   }
   assert(
     /setInterval\(\(\) => \{[\s\S]*?loadCurrentPrint\(\)[\s\S]*?\}, 3000\)/.test(myPageSource),

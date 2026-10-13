@@ -13,7 +13,7 @@
 - **회원 탈퇴 모달**: 확인·요청 중 상태·실패 안내를 추가하고, 탈퇴 요청 성공 후 로그아웃 및 로그인 화면 이동을 연결합니다. 대상: `src/page-slices/mypage/ui/delete-account-modal.tsx`, `src/entities/session/model/account.ts`.
 - **디자인 상세·삭제 모달**: 내가 만든 디자인의 STL 미리보기·상세 정보·색상 선택·공개 토글·출력 요청과 삭제 확인을 연결합니다. 디자인 공개·삭제는 현재 Mock 저장소 기준입니다. 대상: `src/page-slices/mypage/ui/design-detail-modal.tsx`, `delete-design-confirm-modal.tsx`, `mypage-page.tsx`.
 - **피드 좋아요·검색**: 공통 Mock 피드 데이터에 작품명·작성자 검색을 연결하고, 좋아요 상태 유지·요청 중 중복 토글 방지·실패 롤백 및 버튼 비활성화를 적용합니다. 좋아요는 현재 Mock 저장소 기준입니다. 대상: `src/page-slices/feed`, `src/features/like-artwork`, `src/features/feed-search`.
-- **헤더**: 로고의 메인 이동, 로그인 상태별 프로필 표시·마이페이지 이동, 비로그인 사용자의 Create·Feed 접근 시 로그인 안내 모달, 프로필 버튼 정렬을 정리합니다. 대상: `src/widgets/header/ui/header.tsx`, `src/widgets/header/ui/login-required-modal.tsx`.
+- **헤더·프린터 관리**: 로고의 메인 이동, 로그인 상태별 프로필 표시·마이페이지 이동, 비로그인 사용자의 Create·Feed 접근 시 로그인 안내 모달, 프로필 버튼 정렬을 정리합니다. `develop` 통합 후 `/mypage?tab=printer`는 프린터 관리 화면을 표시하며 Create의 연결 상태와 설정 모달에 프린터 정보를 제공합니다. 대상: `src/widgets/header`, `src/entities/printer`, `src/page-slices/mypage/ui/printer-management-page.tsx`.
 - **STL 뷰어**: `ArtworkModelPreview`의 인터랙티브 보기·확대·전체 화면과 카드용 정적 캔버스 렌더링을 적용합니다. 대상: `src/features/stl-viewer/ui/artwork-model-preview.tsx` 및 MyPage 카드.
 - **공통 데이터·인증 UI**: 작품·계정·출력·디자인 fixture를 `src/shared/mock/mock-data.ts`로 통합하고, 로그인·세션 처리와 회원가입 폼 표시를 정리합니다. 공통 API의 오류 전파·Mock fallback 정책도 함께 보강합니다.
 - **검증 스크립트·실행 문서**: `scripts/verify-print-lifecycle.mjs`, `scripts/README.md` 및 `package.json` 실행 구성을 현재 Mock/API 어댑터 계약에 맞춥니다.
@@ -30,6 +30,7 @@
 - 각 실행에서 **17개 API 계약 요청(정상 응답 및 HTTP 오류 시나리오)을 정상 검증**했습니다. 로컬 mock/API 어댑터 기준으로 실제 출력 모듈을 실행하고, API 응답은 주입된 fetch transport로 재현합니다.
 - 검증 항목: 생성·조회·`DELETE /api/prints/{id}` 취소·`POST /api/prints` 재출력, 응답 정규화·지원 상태, HTTP 401/403/404/500 오류 전파. Mock의 고정 진행률·취소 후 `CANCELLED` 유지·실패 시 상태 보존도 확인했습니다. 명시적 Mock 모드의 HTTP 요청은 0건입니다.
 - `npx tsc --noEmit`, `npx eslint .`: 오류·경고 없이 통과.
+- `origin/develop`(`622fff8`) 통합 후에도 타입 검사·ESLint·`npm run test:e2e:print`(17건)·`npm run build`(21개 페이지 생성)를 다시 실행하여 정상 통과했습니다.
 - 실제 백엔드·프린터 장치 연동 및 브라우저 캡처는 미검증입니다. 프론트엔드 검증은 소스 계약 확인이며, `test:e2e:print`도 브라우저 E2E 테스트는 아닙니다.
 - 상세 실행 기록: [scripts/README.md](scripts/README.md#pr-8-execution-record).
 
@@ -55,10 +56,10 @@ PASS print lifecycle verification; HTTP contract requests=17
 - 실패 재현: 경로에 `&mockError=print-create` 추가
 
 ### 3. 마이페이지 출력 현황 및 폴링
-- 경로: `/mypage?tab=printer&mockPrintStatus=PRINTING`
+- 경로: `/mypage?mockPrintStatus=PRINTING`
 - 캡처: 출력 중 카드, 62% 진행률, 남은 시간 및 상세 모달
 - `PRINTING`일 때만 3초마다 조회합니다. Mock 모드에서는 HTTP 요청 없이 메모리 저장소를 조회하며 진행률은 자동 증가하지 않습니다.
-- 현재 `tab=printer`는 처리하지 않습니다. 이 경로는 프린터 관리 탭이 아닌 마이페이지 출력 현황을 표시합니다.
+- `/mypage?tab=printer`는 프린터 관리 화면입니다. 출력 현황은 기본 마이페이지에서 확인합니다.
 - 완료·빈 상태: `mockPrintStatus=COMPLETED` 또는 `EMPTY`로 변경
 
 ### 4. 취소 및 재출력 사전 점검
@@ -81,7 +82,7 @@ PASS print lifecycle verification; HTTP contract requests=17
 
 - [ ] 고정 사용자·작품명 대신 인증 사용자 및 디자인 ID를 사용하고, 모델·버전·프린터·색상 설정을 요청에 반영합니다. 현재 Create의 `colorMode`는 미전송입니다.
 - [ ] 기존 `POST /api/prints`, `GET /api/prints/current`, `DELETE /api/prints/{id}`와 재출력 계약을 확정합니다.
-- [ ] Mock 연결 상태·고정 필라멘트 정보를 실제 장치 API로 교체하고, 프린터 등록·관리 탭을 연결합니다.
+- [ ] Mock 연결 상태·고정 필라멘트 정보를 실제 장치 API로 교체합니다. 프린터 등록·관리 탭 UI는 연결된 상태입니다.
 - [ ] 실제 진행률·완료·실패 상태 및 재출력 점검 결과를 연동합니다.
 - [ ] 메모리 저장소를 서버 데이터로 교체합니다. 운영 환경의 자동 Mock fallback은 차단된 상태입니다.
 - [ ] 실제 테스트 백엔드에서 출력 라이프사이클을 검증하고 브라우저 캡처를 추가합니다. 로컬 Mock/API 어댑터 기준 검증 스크립트의 취소·실패·재출력 검증은 수정 및 실행 완료했습니다.

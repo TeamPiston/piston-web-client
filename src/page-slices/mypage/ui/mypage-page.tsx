@@ -2,8 +2,8 @@
 
 import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import {
   cancelPrintTask,
   createPrintTask,
@@ -25,9 +25,24 @@ import { Header } from "@/widgets/header";
 import { DeleteAccountModal } from "./delete-account-modal";
 import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
 import { PrintRetryConfirmModal } from "./print-retry-confirm-modal";
+import { PrinterManagementPage } from "./printer-management-page";
 import { PrintStatusDetailModal } from "./print-status-detail-modal";
 
 export default function MyPage() {
+  return <Suspense fallback={null}><MyPageContent /></Suspense>;
+}
+
+function MyPageContent() {
+  const searchParams = useSearchParams();
+  return (
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
+      <Header />
+      {searchParams.get("tab") === "printer" ? <PrinterManagementPage /> : <MyProfilePage />}
+    </div>
+  );
+}
+
+function MyProfilePage() {
   const router = useRouter();
   const { logout, user } = useAuth();
   const [printTask, setPrintTask] = useState<PrintTask | null | undefined>(undefined);
@@ -115,8 +130,7 @@ export default function MyPage() {
       : "/models/cube.stl");
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#fbfbfb]">
-      <Header />
+    <>
       <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col px-4 py-10 sm:px-8 lg:px-0">
         <section className="flex flex-col gap-6 rounded-2xl border border-gray-300 bg-white px-6 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-10">
           <div className="flex min-w-0 items-center gap-6">
@@ -237,7 +251,7 @@ export default function MyPage() {
         onClose={() => setIsDeleteAccountModalOpen(false)}
         onConfirm={handleDeleteAccount}
       />
-    </div>
+    </>
   );
 }
 
