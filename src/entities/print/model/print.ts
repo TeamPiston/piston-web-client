@@ -40,8 +40,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function optionalString(value: unknown) {
-  return typeof value === "string" ? value : undefined;
+function optionalString(...values: unknown[]) {
+  return values.find((value): value is string => typeof value === "string");
 }
 
 function unwrapResponse(value: unknown) {
@@ -59,6 +59,15 @@ function normalizePrintTask(value: unknown): PrintTask | null {
     return null;
   }
 
+  if (typeof candidate.id !== "number" && typeof candidate.id !== "string") {
+    return null;
+  }
+
+  const id = Number(candidate.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return null;
+  }
+
   const status = candidate.status;
   if (
     status !== "PRINTING" &&
@@ -72,8 +81,10 @@ function normalizePrintTask(value: unknown): PrintTask | null {
     return null;
   }
 
+  const progress = Math.min(100, Math.max(0, Number(candidate.progress ?? 0)));
+
   return {
-    id: Number(candidate.id ?? 0),
+    id,
     userId: String(candidate.userId ?? PRINT_USER_ID),
     artworkName: String(candidate.artworkName ?? PRINT_ARTWORK_NAME),
     modelUrl: optionalString(candidate.modelUrl ?? candidate.stlUrl),
@@ -81,21 +92,21 @@ function normalizePrintTask(value: unknown): PrintTask | null {
     printingMethod: optionalString(candidate.printingMethod),
     filamentRemaining: optionalString(candidate.filamentRemaining),
     failureReason: optionalString(
-      candidate.failureReason ??
-        candidate.failureMessage ??
-        candidate.errorReason ??
-        candidate.errorMessage ??
-        candidate.stopReason,
+      candidate.failureReason,
+      candidate.failureMessage,
+      candidate.errorReason,
+      candidate.errorMessage,
+      candidate.stopReason,
     ),
     stoppedAt: optionalString(
-      candidate.stoppedAt ??
-        candidate.failedAt ??
-        candidate.failureAt ??
-        candidate.endedAt ??
-        candidate.updatedAt,
+      candidate.stoppedAt,
+      candidate.failedAt,
+      candidate.failureAt,
+      candidate.endedAt,
+      candidate.updatedAt,
     ),
     status,
-    progress: Number(candidate.progress ?? 0),
+    progress: Number.isNaN(progress) ? 0 : progress,
     remainingMinutes: Number(candidate.remainingMinutes ?? 0),
     estimatedEndTime: String(candidate.estimatedEndTime ?? ""),
     createdAt: String(candidate.createdAt ?? ""),
