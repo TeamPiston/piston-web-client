@@ -475,6 +475,10 @@ export function isMockModeEnabled() {
   return process.env.NEXT_PUBLIC_USE_MOCK === "true";
 }
 
+function isMockUrlControlEnabled() {
+  return isMockModeEnabled() || process.env.NODE_ENV !== "production";
+}
+
 export async function withMockFallback<T>(
   apiOperation: () => Promise<T>,
   mockOperation: () => Promise<T> | T,
@@ -607,7 +611,7 @@ export async function fetchMockAccountSettings() {
 }
 
 export function isMockPrinterConnected() {
-  if (typeof window === "undefined") {
+  if (!isMockUrlControlEnabled() || typeof window === "undefined") {
     return MOCK_ACCOUNT_SETTINGS.printerConnected;
   }
 
@@ -664,7 +668,7 @@ function initializeMockPrintStatus(forcedStatus?: MockPrintStatus) {
 }
 
 function getPrintScenarioFromUrl(): MockPrintStatus | undefined {
-  if (typeof window === "undefined") {
+  if (!isMockUrlControlEnabled() || typeof window === "undefined") {
     return undefined;
   }
 
@@ -693,7 +697,7 @@ function getCurrentLocalTime() {
 }
 
 function throwIfMockFailure(action: string) {
-  if (typeof window === "undefined") {
+  if (!isMockUrlControlEnabled() || typeof window === "undefined") {
     return;
   }
 
