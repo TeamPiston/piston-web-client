@@ -4,11 +4,10 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import type {
   Printer,
   PrinterConnectionStatus,
-  PrinterConnectionTestResult,
-} from "@/shared/mock/mock-data";
+} from "@/entities/printer";
+import type { PrinterConnectionTestResult } from "../model/connection-test";
+import type { PrinterDraft } from "../model/printer-draft";
 import { PrinterModalShell } from "./printer-modal-shell";
-
-export type PrinterDraft = Pick<Printer, "name" | "model" | "ipAddress">;
 
 interface PrinterFormModalProps {
   printer: Printer | null;

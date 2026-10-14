@@ -15,7 +15,7 @@ import {
 } from "react";
 import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
 import { isMockPrinterConnected } from "@/shared/mock/mock-data";
-import { usePrinter } from "@/entities/printer";
+import { usePrinterQuery } from "@/entities/printer";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import { Header } from "@/widgets/header";
 import {
@@ -62,7 +62,7 @@ const getServerDesktopSnapshot = () => false;
 
 export default function CreateWorkspace() {
   const router = useRouter();
-  const { connectedPrinter, isPrinterConnected: hasConnectedPrinter } = usePrinter();
+  const { connectedPrinter, isPrinterConnected: hasConnectedPrinter } = usePrinterQuery();
   const isPrinterConnected = hasConnectedPrinter && isMockPrinterConnected();
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopMediaQuery,

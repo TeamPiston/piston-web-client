@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import type { Printer } from "@/shared/mock/mock-data";
+import type { Printer } from "@/entities/printer";
 import { PrinterModalShell } from "./printer-modal-shell";
 
 interface PrinterDeleteModalProps {

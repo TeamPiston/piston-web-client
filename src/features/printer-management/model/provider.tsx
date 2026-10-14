@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { getPrintersWithFallback, type Printer } from "@/shared/mock/mock-data";
 import {
-  PrinterContext,
-  type PrinterContextValue,
+  getPrintersWithFallback,
+  PrinterQueryContext,
+  type Printer,
   type PrintJob,
   type PrintStatus,
-} from "./context";
+} from "@/entities/printer";
+import { PrinterActionsContext } from "./context";
 
 export function PrinterProvider({ children, initialPrinters }: {
   children: ReactNode;
@@ -36,16 +37,19 @@ export function PrinterProvider({ children, initialPrinters }: {
     return true;
   };
 
-  const value: PrinterContextValue = {
+  const query = {
     printers,
-    setPrinters,
     connectedPrinter,
     isPrinterConnected: connectedPrinter !== null,
     printStatus,
-    setPrintStatus,
     printJob,
-    startPrint,
   };
 
-  return <PrinterContext.Provider value={value}>{children}</PrinterContext.Provider>;
+  return (
+    <PrinterQueryContext.Provider value={query}>
+      <PrinterActionsContext.Provider value={{ setPrinters, setPrintStatus, startPrint }}>
+        {children}
+      </PrinterActionsContext.Provider>
+    </PrinterQueryContext.Provider>
+  );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { PrinterProvider } from "@/entities/printer";
+import { PrinterProvider } from "@/features/printer-management";
 import { AuthProvider } from "@/entities/session";
 import "./globals.css";
 
