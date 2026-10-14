@@ -5,12 +5,7 @@ import { PrinterStatusBadge } from "./printer-status-badge";
 export function PrinterCard({ printer, actions }: { printer: Printer; actions?: ReactNode }) {
   return (
     <article
-      className={[
-        "flex flex-col gap-5 rounded-2xl border bg-white p-5 sm:flex-row sm:items-center sm:p-6",
-        printer.connectionStatus === "connected"
-          ? "border-[#5a7bff]"
-          : "border-gray-300",
-      ].join(" ")}
+      className="flex flex-col gap-5 rounded-2xl border border-gray-300 bg-white p-5 transition-colors duration-200 ease-out hover:border-[#5a7bff] sm:flex-row sm:items-center sm:p-6"
     >
       <div className="flex min-w-0 flex-1 items-center gap-5">
         <div
