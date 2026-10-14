@@ -8,12 +8,14 @@ interface PrinterDeleteModalProps {
   printer: Pick<Printer, "id" | "name">;
   onClose: () => void;
   onConfirm: (printerId: string) => void;
+  getFallbackFocusTargets?: () => readonly (HTMLElement | null)[];
 }
 
 export function PrinterDeleteModal({
   printer,
   onClose,
   onConfirm,
+  getFallbackFocusTargets,
 }: PrinterDeleteModalProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -24,6 +26,7 @@ export function PrinterDeleteModal({
       labelledBy={titleId}
       describedBy={descriptionId}
       onClose={onClose}
+      getFallbackFocusTargets={getFallbackFocusTargets}
     >
       <h2 id={titleId} className="break-words text-center text-lg font-bold text-gray-950">
         {printer.name}를 삭제할까요?

@@ -8,6 +8,26 @@ interface PrinterModalShellProps {
   describedBy?: string;
   size?: "sm" | "md";
   onClose: () => void;
+  getFallbackFocusTargets?: () => readonly (HTMLElement | null)[];
+}
+
+function focusIfAvailable(element: Element | null) {
+  if (
+    !(element instanceof HTMLElement) ||
+    element === document.body ||
+    !element.isConnected ||
+    element.matches(":disabled") ||
+    element.closest("[hidden], [inert]") ||
+    element.getClientRects().length === 0
+  ) {
+    return false;
+  }
+  const { visibility } = getComputedStyle(element);
+  if (visibility === "hidden" || visibility === "collapse") {
+    return false;
+  }
+  element.focus();
+  return document.activeElement === element;
 }
 
 export function PrinterModalShell({
@@ -16,6 +36,7 @@ export function PrinterModalShell({
   describedBy,
   size = "md",
   onClose,
+  getFallbackFocusTargets,
 }: PrinterModalShellProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -29,11 +50,13 @@ export function PrinterModalShell({
     return () => {
       dialog?.close();
       document.body.style.overflow = previousOverflow;
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
-        previousFocus.focus();
+      if (!focusIfAvailable(previousFocus)) {
+        for (const target of getFallbackFocusTargets?.() ?? []) {
+          if (focusIfAvailable(target)) break;
+        }
       }
     };
-  }, []);
+  }, [getFallbackFocusTargets]);
 
   return (
     <dialog

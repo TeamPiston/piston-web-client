@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useRef } from "react";
 import { PrinterCard, usePrinterQuery, type Printer } from "@/entities/printer";
 import {
   PrinterProvider,
@@ -29,16 +30,24 @@ export function PrinterManagementPage({ initialPrinters }: PrinterManagementPage
 function PrinterManagementContent() {
   const { printers } = usePrinterQuery();
   const management = usePrinterManagement();
+  const addPrinterRef = useRef<HTMLButtonElement>(null);
+  const printerListRef = useRef<HTMLElement>(null);
+  const getFallbackFocusTargets = useCallback(
+    () => [addPrinterRef.current, printerListRef.current],
+    [],
+  );
   const isEmpty = printers.length === 0;
 
   return (
     <main className="mx-auto flex min-h-[calc(100dvh-var(--header-height))] w-full max-w-[1264px] flex-1 flex-col px-4 py-10 sm:px-8 xl:h-[calc(100dvh-var(--header-height))] xl:min-h-0 xl:flex-none xl:overflow-y-auto">
       <div className="flex shrink-0 items-center justify-between gap-4">
         <h1 className="text-xl font-bold text-gray-950">프린터 관리</h1>
-        <AddPrinterButton onClick={management.openAddForm} />
+        <AddPrinterButton ref={addPrinterRef} onClick={management.openAddForm} />
       </div>
 
       <section
+        ref={printerListRef}
+        tabIndex={-1}
         aria-label="등록된 프린터"
         className={`${isEmpty ? "mt-9" : "mt-8"} flex shrink-0 flex-col gap-4`}
       >
@@ -126,6 +135,7 @@ function PrinterManagementContent() {
           printer={management.deletingPrinter}
           onClose={management.closeDeleteForm}
           onConfirm={management.deletePrinter}
+          getFallbackFocusTargets={getFallbackFocusTargets}
         />
       )}
     </main>

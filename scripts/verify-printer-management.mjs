@@ -278,3 +278,5 @@ assert.equal(references.query.printStatus, "EMPTY");
 assert.equal(references.actions.startPrint(jobA), false, "Updated actions must reject a deleted printer");
 assert.equal(references.actions.removePrinter, initialActions.removePrinter);
 console.log("PASS stable Actions value across unrelated updates and fresh printer-dependent actions");
+
+await import("./verify-printer-focus.mjs");

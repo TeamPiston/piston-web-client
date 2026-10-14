@@ -1,5 +1,6 @@
 "use client";
 
+import type { Ref } from "react";
 import type { Printer } from "@/entities/printer";
 
 interface PrinterControlsProps {
@@ -37,9 +38,10 @@ export function PrinterControls({ printer, onCheckConnection, onEdit, onDelete }
   );
 }
 
-export function AddPrinterButton({ onClick }: { onClick: () => void }) {
+export function AddPrinterButton({ onClick, ref }: { onClick: () => void; ref?: Ref<HTMLButtonElement> }) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       className="h-10 shrink-0 rounded-md bg-[#5a7bff] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5a7bff]"
