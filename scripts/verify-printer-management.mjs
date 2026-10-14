@@ -1,12 +1,96 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 import { randomUUID } from "node:crypto";
 import ts from "typescript";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// Walk a returned element tree, including elements passed through non-children props,
+// and execute function components so Providers created by descendants become visible.
+// Only components built from the hooks mocked below can be executed; others are reported
+// in `unexecuted` instead of being treated as verified.
+function inspectElementTree(root, { isForbidden, renderComponent }) {
+  const found = [];
+  const rendered = [];
+  const unexecuted = [];
+  const seen = new WeakSet();
+  const visit = (value, path) => {
+    if (Array.isArray(value)) {
+      value.forEach((child, i) => visit(child, path + "." + i));
+      return;
+    }
+    if (!value || typeof value !== "object" || !("type" in value) || !value.props) return;
+    // A child passed as a prop is reached again through the parent's rendered output.
+    if (seen.has(value)) return;
+    seen.add(value);
+    const { type, props } = value;
+    if (typeof type === "function" && isForbidden(type)) {
+      found.push(path);
+      return;
+    }
+    for (const [key, prop] of Object.entries(props)) visit(prop, path + ":" + key);
+    if (typeof type !== "function") return;
+    const label = type.name || "anonymous";
+    let output;
+    try {
+      output = renderComponent(type, props, path);
+    } catch (error) {
+      if (!(error instanceof TypeError) || !/is not a function/.test(error.message)) throw error;
+      unexecuted.push(label + " (" + error.message + ")");
+      return;
+    }
+    rendered.push(label);
+    visit(output, path + ">" + label);
+  };
+  visit(root, "root");
+  return { found, rendered, unexecuted };
+}
+
+function assertNoNestedProvider(inspection, subject) {
+  assert.deepEqual(
+    inspection.found,
+    [],
+    subject + " must not create a nested Provider at: " + inspection.found.join(", "),
+  );
+  return inspection;
+}
+
+// Static counterpart: report every use of PrinterProvider other than its declaration and
+// import/export specifiers. This cannot see namespace imports or computed references.
+function findPrinterProviderUsages(sourceText, fileName) {
+  const sourceFile = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.ES2022, true);
+  const usages = [];
+  const visit = (node) => {
+    if (ts.isIdentifier(node) && node.text === "PrinterProvider") {
+      const parent = node.parent;
+      const isDeclarationOrSpecifier =
+        ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent) ||
+        ts.isJsxClosingElement(parent) ||
+        (ts.isFunctionDeclaration(parent) && parent.name === node);
+      if (!isDeclarationOrSpecifier) {
+        usages.push(sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+      }
+    }
+    if (ts.isImportSpecifier(node) && node.propertyName?.text === "PrinterProvider" &&
+        node.name.text !== "PrinterProvider") {
+      usages.push(sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return usages;
+}
+
+function listSourceFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) return listSourceFiles(path);
+    return /\.(ts|tsx)$/.test(entry.name) ? [path] : [];
+  });
+}
 
 // Exercise the real provider and hooks with deterministic state and context slots.
 // This verifies state transitions, not browser rendering or React scheduling.
@@ -98,7 +182,7 @@ function runtime(initialPrinters) {
   const feature = load("src/features/printer-management/index.ts");
   assert.throws(() => entity.usePrinterQuery(), /PrinterProvider/);
   assert.throws(() => feature.usePrinterActions(), /PrinterProvider/);
-  return (pageProps) => {
+  const run = (pageProps) => {
     let tree = render("provider", () => feature.PrinterProvider({ initialPrinters, children: null }));
     while (tree) {
       contexts.set(tree.type, tree.props.value);
@@ -111,16 +195,19 @@ function runtime(initialPrinters) {
     };
     if (pageProps !== undefined) {
       const page = load("src/page-slices/mypage/ui/printer-management-page.tsx");
-      let content = render("page", () => page.PrinterManagementPage(pageProps));
-      while (typeof content.type === "function") {
-        assert.notEqual(content.type, feature.PrinterProvider, "Management page must not create a nested Provider");
-        const { type, props } = content;
-        content = render("page/" + type.name, () => type(props));
-      }
+      const content = render("page", () => page.PrinterManagementPage(pageProps));
       result.page = content;
+      result.pageInspection = assertNoNestedProvider(inspectTree(content, "page"), "Management page");
     }
     return result;
   };
+  const inspectTree = (tree, name) => inspectElementTree(tree, {
+    isForbidden: (type) => type === feature.PrinterProvider,
+    renderComponent: (type, props, path) => render(name + "/" + path, () => type(props)),
+  });
+  run.inspectTree = inspectTree;
+  run.PrinterProvider = feature.PrinterProvider;
+  return run;
 }
 
 const render = runtime([]);
@@ -368,8 +455,15 @@ function findElements(node, predicate) {
 const renderPreview = runtime([printerA, printerB]);
 let preview = renderPreview({ previewEmpty: false });
 assert.equal(findElements(preview.page, (node) => node.type.name === "PrinterCard").length, 2);
+// Liveness of the nested-Provider walk: it must have executed the page's descendants.
+const renderedNames = preview.pageInspection.rendered;
+assert.equal(renderedNames.filter((name) => name === "PrinterCard").length, 2);
+assert.equal(renderedNames.filter((name) => name === "PrinterControls").length, 2);
+assert.equal(renderedNames.filter((name) => name === "AddPrinterButton").length, 1);
+assert.deepEqual(preview.pageInspection.unexecuted, []);
 assert.equal(preview.actions.startPrint(jobA), true);
 preview = renderPreview({ previewEmpty: true });
+assert.equal(preview.pageInspection.rendered.filter((name) => name === "PrinterCard").length, 0);
 const sharedPrinters = preview.query.printers;
 const sharedActions = preview.actions;
 assert.equal(findElements(preview.page, (node) => node.type.name === "PrinterCard").length, 0);
@@ -405,5 +499,61 @@ assert.equal(preview.query.printJob, null);
 assert.equal(preview.query.printStatus, "EMPTY");
 assert.equal(findElements(preview.page, (node) => node.type.name === "PrinterCard").length, 1);
 console.log("PASS empty display preview, shared state preservation across transitions and normal management updates");
+
+// Nested Provider guard self-test: each deliberately wrong tree must be rejected.
+// Executed walk: only elements reachable from the rendered tree, using mocked hooks.
+const nestedProvider = renderPreview.PrinterProvider;
+const inspectSynthetic = (tree) => assertNoNestedProvider(renderPreview.inspectTree(tree, "synthetic"), "Synthetic page");
+const providerElement = { type: nestedProvider, props: { initialPrinters: [], children: null } };
+function WrapsProvider() { return { type: "section", props: { children: providerElement } }; }
+function NeedsUnsupportedHook() { return globalThis.__unsupportedHook(); }
+const nestedCases = {
+  "root-level wrapper": providerElement,
+  "inside a host element": { type: "main", props: { children: [{ type: "div", props: { children: providerElement } }] } },
+  "inside a non-children prop": { type: "article", props: { actions: [providerElement], children: null } },
+  "returned by a child component": { type: "main", props: { children: { type: WrapsProvider, props: {} } } },
+  "passed as children to an unexecutable component": {
+    type: "main",
+    props: { children: { type: NeedsUnsupportedHook, props: { children: providerElement } } },
+  },
+};
+for (const [name, tree] of Object.entries(nestedCases)) {
+  assert.throws(() => inspectSynthetic(tree), /nested Provider/, "Nested Provider must be rejected: " + name);
+}
+const cleanSynthetic = renderPreview.inspectTree(
+  { type: "main", props: { children: [{ type: "div", props: { children: null } }] } },
+  "synthetic-clean",
+);
+assert.deepEqual(cleanSynthetic.found, []);
+
+// Static scan: PrinterProvider may be used as an element only by the app root layout.
+const providerUsagePolicy = new Map([["src/app/layout.tsx", 1]]);
+const staticUsages = new Map();
+for (const file of listSourceFiles(resolve(root, "src"))) {
+  const usages = findPrinterProviderUsages(readFileSync(file, "utf8"), file);
+  if (usages.length > 0) staticUsages.set(relative(root, file).replaceAll("\\", "/"), usages.length);
+}
+assert.deepEqual(
+  [...staticUsages].sort(),
+  [...providerUsagePolicy].sort(),
+  "PrinterProvider must be used only once, in src/app/layout.tsx",
+);
+for (const source of [
+  "const x = <PrinterProvider><Child /></PrinterProvider>;",
+  "const y = createElement(PrinterProvider, null);",
+  "import { PrinterProvider as Root } from '@/features/printer-management';",
+  "const z = PrinterProvider({ children: null });",
+]) {
+  assert.equal(findPrinterProviderUsages(source, "sample.tsx").length > 0, true, "Static scan missed: " + source);
+}
+assert.equal(
+  findPrinterProviderUsages("export function PrinterProvider() {}\nexport { PrinterProvider } from './p';", "sample.ts").length,
+  0,
+);
+console.log(
+  "PASS nested Provider guard: executed walk of " + preview.pageInspection.rendered.length +
+  " page components (" + preview.pageInspection.unexecuted.length + " unexecuted), " +
+  Object.keys(nestedCases).length + " rejected synthetic cases, static src scan (layout only)",
+);
 
 await import("./verify-printer-focus.mjs");
