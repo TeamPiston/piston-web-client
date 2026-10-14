@@ -16,13 +16,13 @@ import { deleteCurrentAccount, useAuth } from "@/entities/session";
 import {
   deleteMockDesign,
   fetchMockMyDesigns,
+  isMockModeEnabled,
   MOCK_ACCOUNT_PROFILE,
   MOCK_MY_DESIGNS,
   toggleMockDesignPublish,
 } from "@/shared/mock/mock-data";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import { Header } from "@/widgets/header";
-import { isMockModeEnabled } from "@/shared/mock/mock-data";
 import { DeleteAccountModal } from "./delete-account-modal";
 import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
 import { PrintRetryConfirmModal } from "./print-retry-confirm-modal";
