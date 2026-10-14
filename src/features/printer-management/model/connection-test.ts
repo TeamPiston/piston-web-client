@@ -8,11 +8,15 @@ export type PrinterConnectionTestResult =
     }
   | { status: "disconnected"; message: string };
 
+// Reserved failure scenario for mock feedback; this performs no network request.
+const MOCK_UNREACHABLE_IP_SUFFIX = ".99";
+
+// TODO: Replace this deterministic mock with the backend connection-test response.
 export function getMockPrinterConnectionTestResult(
   model: string,
   ipAddress: string,
 ): PrinterConnectionTestResult {
-  if (ipAddress.trim().endsWith(".99")) {
+  if (ipAddress.trim().endsWith(MOCK_UNREACHABLE_IP_SUFFIX)) {
     return {
       status: "disconnected",
       message: "프린터를 찾을 수 없어요",

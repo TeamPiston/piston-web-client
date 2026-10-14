@@ -71,19 +71,21 @@ export function usePrinterManagement() {
   };
 
   const testPrinterConnection = (draft: PrinterDraft): PrinterConnectionTestResult => {
+    // TODO: Replace cached/mock results with an API test using the edited ID and draft address/model.
     if (!editingPrinter) {
       return getMockPrinterConnectionTestResult(draft.model, draft.ipAddress);
     }
     const printer = printers.find(
-      (currentPrinter) =>
-        currentPrinter.ipAddress === draft.ipAddress.trim() &&
-        currentPrinter.model === draft.model,
+      (currentPrinter) => currentPrinter.id === editingPrinter.id,
     );
     if (!printer) {
       return {
         status: "disconnected",
-        message: "이 IP 주소의 연결 정보가 없습니다. 실제 연결 테스트는 서버 연동 후 사용할 수 있어요.",
+        message: "수정 중인 프린터의 등록 정보가 없습니다. 목록에서 다시 선택해 주세요.",
       };
+    }
+    if (printer.ipAddress !== draft.ipAddress.trim() || printer.model !== draft.model) {
+      return getMockPrinterConnectionTestResult(draft.model, draft.ipAddress);
     }
     return printer.connectionStatus === "connected"
       ? getMockPrinterConnectionTestResult(draft.model, draft.ipAddress)

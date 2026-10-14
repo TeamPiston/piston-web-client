@@ -279,4 +279,69 @@ assert.equal(references.actions.startPrint(jobA), false, "Updated actions must r
 assert.equal(references.actions.removePrinter, initialActions.removePrinter);
 console.log("PASS stable Actions value across unrelated updates and fresh printer-dependent actions");
 
+const editedPrinter = { ...printerA, ipAddress: "192.168.0.20" };
+const otherPrinter = {
+  ...printerB,
+  ipAddress: "192.168.0.30",
+  model: "QIDI X-Plus 4",
+  connectionStatus: "disconnected",
+};
+const renderConnections = runtime([editedPrinter, otherPrinter]);
+let connections = renderConnections();
+connections.management.openEditForm(connections.query.printers[0]);
+connections = renderConnections();
+const originalPrinters = connections.query.printers;
+assert.equal(connections.management.testPrinterConnection(editedPrinter).status, "connected");
+const otherAddressResult = connections.management.testPrinterConnection(otherPrinter);
+assert.equal(otherAddressResult.status, "connected", "Changed input must use a fresh mock, not another printer's disconnected state");
+assert.equal(otherAddressResult.model, otherPrinter.model);
+assert.equal(connections.management.testPrinterConnection({
+  ...editedPrinter, ipAddress: "192.168.0.42",
+}).status, "connected");
+assert.equal(connections.management.testPrinterConnection({
+  ...editedPrinter, model: "QIDI Q1 Pro",
+}).status, "connected");
+assert.equal(connections.management.testPrinterConnection({
+  ...editedPrinter, ipAddress: " 192.168.0.99 ",
+}).status, "disconnected");
+assert.equal(renderConnections().query.printers, originalPrinters, "Connection previews must not mutate stored printers");
+
+connections.management.savePrinter({
+  name: otherPrinter.name,
+  model: otherPrinter.model,
+  ipAddress: otherPrinter.ipAddress,
+}, otherAddressResult.status);
+connections = renderConnections();
+assert.equal(connections.query.printers[0].id, editedPrinter.id);
+assert.equal(connections.query.printers[0].connectionStatus, "connected");
+assert.equal(connections.query.printers[1].id, otherPrinter.id);
+assert.equal(connections.query.printers[1].connectionStatus, "disconnected");
+connections.management.openEditForm(connections.query.printers[1]);
+connections = renderConnections();
+assert.equal(
+  connections.management.testPrinterConnection(otherPrinter).status,
+  "disconnected",
+  "Identical IP/model records must still use the edited printer's ID",
+);
+connections.actions.setPrinters((printers) => printers.map((printer) =>
+  printer.id === otherPrinter.id ? { ...printer, connectionStatus: "connected" } : printer,
+));
+connections = renderConnections();
+assert.equal(connections.management.testPrinterConnection(otherPrinter).status, "connected", "Unchanged input must read the latest state of the edited ID");
+
+connections.management.openAddForm();
+connections = renderConnections();
+const newDraft = { ...draft, ipAddress: "192.168.0.44" };
+assert.equal(connections.management.testPrinterConnection(newDraft).status, "connected");
+const failedRegistration = connections.management.testPrinterConnection({
+  ...newDraft, ipAddress: "192.168.0.99",
+});
+assert.equal(failedRegistration.status, "disconnected");
+connections.management.savePrinter(newDraft, failedRegistration.status);
+assert.equal(renderConnections().query.printers.length, 2);
+connections.management.savePrinter(newDraft, "connected");
+assert.equal(renderConnections().query.printers.length, 3);
+assert.equal(renderConnections().query.printers[1].connectionStatus, "connected");
+console.log("PASS ID-scoped edit connection checks, changed addresses/models, isolated mock previews and registration scenarios");
+
 await import("./verify-printer-focus.mjs");
