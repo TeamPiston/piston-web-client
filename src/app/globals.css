@@ -20,17 +20,11 @@ body {
   overflow-x: hidden;
 }
 
-/* Hide scrollbar visuals without changing scroll behavior. */
-html::-webkit-scrollbar,
-body::-webkit-scrollbar,
-body *::-webkit-scrollbar,
+/* Opt-in only: hide scrollbar visuals without changing scroll behavior. */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
-html,
-body,
-body *,
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
