@@ -16,6 +16,19 @@ function runtime(initialPrinters) {
   const state = new Map();
   let component;
   let index;
+  function memoize(factory, dependencies) {
+    const slots = state.get(component);
+    const slot = index++;
+    const previous = slots[slot];
+    if (
+      !previous ||
+      previous.dependencies.length !== dependencies.length ||
+      !dependencies.every((dependency, i) => Object.is(dependency, previous.dependencies[i]))
+    ) {
+      slots[slot] = { value: factory(), dependencies: [...dependencies] };
+    }
+    return slots[slot].value;
+  }
   const react = {
     createContext: () => {
       const context = {};
@@ -26,11 +39,17 @@ function runtime(initialPrinters) {
     useState: (initial) => {
       const slots = state.get(component);
       const slot = index++;
-      if (!(slot in slots)) slots[slot] = typeof initial === "function" ? initial() : initial;
-      return [slots[slot], (next) => {
-        slots[slot] = typeof next === "function" ? next(slots[slot]) : next;
-      }];
+      if (!(slot in slots)) {
+        const cell = { value: typeof initial === "function" ? initial() : initial };
+        cell.setValue = (next) => {
+          cell.value = typeof next === "function" ? next(cell.value) : next;
+        };
+        slots[slot] = cell;
+      }
+      return [slots[slot].value, slots[slot].setValue];
     },
+    useMemo: memoize,
+    useCallback: (callback, dependencies) => memoize(() => callback, dependencies),
   };
   const jsx = (type, props) => ({ type, props });
   function load(relative) {
@@ -213,3 +232,49 @@ for (const nextJob of [jobA, jobB]) {
   assert.equal(result.query.printJob, nextJob === jobA ? null : jobB);
 }
 console.log("PASS deletion uses the latest job even before callbacks re-render");
+
+const renderReferences = runtime([printerA, printerB]);
+let references = renderReferences();
+const initialActions = references.actions;
+assert.equal(renderReferences().actions, initialActions, "Unchanged renders must reuse Actions value");
+assert.equal(initialActions.startPrint(jobA), true);
+references = renderReferences();
+assert.equal(references.query.printStatus, "PRINTING");
+assert.equal(references.query.printJob, jobA);
+assert.equal(references.actions, initialActions, "Print state changes must not change Actions value");
+assert.equal(references.actions.startPrint, initialActions.startPrint);
+assert.equal(references.actions.removePrinter, initialActions.removePrinter);
+references.management.openAddForm();
+assert.equal(renderReferences().actions, initialActions, "Form state changes must not change Actions value");
+
+references.actions.setPrinters((printers) =>
+  printers.map((printer) => printer.id === printerA.id
+    ? { ...printer, connectionStatus: "disconnected" }
+    : printer),
+);
+references = renderReferences();
+assert.notEqual(references.actions, initialActions);
+assert.notEqual(references.actions.startPrint, initialActions.startPrint);
+assert.equal(references.actions.removePrinter, initialActions.removePrinter);
+assert.equal(references.actions.setPrinters, initialActions.setPrinters);
+assert.equal(references.actions.startPrint(jobA), false, "Updated actions must see a disconnected printer");
+const disconnectedActions = references.actions;
+assert.equal(renderReferences().actions, disconnectedActions);
+
+references.actions.setPrinters((printers) =>
+  printers.map((printer) => printer.id === printerA.id
+    ? { ...printer, connectionStatus: "connected" }
+    : printer),
+);
+references = renderReferences();
+assert.equal(references.actions.startPrint(jobA), true, "Updated actions must see a reconnected printer");
+const reconnectedActions = references.actions;
+assert.equal(renderReferences().actions, reconnectedActions);
+initialActions.removePrinter(printerA.id);
+references = renderReferences();
+assert.equal(references.query.printers.some((printer) => printer.id === printerA.id), false);
+assert.equal(references.query.printJob, null);
+assert.equal(references.query.printStatus, "EMPTY");
+assert.equal(references.actions.startPrint(jobA), false, "Updated actions must reject a deleted printer");
+assert.equal(references.actions.removePrinter, initialActions.removePrinter);
+console.log("PASS stable Actions value across unrelated updates and fresh printer-dependent actions");

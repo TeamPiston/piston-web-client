@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   getPrintersWithFallback,
   PrinterQueryContext,
@@ -26,7 +26,7 @@ export function PrinterProvider({ children, initialPrinters }: {
     (printer) => printer.connectionStatus === "connected",
   ) ?? null;
 
-  const startPrint = (job: PrintJob) => {
+  const startPrint = useCallback((job: PrintJob) => {
     if (!printers.some(
       (printer) => printer.id === job.printerId && printer.connectionStatus === "connected",
     )) {
@@ -36,9 +36,9 @@ export function PrinterProvider({ children, initialPrinters }: {
     // TODO: Submit the print request and update status only after API success.
     setPrintState({ printJob: job, printStatus: "PRINTING" });
     return true;
-  };
+  }, [printers]);
 
-  const removePrinter = (printerId: string) => {
+  const removePrinter = useCallback((printerId: string) => {
     // TODO: Cancel the server-side print and delete the printer before committing local changes.
     // This currently clears only the mock provider state.
     setPrinters((currentPrinters) =>
@@ -49,7 +49,12 @@ export function PrinterProvider({ children, initialPrinters }: {
         ? { printJob: null, printStatus: "EMPTY" }
         : currentPrint,
     );
-  };
+  }, []);
+
+  const actions = useMemo(
+    () => ({ setPrinters, removePrinter, startPrint }),
+    [setPrinters, removePrinter, startPrint],
+  );
 
   const query = {
     printers,
@@ -61,7 +66,7 @@ export function PrinterProvider({ children, initialPrinters }: {
 
   return (
     <PrinterQueryContext.Provider value={query}>
-      <PrinterActionsContext.Provider value={{ setPrinters, removePrinter, startPrint }}>
+      <PrinterActionsContext.Provider value={actions}>
         {children}
       </PrinterActionsContext.Provider>
     </PrinterQueryContext.Provider>
