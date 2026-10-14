@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { PrinterCard, usePrinterQuery, type Printer } from "@/entities/printer";
+import { PrinterCard, usePrinterQuery } from "@/entities/printer";
 import {
-  PrinterProvider,
   usePrinterManagement,
   AddPrinterButton,
   PrinterControls,
@@ -12,22 +11,10 @@ import {
 } from "@/features/printer-management";
 
 interface PrinterManagementPageProps {
-  initialPrinters?: Printer[];
+  previewEmpty?: boolean;
 }
 
-export function PrinterManagementPage({ initialPrinters }: PrinterManagementPageProps) {
-  if (initialPrinters !== undefined) {
-    return (
-      <PrinterProvider initialPrinters={initialPrinters}>
-        <PrinterManagementContent />
-      </PrinterProvider>
-    );
-  }
-
-  return <PrinterManagementContent />;
-}
-
-function PrinterManagementContent() {
+export function PrinterManagementPage({ previewEmpty = false }: PrinterManagementPageProps) {
   const { printers } = usePrinterQuery();
   const management = usePrinterManagement();
   const addPrinterRef = useRef<HTMLButtonElement>(null);
@@ -36,13 +23,14 @@ function PrinterManagementContent() {
     () => [addPrinterRef.current, printerListRef.current],
     [],
   );
-  const isEmpty = printers.length === 0;
+  // Design preview changes presentation only; all actions still belong to the root provider.
+  const isEmpty = previewEmpty || printers.length === 0;
 
   return (
     <main className="mx-auto flex min-h-[calc(100dvh-var(--header-height))] w-full max-w-[1264px] flex-1 flex-col px-4 py-10 sm:px-8 xl:h-[calc(100dvh-var(--header-height))] xl:min-h-0 xl:flex-none xl:overflow-y-auto">
       <div className="flex shrink-0 items-center justify-between gap-4">
         <h1 className="text-xl font-bold text-gray-950">프린터 관리</h1>
-        <AddPrinterButton ref={addPrinterRef} onClick={management.openAddForm} />
+        <AddPrinterButton ref={addPrinterRef} disabled={previewEmpty} onClick={management.openAddForm} />
       </div>
 
       <section
@@ -121,7 +109,7 @@ function PrinterManagementContent() {
         </ol>
       </section>
 
-      {management.isFormOpen && (
+      {!previewEmpty && management.isFormOpen && (
         <PrinterFormModal
           key={management.editingPrinter?.id ?? "new-printer"}
           printer={management.editingPrinter}
@@ -130,7 +118,7 @@ function PrinterManagementContent() {
           onTestConnection={management.testPrinterConnection}
         />
       )}
-      {management.deletingPrinter && (
+      {!previewEmpty && management.deletingPrinter && (
         <PrinterDeleteModal
           printer={management.deletingPrinter}
           onClose={management.closeDeleteForm}

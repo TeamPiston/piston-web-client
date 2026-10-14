@@ -38,13 +38,18 @@ export function PrinterControls({ printer, onCheckConnection, onEdit, onDelete }
   );
 }
 
-export function AddPrinterButton({ onClick, ref }: { onClick: () => void; ref?: Ref<HTMLButtonElement> }) {
+export function AddPrinterButton({ onClick, ref, disabled = false }: {
+  onClick: () => void;
+  ref?: Ref<HTMLButtonElement>;
+  disabled?: boolean;
+}) {
   return (
     <button
       ref={ref}
       type="button"
+      disabled={disabled}
       onClick={onClick}
-      className="h-10 shrink-0 rounded-md bg-[#5a7bff] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5a7bff]"
+      className="h-10 shrink-0 rounded-md bg-[#5a7bff] px-5 text-sm font-semibold text-white transition-colors enabled:hover:bg-[#4a6ee5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5a7bff] disabled:cursor-not-allowed disabled:opacity-50"
     >
       프린터 추가
     </button>

@@ -50,6 +50,7 @@ function runtime(initialPrinters) {
     },
     useMemo: memoize,
     useCallback: (callback, dependencies) => memoize(() => callback, dependencies),
+    useRef: (initial) => memoize(() => ({ current: initial }), []),
   };
   const jsx = (type, props) => ({ type, props });
   function load(relative) {
@@ -97,17 +98,28 @@ function runtime(initialPrinters) {
   const feature = load("src/features/printer-management/index.ts");
   assert.throws(() => entity.usePrinterQuery(), /PrinterProvider/);
   assert.throws(() => feature.usePrinterActions(), /PrinterProvider/);
-  return () => {
+  return (pageProps) => {
     let tree = render("provider", () => feature.PrinterProvider({ initialPrinters, children: null }));
     while (tree) {
       contexts.set(tree.type, tree.props.value);
       tree = tree.props.children;
     }
-    return {
+    const result = {
       query: entity.usePrinterQuery(),
       actions: feature.usePrinterActions(),
       management: render("management", feature.usePrinterManagement),
     };
+    if (pageProps !== undefined) {
+      const page = load("src/page-slices/mypage/ui/printer-management-page.tsx");
+      let content = render("page", () => page.PrinterManagementPage(pageProps));
+      while (typeof content.type === "function") {
+        assert.notEqual(content.type, feature.PrinterProvider, "Management page must not create a nested Provider");
+        const { type, props } = content;
+        content = render("page/" + type.name, () => type(props));
+      }
+      result.page = content;
+    }
+    return result;
   };
 }
 
@@ -343,5 +355,55 @@ connections.management.savePrinter(newDraft, "connected");
 assert.equal(renderConnections().query.printers.length, 3);
 assert.equal(renderConnections().query.printers[1].connectionStatus, "connected");
 console.log("PASS ID-scoped edit connection checks, changed addresses/models, isolated mock previews and registration scenarios");
+
+function findElements(node, predicate) {
+  if (Array.isArray(node)) return node.flatMap((child) => findElements(child, predicate));
+  if (!node || typeof node !== "object" || !node.props) return [];
+  return [
+    ...(predicate(node) ? [node] : []),
+    ...findElements(node.props.children, predicate),
+  ];
+}
+
+const renderPreview = runtime([printerA, printerB]);
+let preview = renderPreview({ previewEmpty: false });
+assert.equal(findElements(preview.page, (node) => node.type.name === "PrinterCard").length, 2);
+assert.equal(preview.actions.startPrint(jobA), true);
+preview = renderPreview({ previewEmpty: true });
+const sharedPrinters = preview.query.printers;
+const sharedActions = preview.actions;
+assert.equal(findElements(preview.page, (node) => node.type.name === "PrinterCard").length, 0);
+assert.equal(findElements(preview.page, (node) => node.type === "h2" &&
+  node.props.children === "등록된 프린터가 없어요").length, 1);
+const previewAddButton = findElements(preview.page, (node) => node.type.name === "AddPrinterButton")[0];
+assert.equal(previewAddButton.type(previewAddButton.props).props.disabled, true, "Preview must not offer global mutations");
+assert.equal(preview.query.printers.length, 2);
+assert.equal(preview.query.connectedPrinter.id, printerA.id);
+assert.equal(preview.query.printJob, jobA);
+assert.equal(preview.query.printStatus, "PRINTING");
+for (const previewEmpty of [false, true, false]) {
+  preview = renderPreview({ previewEmpty });
+  assert.equal(preview.query.printers, sharedPrinters, "Preview transitions must preserve global list identity");
+  assert.equal(preview.actions, sharedActions);
+  assert.equal(preview.query.printJob, jobA);
+  assert.equal(preview.query.printStatus, "PRINTING");
+}
+const normalAddButton = findElements(preview.page, (node) => node.type.name === "AddPrinterButton")[0];
+assert.equal(normalAddButton.type(normalAddButton.props).props.disabled, false);
+preview.management.openEditForm(preview.query.printers[0]);
+preview = renderPreview({ previewEmpty: false });
+preview.management.savePrinter({ ...draft, name: "Shared printer" }, "connected");
+preview = renderPreview({ previewEmpty: false });
+assert.equal(preview.query.printers[0].name, "Shared printer");
+assert.equal(findElements(preview.page, (node) => node.type.name === "PrinterCard")[0].props.printer, preview.query.printers[0]);
+preview.management.openDeleteForm(preview.query.printers[0]);
+preview = renderPreview({ previewEmpty: false });
+preview.management.deletePrinter(printerA.id);
+preview = renderPreview({ previewEmpty: false });
+assert.equal(preview.query.printers.length, 1);
+assert.equal(preview.query.printJob, null);
+assert.equal(preview.query.printStatus, "EMPTY");
+assert.equal(findElements(preview.page, (node) => node.type.name === "PrinterCard").length, 1);
+console.log("PASS empty display preview, shared state preservation across transitions and normal management updates");
 
 await import("./verify-printer-focus.mjs");

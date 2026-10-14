@@ -45,7 +45,7 @@ function MyPageContent() {
       {isPrinterTab ? (
         <PrinterManagementPage
           key={isEmptyPreview ? "empty-printers" : "default-printers"}
-          initialPrinters={isEmptyPreview ? [] : undefined}
+          previewEmpty={isEmptyPreview}
         />
       ) : (
         <MyProfilePage />
