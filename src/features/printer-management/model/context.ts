@@ -1,11 +1,11 @@
 "use client";
 
 import { createContext, useContext, type Dispatch, type SetStateAction } from "react";
-import type { Printer, PrintJob, PrintStatus } from "@/entities/printer";
+import type { Printer, PrintJob } from "@/entities/printer";
 
 interface PrinterActions {
   setPrinters: Dispatch<SetStateAction<Printer[]>>;
-  setPrintStatus: Dispatch<SetStateAction<PrintStatus>>;
+  removePrinter: (printerId: string) => void;
   startPrint: (job: PrintJob) => boolean;
 }
 

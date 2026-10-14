@@ -8,7 +8,7 @@ import type { PrinterDraft } from "./printer-draft";
 
 export function usePrinterManagement() {
   const { printers } = usePrinterQuery();
-  const { setPrinters } = usePrinterActions();
+  const { setPrinters, removePrinter } = usePrinterActions();
   const [editingPrinter, setEditingPrinter] = useState<Printer | null>(null);
   const [deletingPrinter, setDeletingPrinter] = useState<Printer | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -112,9 +112,7 @@ export function usePrinterManagement() {
       return;
     }
 
-    setPrinters((currentPrinters) =>
-      currentPrinters.filter((currentPrinter) => currentPrinter.id !== printerId),
-    );
+    removePrinter(printerId);
     setAnnouncement(`${deletingPrinter.name} 프린터를 삭제했습니다.`);
     setDeletingPrinter(null);
   };

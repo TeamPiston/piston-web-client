@@ -158,6 +158,8 @@ view = render();
 assert.equal(view.query.printers.length, 0);
 assert.equal(view.query.isPrinterConnected, false);
 assert.equal(view.management.deletingPrinter, null);
+assert.equal(view.query.printStatus, "EMPTY", "Deleting the active printer must clear PRINTING");
+assert.equal(view.query.printJob, null, "Deleted printers must not remain in the print job");
 console.log("PASS edit, connection invalidation/recheck and confirmed deletion");
 
 const first = runtime();
@@ -168,6 +170,46 @@ firstView.management.openDeleteForm(original);
 firstView = first();
 firstView.management.deletePrinter(original.id);
 assert.equal(first().query.printers.length, 1);
+assert.equal(first().query.printStatus, "EMPTY");
+assert.equal(first().query.printJob, null);
 assert.equal(second().query.printers.length, 2);
 assert.equal(runtime([])().query.printers.length, 0);
 console.log("PASS default fixtures, provider isolation and explicit empty preview");
+
+const printerA = { ...draft, id: "printer-a", connectionStatus: "connected" };
+const printerB = { ...draft, id: "printer-b", connectionStatus: "connected" };
+const jobA = { ...job, printerId: printerA.id };
+const jobB = { ...job, printerId: printerB.id };
+
+for (const deletingActivePrinter of [true, false]) {
+  const renderDeletion = runtime([printerA, printerB]);
+  let deletion = renderDeletion();
+  assert.equal(deletion.actions.startPrint(jobA), true);
+  deletion = renderDeletion();
+  assert.equal(deletion.query.printStatus, "PRINTING");
+  assert.equal(deletion.query.printJob, jobA);
+  const target = deletingActivePrinter ? printerA : printerB;
+  deletion.management.openDeleteForm(target);
+  deletion = renderDeletion();
+  deletion.management.deletePrinter(target.id);
+  deletion = renderDeletion();
+  assert.equal(deletion.query.printers.length, 1);
+  assert.equal(deletion.query.printers.some((printer) => printer.id === target.id), false);
+  assert.equal(deletion.query.printStatus, deletingActivePrinter ? "EMPTY" : "PRINTING");
+  assert.equal(deletion.query.printJob, deletingActivePrinter ? null : jobA);
+}
+console.log("PASS active printer deletion clears the job; other printer deletion preserves it");
+
+// Start/change the job after opening confirmation, without refreshing its callbacks.
+for (const nextJob of [jobA, jobB]) {
+  const renderPendingDeletion = runtime([printerA, printerB]);
+  renderPendingDeletion().management.openDeleteForm(printerA);
+  const pendingDeletion = renderPendingDeletion();
+  assert.equal(pendingDeletion.actions.startPrint(nextJob), true);
+  pendingDeletion.management.deletePrinter(printerA.id);
+  const result = renderPendingDeletion();
+  assert.equal(result.query.printers.some((printer) => printer.id === printerA.id), false);
+  assert.equal(result.query.printStatus, nextJob === jobA ? "EMPTY" : "PRINTING");
+  assert.equal(result.query.printJob, nextJob === jobA ? null : jobB);
+}
+console.log("PASS deletion uses the latest job even before callbacks re-render");
