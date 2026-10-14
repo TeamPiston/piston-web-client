@@ -547,9 +547,9 @@ export default function CreateWorkspace() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col overflow-x-clip bg-white xl:h-dvh xl:min-h-0 xl:overflow-hidden">
+    <div className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col overflow-x-clip bg-white xl:h-dvh xl:min-h-0 xl:overflow-x-hidden xl:overflow-y-auto">
       <Header />
-      <main className="relative min-h-[calc(100dvh-var(--header-height))] w-full flex-1 bg-white xl:h-[calc(100dvh-var(--header-height))] xl:min-h-0 xl:flex-none xl:overflow-hidden">
+      <main className="relative min-h-[calc(100dvh-var(--header-height))] w-full flex-1 bg-white xl:h-[calc(100dvh-var(--header-height))] xl:min-h-[720px] xl:flex-none xl:overflow-hidden">
         <div className="grid min-h-[calc(100dvh-var(--header-height))] xl:h-full xl:min-h-0 xl:grid-cols-[280px_minmax(0,1fr)_280px] xl:grid-rows-[minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_360px]">
           <aside className="relative hidden min-h-0 border-r border-gray-200 bg-white xl:block">
             {isDesktop && isHistoryOpen && (
