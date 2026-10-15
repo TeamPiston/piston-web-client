@@ -135,6 +135,7 @@ function runtime(initialPrinters) {
     useMemo: memoize,
     useCallback: (callback, dependencies) => memoize(() => callback, dependencies),
     useRef: (initial) => memoize(() => ({ current: initial }), []),
+    useId: () => "test-id",
   };
   const jsx = (type, props) => ({ type, props });
   function load(relative) {
@@ -207,6 +208,7 @@ function runtime(initialPrinters) {
   });
   run.inspectTree = inspectTree;
   run.PrinterProvider = feature.PrinterProvider;
+  run.PrinterDeleteModal = feature.PrinterDeleteModal;
   return run;
 }
 
@@ -555,5 +557,24 @@ console.log(
   " page components (" + preview.pageInspection.unexecuted.length + " unexecuted), " +
   Object.keys(nestedCases).length + " rejected synthetic cases, static src scan (layout only)",
 );
+
+// Deleting a printer only removes its registration; it must not claim to cancel a print task,
+// because the delete flow is not linked to the print lifecycle (entities/print).
+function collectText(node) {
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(collectText).join("");
+  if (!node || typeof node !== "object" || !node.props) return "";
+  return collectText(node.props.children);
+}
+const deleteModalText = collectText(
+  renderPreview.PrinterDeleteModal({
+    printer: { id: printerA.id, name: printerA.name },
+    onClose() {},
+    onConfirm() {},
+  }),
+);
+assert.match(deleteModalText, /진행 중인 출력 작업은 자동으로 취소되지 않습니다/);
+assert.doesNotMatch(deleteModalText, /먼저 취소|자동으로 취소돼요|출력이 취소/);
+console.log("PASS delete modal does not promise automatic print cancellation");
 
 await import("./verify-printer-focus.mjs");
