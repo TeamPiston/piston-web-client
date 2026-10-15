@@ -30,7 +30,7 @@ export function HistorySidebar({
   onTitleKeyDown,
 }: HistorySidebarProps) {
   return (
-    <aside className="flex h-full w-full flex-col rounded-r-2xl bg-white px-5 py-6 shadow-lg">
+    <aside className="flex h-full min-h-0 w-full flex-col rounded-r-2xl bg-white px-5 py-6 shadow-lg">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-bold text-gray-950">채팅</h2>
         <button
@@ -47,7 +47,7 @@ export function HistorySidebar({
       <button
         type="button"
         onClick={onNewChat}
-        className="mt-6 flex h-11 items-center justify-center gap-2 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
+        className="mt-6 flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5]"
       >
         <Plus className="h-4 w-4" aria-hidden="true" />
         새 채팅

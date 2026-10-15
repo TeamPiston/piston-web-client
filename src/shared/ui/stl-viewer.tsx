@@ -35,7 +35,7 @@ export function StlViewer({
       className={[
         "relative w-full overflow-hidden",
         compact
-          ? "h-full min-h-[176px] rounded-[18px] bg-[#f6f6f6] sm:min-h-[200px]"
+          ? "h-full min-h-0 rounded-[18px] bg-[#f6f6f6]"
           : "h-[clamp(320px,60vh,720px)] min-h-0 rounded-lg bg-slate-950 shadow-inner",
         !interactive && "pointer-events-none",
       ]

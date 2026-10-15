@@ -42,7 +42,7 @@ export function ArtworkCard({ artwork, likeSlot }: ArtworkCardProps) {
   }, []);
 
   return (
-    <div className="flex h-[280px] w-[320px] flex-col justify-between rounded-[26px] bg-white/80 p-4 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm transition hover:shadow-md">
+    <div className="flex h-[280px] w-full max-w-[320px] flex-col justify-between rounded-[26px] bg-white/80 p-4 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm transition hover:shadow-md xl:h-[264px]">
       <Link
         href={detailHref}
         ref={viewerRef}
@@ -52,7 +52,7 @@ export function ArtworkCard({ artwork, likeSlot }: ArtworkCardProps) {
         {shouldRenderViewer ? (
           <StlViewer url={artwork.stlUrl} compact autoRotate interactive={false} />
         ) : (
-          <div className="h-full min-h-[176px] w-full rounded-[18px] bg-[#f6f6f6] sm:min-h-[200px]" />
+          <div className="h-full w-full rounded-[18px] bg-[#f6f6f6]" />
         )}
       </Link>
 

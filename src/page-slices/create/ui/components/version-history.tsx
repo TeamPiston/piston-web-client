@@ -17,14 +17,14 @@ export function VersionHistory({
   versions,
 }: VersionHistoryProps) {
   return (
-    <aside className="min-h-[420px] border-l border-gray-200 bg-white px-5 py-7 xl:min-h-0">
+    <aside className="flex min-h-[420px] min-w-0 flex-col border-l border-gray-200 bg-white px-5 py-7 xl:min-h-0">
       <h2 className="text-sm font-bold text-gray-950">버전</h2>
       {!isGenerated ? (
         <p className="mt-4 text-xs leading-5 text-gray-400">
           아직 기록이 없어요. 디자인을 만들면 여기에 쌓여요.
         </p>
       ) : (
-        <div className="mt-4 flex flex-col gap-3">
+        <div className="mt-4 flex min-h-0 flex-col gap-3 xl:flex-1 xl:overflow-y-auto">
           {[...versions].reverse().map((version) => {
             const isSelected = selectedVersionId === version.id;
 
@@ -34,7 +34,7 @@ export function VersionHistory({
                 type="button"
                 onClick={() => onSelectVersion(version.id)}
                 className={[
-                  "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors",
+                  "flex w-full shrink-0 items-start gap-3 rounded-xl border p-3 text-left transition-colors",
                   isSelected
                     ? "border-transparent bg-[#eef2ff]"
                     : "border-gray-200 bg-white hover:bg-gray-50",
@@ -54,7 +54,7 @@ export function VersionHistory({
         </div>
       )}
       {isGenerated && (
-        <p className="mt-6 flex items-center gap-2 text-xs text-gray-400">
+        <p className="mt-6 flex shrink-0 items-center gap-2 text-xs text-gray-400">
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           수정할 때마다 자동으로 저장돼요.
         </p>

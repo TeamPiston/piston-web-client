@@ -1,4 +1,6 @@
-export { PrinterProvider } from "./model/provider";
-export { usePrinter } from "./model/use-printer";
-export type { PrintJob, PrintStatus } from "./model/context";
-export type { Printer } from "@/shared/mock/mock-data";
+export { PrinterQueryContext } from "./model/query-context";
+export { usePrinterQuery } from "./model/use-printer-query";
+export { getPrintersWithFallback } from "./model/mock-printers";
+export { PrinterCard } from "./ui/printer-card";
+export { PrinterStatusBadge } from "./ui/printer-status-badge";
+export type { Printer, PrinterConnectionStatus, PrintJob, PrintStatus } from "./model/printer";

@@ -57,7 +57,7 @@ export function ChatPanel({
   const latestPrintWarningId = [...messages].reverse().find((message) => message.hasPrintIssue)?.id;
 
   return (
-    <section className="relative flex min-h-[720px] min-w-0 flex-col border-r border-gray-200 bg-white px-6 pb-[52px] pt-20 xl:min-h-0 xl:px-[60px]">
+    <section className="relative flex min-h-[720px] min-w-0 flex-col border-r border-gray-200 bg-white px-6 pb-[52px] pt-20 xl:min-h-0 xl:overflow-hidden 2xl:px-[60px]">
       <button
         type="button"
         onClick={onToggleHistory}

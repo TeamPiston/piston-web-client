@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:print": "node scripts/verify-print-lifecycle.mjs",
+    "test:printer": "node scripts/verify-printer-management.mjs",
     "test:e2e:print": "npm run test:print",
     "test:print:api": "node scripts/verify-print-lifecycle.mjs --api"
   },

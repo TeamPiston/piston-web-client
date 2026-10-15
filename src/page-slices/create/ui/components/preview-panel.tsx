@@ -32,7 +32,7 @@ export function PreviewPanel({
 }: PreviewPanelProps) {
   return (
     <section className="flex min-h-[720px] min-w-0 flex-col items-center bg-white px-6 pb-8 pt-20 lg:pt-[120px] xl:min-h-0">
-      <div className="relative h-[600px] w-full max-w-[432px]">
+      <div className="relative h-[600px] w-full max-w-[432px] xl:min-h-0 xl:max-h-[600px] xl:flex-1">
         {printSuccessPhase !== "hidden" && (
           <div
             role="status"

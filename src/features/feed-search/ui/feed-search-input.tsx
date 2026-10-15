@@ -9,7 +9,7 @@ interface FeedSearchInputProps {
 
 export function FeedSearchInput({ value, onChange }: FeedSearchInputProps) {
   return (
-    <div className="mb-12 w-[400px] h-[48px]">
+    <div className="mb-6 h-12 w-full max-w-[400px] shrink-0">
       <div className="flex w-full h-full items-center justify-between rounded-[20px] bg-white pl-6 pr-6 py-2 shadow-sm ring-1 ring-black/[0.04] opacity-100 rotate-0">
         <input
           type="text"

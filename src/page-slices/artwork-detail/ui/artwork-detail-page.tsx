@@ -4,7 +4,8 @@ import { ArrowLeft, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ArtworkDetail, FilamentColor } from "@/entities/artwork";
-import { usePrinter } from "@/entities/printer";
+import { usePrinterQuery } from "@/entities/printer";
+import { usePrinterActions } from "@/features/printer-management";
 import { LikeButton } from "@/features/like-artwork";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
@@ -27,7 +28,8 @@ const FALLBACK_FILAMENT_COLORS: FilamentColor[] = [
 
 export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   const router = useRouter();
-  const { connectedPrinter, isPrinterConnected, startPrint } = usePrinter();
+  const { connectedPrinter, isPrinterConnected } = usePrinterQuery();
+  const { startPrint } = usePrinterActions();
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 

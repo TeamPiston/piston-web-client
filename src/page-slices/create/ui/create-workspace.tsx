@@ -15,7 +15,7 @@ import {
 } from "react";
 import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
 import { isMockPrinterConnected } from "@/shared/mock/mock-data";
-import { usePrinter } from "@/entities/printer";
+import { usePrinterQuery } from "@/entities/printer";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import { Header } from "@/widgets/header";
 import {
@@ -62,7 +62,7 @@ const getServerDesktopSnapshot = () => false;
 
 export default function CreateWorkspace() {
   const router = useRouter();
-  const { connectedPrinter, isPrinterConnected: hasConnectedPrinter } = usePrinter();
+  const { connectedPrinter, isPrinterConnected: hasConnectedPrinter } = usePrinterQuery();
   const isPrinterConnected = hasConnectedPrinter && isMockPrinterConnected();
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopMediaQuery,
@@ -547,11 +547,11 @@ export default function CreateWorkspace() {
   };
 
   return (
-    <>
+    <div className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col overflow-x-clip bg-white xl:h-dvh xl:min-h-0 xl:overflow-x-hidden xl:overflow-y-auto">
       <Header />
-      <main className="relative min-h-[calc(100vh-100px)] overflow-hidden bg-white xl:h-[calc(100vh-100px)]">
-        <div className="grid min-h-[calc(100vh-100px)] xl:h-full xl:grid-cols-[360px_minmax(0,1fr)_360px]">
-          <aside className="relative hidden border-r border-gray-200 bg-white xl:block">
+      <main className="relative min-h-[calc(100dvh-var(--header-height))] w-full flex-1 bg-white xl:h-[calc(100dvh-var(--header-height))] xl:min-h-[720px] xl:flex-none xl:overflow-hidden">
+        <div className="grid min-h-[calc(100dvh-var(--header-height))] xl:h-full xl:min-h-0 xl:grid-cols-[280px_minmax(0,1fr)_280px] xl:grid-rows-[minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)_360px]">
+          <aside className="relative hidden min-h-0 border-r border-gray-200 bg-white xl:block">
             {isDesktop && isHistoryOpen && (
               <HistorySidebar
                 chatHistories={chatHistories}
@@ -568,7 +568,7 @@ export default function CreateWorkspace() {
             )}
           </aside>
 
-          <section className="grid min-h-[calc(100vh-100px)] min-w-0 lg:grid-cols-2">
+          <section className="grid min-h-[calc(100dvh-var(--header-height))] min-w-0 lg:grid-cols-2 xl:min-h-0 xl:grid-rows-[minmax(0,1fr)]">
             <ChatPanel
               attachedImages={attachedImages}
               isLimitExceeded={isLimitExceeded}
@@ -658,6 +658,6 @@ export default function CreateWorkspace() {
         onClose={handlePrinterConnectionModalClose}
         onOpenPrinterManagement={handleOpenPrinterManagement}
       />
-    </>
+    </div>
   );
 }
