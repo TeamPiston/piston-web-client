@@ -1,5 +1,19 @@
 # Print Lifecycle Verification
 
+## Create Attachment Regression Checks
+
+Run `npm run test:create-attachments` for image filtering, the two-image limit,
+file/paste/drop handlers, repeated add/remove/reset operations and Object URL
+ownership. It also executes CreateWorkspace submit and new-chat handlers to check
+image-name messages and attachment cleanup. The actual TypeScript modules run in
+memory with simulated hook state/effects, URL APIs and child components; no server
+or new dependency is required. Mount-effect replay and repeated state-updater
+calls are simulated, not actual React StrictMode or concurrent scheduling.
+Native file dialogs, clipboard/drag events, image decoding, layout and browser
+accessibility still require browser verification.
+
+## Print Checks
+
 Run `node scripts/verify-print-lifecycle.mjs` or `npm run test:print` after
 installing the project's dependencies. `npm run test:e2e:print` remains an alias
 for compatibility; this is a module/contract check, not a browser E2E test.

@@ -7,9 +7,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type ChangeEvent,
-  type ClipboardEvent,
-  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
@@ -30,8 +27,8 @@ import {
   MOCK_VERSIONS,
 } from "../model/mock-data";
 import { createPrintCorrection, resolveModelParams } from "../model/model-utils";
+import { useCreateAttachments } from "../model/use-create-attachments";
 import type {
-  AttachedImage,
   ChatHistory,
   ChatMessage,
   DesignVersion,
@@ -44,8 +41,6 @@ import { PreviewPanel } from "./components/preview-panel";
 import { PrintInProgressModal } from "./components/print-in-progress-modal";
 import { PrinterDisconnectedModal } from "./components/printer-disconnected-modal";
 import { VersionHistory } from "./components/version-history";
-
-const MAX_ATTACHED_IMAGES = 2;
 
 const DESKTOP_MEDIA_QUERY = "(min-width: 80rem)";
 
@@ -70,9 +65,18 @@ export default function CreateWorkspace() {
     getServerDesktopSnapshot,
   );
   const [draft, setDraft] = useState("");
-  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
-  const [isLimitExceeded, setIsLimitExceeded] = useState(false);
-  const attachedImagesRef = useRef<AttachedImage[]>([]);
+  const {
+    attachedImages,
+    isLimitExceeded,
+    fileInputRef,
+    handleFileChange,
+    handlePaste,
+    handleDrop,
+    handleDragOver,
+    handleRemoveAttachment,
+    resetAttachments,
+    clearLimitExceeded,
+  } = useCreateAttachments();
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
   const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
@@ -96,7 +100,6 @@ export default function CreateWorkspace() {
     () => resolveModelParams(MOCK_VERSIONS[2]),
   );
   const [cameraDistance, setCameraDistance] = useState(42);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
   const historyTitleInputRef = useRef<HTMLInputElement>(null);
   const nextVersionNumberRef = useRef(1);
@@ -110,16 +113,6 @@ export default function CreateWorkspace() {
       historyTitleInputRef.current?.select();
     }
   }, [editingHistoryId, isDesktop, isHistoryOpen]);
-
-  useEffect(() => {
-    attachedImagesRef.current = attachedImages;
-  }, [attachedImages]);
-
-  useEffect(() => {
-    return () => {
-      attachedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.url));
-    };
-  }, []);
 
   useEffect(() => {
     const textarea = draftTextareaRef.current;
@@ -246,13 +239,7 @@ export default function CreateWorkspace() {
 
     appendMockResponse(userContent, prompt);
     setDraft("");
-    attachedImages.forEach((image) => URL.revokeObjectURL(image.url));
-    setAttachedImages([]);
-    setIsLimitExceeded(false);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    resetAttachments();
   };
 
   const handleAutoFix = (messageId: string) => {
@@ -379,72 +366,9 @@ export default function CreateWorkspace() {
     setCurrentModelParams(resolveModelParams(nextVersion));
   };
 
-  const addImages = (files: File[]) => {
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length === 0) {
-      return;
-    }
-
-    const availableSlots = MAX_ATTACHED_IMAGES - attachedImages.length;
-    if (availableSlots <= 0) {
-      setIsLimitExceeded(true);
-      return;
-    }
-
-    const filesToAdd = imageFiles.slice(0, availableSlots);
-    const nextImages = filesToAdd.map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name || "붙여넣은 이미지",
-      url: URL.createObjectURL(file),
-    }));
-
-    setAttachedImages((currentImages) => [...currentImages, ...nextImages]);
-    setIsLimitExceeded(imageFiles.length > availableSlots);
-  };
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    addImages(Array.from(event.target.files ?? []));
-    event.target.value = "";
-  };
-
-  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const imageFiles = Array.from(event.clipboardData.files).filter((file) =>
-      file.type.startsWith("image/"),
-    );
-
-    if (imageFiles.length > 0) {
-      event.preventDefault();
-      addImages(imageFiles);
-    }
-  };
-
-  const handleDrop = (event: DragEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    addImages(Array.from(event.dataTransfer.files));
-  };
-
-  const handleDragOver = (event: DragEvent<HTMLFormElement>) => {
-    event.preventDefault();
-  };
-
-  const handleRemoveAttachment = (imageId: string) => {
-    const imageToRemove = attachedImages.find((image) => image.id === imageId);
-    if (imageToRemove) {
-      URL.revokeObjectURL(imageToRemove.url);
-    }
-
-    setAttachedImages((currentImages) =>
-      currentImages.filter((image) => image.id !== imageId),
-    );
-    setIsLimitExceeded(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
   const handleDraftChange = (value: string) => {
     setDraft(value);
-    setIsLimitExceeded(false);
+    clearLimitExceeded();
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -481,9 +405,7 @@ export default function CreateWorkspace() {
     setIsLoading(false);
     setMessages([]);
     autoFixedMessageIdsRef.current.clear();
-    attachedImages.forEach((image) => URL.revokeObjectURL(image.url));
-    setAttachedImages([]);
-    setIsLimitExceeded(false);
+    resetAttachments();
     setIsPrintInProgressModalOpen(false);
     setIsPrintStatusChecking(false);
     setIsPrintCheckFailed(false);
@@ -497,10 +419,6 @@ export default function CreateWorkspace() {
     setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
     setCameraDistance(42);
     setIsHistoryOpen(false);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
   };
 
   const handleStartHistoryEdit = (history: ChatHistory) => {
