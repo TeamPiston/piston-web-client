@@ -15,23 +15,30 @@ accessibility still require browser verification.
 ## Create Print Flow Regression Checks
 
 Run `npm run test:create-print-flow` to execute the actual Create print hook with
-deferred API promises and simulated React state, callback identity, effects and
+deferred API promises and simulated React state, refs, callback identity, effects and
 timers. It covers eligibility, connection/active-job precedence, query and submit
-errors, loading guards after rerender, explicit confirmation, modal closure,
-reset and timer cleanup. Requests retain their original zero-argument contract;
+errors, same-render and rerendered duplicate calls, explicit confirmation, modal
+closure, reset and timer cleanup. Independent in-flight guards remain locked
+across modal closure and reset until their own request settles. Success, rejected
+promises and synchronous API exceptions release the lock and allow subsequent
+requests; completion of one operation does not release the other's lock.
+Requests retain their original zero-argument contract;
 colorMode and printerId are not added to the API payload.
 
 Tests named `legacy` characterize existing limitations, not desired safety
-guarantees: same-render callbacks can duplicate requests, pending checks capture
-the old connection state, late responses still apply after reset/close and still
+guarantees: pending checks capture the old connection state,
+late responses still apply after reset/close and still
 attempt updates after unmount. A rerender at the 3500 ms fading transition also
 cleans up the scheduled 4000 ms hide timer, leaving the phase at `fading` until a
-reset or another transition. This extraction deliberately does not introduce
-request cancellation, response invalidation or a new locking/timer policy.
+reset or another transition. Duplicate-request protection does not introduce
+request cancellation, response invalidation or a new timer policy.
 These cases need a separately scoped behavior change, not silent test weakening.
 
 The harness does not run a browser, React's concurrent scheduler or native modal
-focus/keyboard behavior. API adapter/Mock contracts remain covered by the print
+focus/keyboard behavior. State cells update immediately, while handlers retain
+their render's snapshot until the test explicitly rerenders; refs retain the
+same mutable object across renders. This is not a simulation of React's full
+batching or StrictMode behavior. API adapter/Mock contracts remain covered by the print
 checks below, which use the actual entity and transport modules.
 
 ## Print Checks

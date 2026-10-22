@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
 import type { PrintSuccessPhase } from "./types";
 
@@ -24,6 +24,8 @@ export function useCreatePrintFlow({
   const [currentPrintTask, setCurrentPrintTask] = useState<PrintTask | null>(null);
   const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
   const [printSuccessPhase, setPrintSuccessPhase] = useState<PrintSuccessPhase>("hidden");
+  const isPrintCheckInFlightRef = useRef(false);
+  const isPrintStartInFlightRef = useRef(false);
 
   useEffect(() => {
     if (printSuccessPhase !== "visible") {
@@ -40,14 +42,16 @@ export function useCreatePrintFlow({
   }, [printSuccessPhase]);
 
   const handlePrintOpen = () => {
-    if (!isGenerated || isPrintBlocked || isPrintStatusChecking) {
+    if (!isGenerated || isPrintBlocked || isPrintStatusChecking || isPrintCheckInFlightRef.current) {
       return;
     }
 
+    isPrintCheckInFlightRef.current = true;
     setIsPrintStatusChecking(true);
 
-    void getCurrentPrintTask()
-      .then((printTask) => {
+    void (async () => {
+      try {
+        const printTask = await getCurrentPrintTask();
         setCurrentPrintTask(printTask);
         setIsPrintCheckFailed(false);
 
@@ -68,38 +72,43 @@ export function useCreatePrintFlow({
         setIsPrinterConnectionModalOpen(false);
         setPrintStartError(null);
         setIsPrintModalOpen(true);
-      })
-      .catch(() => {
+      } catch {
         setIsPrintCheckFailed(true);
         setIsPrintModalOpen(false);
         setIsPrintInProgressModalOpen(false);
         setIsPrinterConnectionModalOpen(false);
-      })
-      .finally(() => {
+      } finally {
+        isPrintCheckInFlightRef.current = false;
         setIsPrintStatusChecking(false);
-      });
+      }
+    })();
   };
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
-    if (isPrintStarting || isPrintCheckFailed || isPrintStatusChecking || !isPrintModalOpen) {
+    if (
+      isPrintStarting || isPrintCheckFailed || isPrintStatusChecking ||
+      !isPrintModalOpen || isPrintStartInFlightRef.current
+    ) {
       return;
     }
 
     void colorMode;
+    isPrintStartInFlightRef.current = true;
     setIsPrintStarting(true);
     setPrintStartError(null);
 
-    void createPrintTask()
-      .then(() => {
+    void (async () => {
+      try {
+        await createPrintTask();
         setIsPrintModalOpen(false);
         setPrintSuccessPhase("visible");
-      })
-      .catch(() => {
+      } catch {
         setPrintStartError("출력 시작에 실패했어요. 잠시 후 다시 시도해 주세요.");
-      })
-      .finally(() => {
+      } finally {
+        isPrintStartInFlightRef.current = false;
         setIsPrintStarting(false);
-      });
+      }
+    })();
   };
 
   const handlePrintModalClose = useCallback(() => {
