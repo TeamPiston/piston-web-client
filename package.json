@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:create-attachments": "node scripts/verify-create-attachments.mjs",
+    "test:create-print-flow": "node scripts/verify-create-print-flow.mjs",
     "test:print": "node scripts/verify-print-lifecycle.mjs",
     "test:printer": "node scripts/verify-printer-management.mjs",
     "test:e2e:print": "npm run test:print",

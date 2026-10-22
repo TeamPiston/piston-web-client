@@ -65,18 +65,57 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", fetchImpl }) {
 }
 
 async function verifyFrontendContracts() {
-  const [createSource, previewSource, myPageSource] = await Promise.all([
+  const [createSource, printFlowSource, previewSource, myPageSource] = await Promise.all([
     readFile(resolve(ROOT_DIR, "src/page-slices/create/ui/create-workspace.tsx"), "utf8"),
+    readFile(resolve(ROOT_DIR, "src/page-slices/create/model/use-create-print-flow.ts"), "utf8"),
     readFile(resolve(ROOT_DIR, "src/page-slices/create/ui/components/preview-panel.tsx"), "utf8"),
     readFile(resolve(ROOT_DIR, "src/page-slices/mypage/ui/mypage-page.tsx"), "utf8"),
   ]);
-  assert(createSource.includes("createPrintTask()"), "Create: missing print creation");
+  assert(
+    createSource.includes("useCreatePrintFlow({ isGenerated, isPrintBlocked, isPrinterConnected })"),
+    "Create: missing print flow integration",
+  );
+  for (const statement of [
+    "onPrint={handlePrintOpen}",
+    "onRetryPrintCheck={handlePrintOpen}",
+    "onConfirm={handlePrintConfirm}",
+    "onClose={handlePrintModalClose}",
+    "onClose={handlePrinterConnectionModalClose}",
+    "onClose={handlePrintInProgressModalClose}",
+    "isOpen={isPrintModalOpen && !isPrintCheckFailed && !isPrintStatusChecking}",
+    "isOpen={isPrinterConnectionModalOpen}",
+    "isOpen={isPrintInProgressModalOpen}",
+    'currentPrintTask?.status === "PRINTING"',
+    "isSubmitting={isPrintStarting}",
+    "errorMessage={printStartError}",
+    "printSuccessPhase={printSuccessPhase}",
+  ]) {
+    assert(createSource.includes(statement), "Create: missing print flow wiring: " + statement);
+  }
+  const createAst = ts.createSourceFile("create-workspace.tsx", createSource, ts.ScriptTarget.ES2022, true);
+  const callbacks = new Map();
+  const collectCallbacks = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      callbacks.set(node.name.text, node.initializer.getText(createAst));
+    }
+    ts.forEachChild(node, collectCallbacks);
+  };
+  collectCallbacks(createAst);
+  for (const [callback, call] of [
+    ["handleNewChat", "resetPrintFlow()"],
+    ["appendMockResponse", "closePrintSetup()"],
+    ["handleOpenPrinterManagement", "closePrintSetup()"],
+    ["handleOpenPrinterManagement", 'router.push("/mypage?tab=printer")'],
+  ]) {
+    assert(callbacks.get(callback)?.includes(call), "Create: missing " + callback + " integration: " + call);
+  }
+  assert(printFlowSource.includes("createPrintTask()"), "Create: missing print creation");
   for (const statement of [
     'setPrintSuccessPhase("visible")',
     'setPrintSuccessPhase("fading"), 3500',
     'setPrintSuccessPhase("hidden"), 4000',
   ]) {
-    assert(createSource.includes(statement), "Create: missing success overlay contract: " + statement);
+    assert(printFlowSource.includes(statement), "Create: missing success overlay contract: " + statement);
   }
   for (const statement of [
     "출력이 시작되었습니다.",

@@ -12,6 +12,28 @@ calls are simulated, not actual React StrictMode or concurrent scheduling.
 Native file dialogs, clipboard/drag events, image decoding, layout and browser
 accessibility still require browser verification.
 
+## Create Print Flow Regression Checks
+
+Run `npm run test:create-print-flow` to execute the actual Create print hook with
+deferred API promises and simulated React state, callback identity, effects and
+timers. It covers eligibility, connection/active-job precedence, query and submit
+errors, loading guards after rerender, explicit confirmation, modal closure,
+reset and timer cleanup. Requests retain their original zero-argument contract;
+colorMode and printerId are not added to the API payload.
+
+Tests named `legacy` characterize existing limitations, not desired safety
+guarantees: same-render callbacks can duplicate requests, pending checks capture
+the old connection state, late responses still apply after reset/close and still
+attempt updates after unmount. A rerender at the 3500 ms fading transition also
+cleans up the scheduled 4000 ms hide timer, leaving the phase at `fading` until a
+reset or another transition. This extraction deliberately does not introduce
+request cancellation, response invalidation or a new locking/timer policy.
+These cases need a separately scoped behavior change, not silent test weakening.
+
+The harness does not run a browser, React's concurrent scheduler or native modal
+focus/keyboard behavior. API adapter/Mock contracts remain covered by the print
+checks below, which use the actual entity and transport modules.
+
 ## Print Checks
 
 Run `node scripts/verify-print-lifecycle.mjs` or `npm run test:print` after

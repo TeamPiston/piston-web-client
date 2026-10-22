@@ -10,7 +10,6 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
 import { isMockPrinterConnected } from "@/shared/mock/mock-data";
 import { usePrinterQuery } from "@/entities/printer";
 import { PrintSettingsModal } from "@/features/print-artwork";
@@ -28,11 +27,11 @@ import {
 } from "../model/mock-data";
 import { createPrintCorrection, resolveModelParams } from "../model/model-utils";
 import { useCreateAttachments } from "../model/use-create-attachments";
+import { useCreatePrintFlow } from "../model/use-create-print-flow";
 import type {
   ChatHistory,
   ChatMessage,
   DesignVersion,
-  PrintSuccessPhase,
   ResolvedArtworkModelParams,
 } from "../model/types";
 import { ChatPanel } from "./components/chat-panel";
@@ -83,17 +82,26 @@ export default function CreateWorkspace() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [isPrintBlocked, setIsPrintBlocked] = useState(false);
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [isPrintInProgressModalOpen, setIsPrintInProgressModalOpen] = useState(false);
-  const [isPrintStatusChecking, setIsPrintStatusChecking] = useState(false);
-  const [isPrintCheckFailed, setIsPrintCheckFailed] = useState(false);
-  const [isPrintStarting, setIsPrintStarting] = useState(false);
-  const [printStartError, setPrintStartError] = useState<string | null>(null);
-  const [currentPrintTask, setCurrentPrintTask] = useState<PrintTask | null>(null);
-  const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
+  const {
+    isPrintModalOpen,
+    isPrintInProgressModalOpen,
+    isPrintStatusChecking,
+    isPrintCheckFailed,
+    isPrintStarting,
+    printStartError,
+    currentPrintTask,
+    isPrinterConnectionModalOpen,
+    printSuccessPhase,
+    handlePrintOpen,
+    handlePrintConfirm,
+    handlePrintModalClose,
+    handlePrinterConnectionModalClose,
+    handlePrintInProgressModalClose,
+    closePrintSetup,
+    resetPrintFlow,
+  } = useCreatePrintFlow({ isGenerated, isPrintBlocked, isPrinterConnected });
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [printSuccessPhase, setPrintSuccessPhase] = useState<PrintSuccessPhase>("hidden");
   const [selectedVersionId, setSelectedVersionId] = useState("v3");
   const [versions, setVersions] = useState<DesignVersion[]>([]);
   const [currentModelParams, setCurrentModelParams] = useState<ResolvedArtworkModelParams>(
@@ -132,20 +140,6 @@ export default function CreateWorkspace() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (printSuccessPhase !== "visible") {
-      return;
-    }
-
-    const fadeTimeoutId = window.setTimeout(() => setPrintSuccessPhase("fading"), 3500);
-    const hideTimeoutId = window.setTimeout(() => setPrintSuccessPhase("hidden"), 4000);
-
-    return () => {
-      window.clearTimeout(fadeTimeoutId);
-      window.clearTimeout(hideTimeoutId);
-    };
-  }, [printSuccessPhase]);
 
   const appendVersion = (version: Omit<DesignVersion, "id" | "label">) => {
     const versionId = `v${nextVersionNumberRef.current++}`;
@@ -200,8 +194,7 @@ export default function CreateWorkspace() {
     };
     setMessages((currentMessages) => [...currentMessages, userMessage]);
     setIsLoading(true);
-    setIsPrintModalOpen(false);
-    setIsPrinterConnectionModalOpen(false);
+    closePrintSetup();
 
     loadingTimeoutRef.current = window.setTimeout(() => {
       loadingTimeoutRef.current = null;
@@ -278,83 +271,10 @@ export default function CreateWorkspace() {
     appendVersion(MOCK_CORRECTED_VERSION);
   };
 
-  const handlePrintOpen = () => {
-    if (!isGenerated || isPrintBlocked || isPrintStatusChecking) {
-      return;
-    }
-
-    setIsPrintStatusChecking(true);
-
-    void getCurrentPrintTask()
-      .then((printTask) => {
-        setCurrentPrintTask(printTask);
-        setIsPrintCheckFailed(false);
-
-        if (printTask?.status === "PRINTING") {
-          setIsPrintModalOpen(false);
-          setIsPrinterConnectionModalOpen(false);
-          setIsPrintInProgressModalOpen(true);
-          return;
-        }
-
-        if (!isPrinterConnected) {
-          setPrintStartError(null);
-          setIsPrintModalOpen(false);
-          setIsPrinterConnectionModalOpen(true);
-          return;
-        }
-
-        setIsPrinterConnectionModalOpen(false);
-        setPrintStartError(null);
-        setIsPrintModalOpen(true);
-      })
-      .catch(() => {
-        setIsPrintCheckFailed(true);
-        setIsPrintModalOpen(false);
-        setIsPrintInProgressModalOpen(false);
-        setIsPrinterConnectionModalOpen(false);
-      })
-      .finally(() => {
-        setIsPrintStatusChecking(false);
-      });
-  };
-
-  const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
-    if (isPrintStarting || isPrintCheckFailed || isPrintStatusChecking || !isPrintModalOpen) {
-      return;
-    }
-
-    // TODO: 백엔드 API 연동 시 colorMode를 요청 body에 포함하여 전달
-    void colorMode;
-    setIsPrintStarting(true);
-    setPrintStartError(null);
-
-    void createPrintTask()
-      .then(() => {
-        setIsPrintModalOpen(false);
-        setPrintSuccessPhase("visible");
-      })
-      .catch(() => {
-        setPrintStartError("출력 시작에 실패했어요. 잠시 후 다시 시도해 주세요.");
-      })
-      .finally(() => {
-        setIsPrintStarting(false);
-      });
-  };
-
-  const handlePrintModalClose = useCallback(() => {
-    setIsPrintModalOpen(false);
-  }, []);
-
-  const handlePrinterConnectionModalClose = useCallback(() => {
-    setIsPrinterConnectionModalOpen(false);
-  }, []);
-
   const handleOpenPrinterManagement = useCallback(() => {
-    setIsPrintModalOpen(false);
-    setIsPrinterConnectionModalOpen(false);
+    closePrintSetup();
     router.push("/mypage?tab=printer");
-  }, [router]);
+  }, [closePrintSetup, router]);
 
   const handleVersionSelect = (versionId: string) => {
     const nextVersion = versions.find((version) => version.id === versionId);
@@ -400,19 +320,11 @@ export default function CreateWorkspace() {
     setEditingHistoryId(null);
     setIsGenerated(false);
     setIsPrintBlocked(false);
-    setIsPrintModalOpen(false);
-    setIsPrinterConnectionModalOpen(false);
+    resetPrintFlow();
     setIsLoading(false);
     setMessages([]);
     autoFixedMessageIdsRef.current.clear();
     resetAttachments();
-    setIsPrintInProgressModalOpen(false);
-    setIsPrintStatusChecking(false);
-    setIsPrintCheckFailed(false);
-    setIsPrintStarting(false);
-    setPrintStartError(null);
-    setCurrentPrintTask(null);
-    setPrintSuccessPhase("hidden");
     setSelectedVersionId("v3");
     setVersions([]);
     nextVersionNumberRef.current = 1;
@@ -566,7 +478,7 @@ export default function CreateWorkspace() {
         <PrintInProgressModal
           isOpen={isPrintInProgressModalOpen}
           printTask={currentPrintTask}
-          onClose={() => setIsPrintInProgressModalOpen(false)}
+          onClose={handlePrintInProgressModalClose}
           onOpenMyPage={() => router.push("/mypage")}
         />
       )}
