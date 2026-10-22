@@ -25,20 +25,42 @@ requests; completion of one operation does not release the other's lock.
 Requests retain their original zero-argument contract;
 colorMode and printerId are not added to the API payload.
 
+Reset increments the UI response epoch before clearing state. Effect cleanup
+also advances the epoch and marks the hook inactive; setup marks it active again.
+Requests capture their starting epoch. Success, error and loading updates are
+ignored after reset or cleanup, even if a later setup reactivates the hook.
+The request's own in-flight lock still releases in finally, including for stale
+responses. Reset and cleanup do not release these locks, so a newer request of
+the same kind cannot acquire the lock before the old one finishes. Each independent
+lock stores its request epoch (or null when idle). Setup derives the loading flags
+from these owners and the active epoch, so effect replay does not leave the same
+instance stuck loading. This does not revive the old response or release its lock.
+A request that never settles keeps its own lock indefinitely in that instance,
+including after reset or effect replay; no timeout or cancellation is introduced.
+
+Tests count setter attempts as well as visible state. They cover stale success
+and failure, new-generation state and lock preservation, fresh hook instances,
+and effect cleanup/setup replay. Ordinary modal closure does not invalidate a
+response. This is UI response invalidation, not backend cancellation: a submitted
+print request may still create a server-side job after reset or navigation.
+No cancel API or transport abort is added.
+
 Tests named `legacy` characterize existing limitations, not desired safety
-guarantees: pending checks capture the old connection state,
-late responses still apply after reset/close and still
-attempt updates after unmount. A rerender at the 3500 ms fading transition also
+guarantees: pending checks capture the old connection state.
+A rerender at the 3500 ms fading transition also
 cleans up the scheduled 4000 ms hide timer, leaving the phase at `fading` until a
-reset or another transition. Duplicate-request protection does not introduce
-request cancellation, response invalidation or a new timer policy.
+reset or another transition. The existing connection and timer policies are unchanged.
 These cases need a separately scoped behavior change, not silent test weakening.
 
 The harness does not run a browser, React's concurrent scheduler or native modal
 focus/keyboard behavior. State cells update immediately, while handlers retain
 their render's snapshot until the test explicitly rerenders; refs retain the
 same mutable object across renders. This is not a simulation of React's full
-batching or StrictMode behavior. API adapter/Mock contracts remain covered by the print
+batching or StrictMode behavior. Pending-request effect replay tests exercise
+invalidation, retained locks and retry on the same instance without an extra reset;
+fresh-mount tests also replay setup/cleanup before issuing normal requests.
+They do not prove browser event ordering or React's real lifecycle scheduling.
+API adapter/Mock contracts remain covered by the print
 checks below, which use the actual entity and transport modules.
 
 ## Print Checks

@@ -26,6 +26,7 @@ function createHarness(context, initialOptions = {}) {
   let now = 0;
   let timerId = 0;
   let mounted = true;
+  let stateUpdates = 0;
   let updatesAfterUnmount = 0;
   const react = {
     useRef(initial) {
@@ -38,6 +39,7 @@ function createHarness(context, initialOptions = {}) {
       if (!(slot in slots)) {
         const cell = { value: typeof initial === "function" ? initial() : initial };
         cell.set = (next) => {
+          stateUpdates += 1;
           if (!mounted) {
             updatesAfterUnmount += 1;
             return;
@@ -114,6 +116,7 @@ function createHarness(context, initialOptions = {}) {
   });
   return {
     render, unmount, queries, submissions, timers, api,
+    get stateUpdates() { return stateUpdates; },
     get updatesAfterUnmount() { return updatesAfterUnmount; },
     replayMountEffects() {
       for (const effect of effects.values()) {
@@ -435,12 +438,13 @@ for (const operation of ["query", "submit"]) {
     await flushResponses();
     let flow = harness.render();
     if (operation === "query") {
-      assert.equal(flow.isPrintModalOpen, true);
+      assertReset(flow);
       flow.handlePrintOpen();
       assert.equal(harness.queries.length, 2);
       harness.queries[1].resolve(null);
     } else {
-      assert.equal(flow.printSuccessPhase, "visible");
+      assert.equal(flow.printSuccessPhase, "hidden");
+      assert.equal(flow.isPrintModalOpen, true);
       flow = await openSettings(harness);
       flow.handlePrintConfirm(settings);
       assert.equal(harness.submissions.length, 2);
@@ -542,37 +546,155 @@ test("legacy closure: a pending check uses connection state from its initiating 
 });
 
 for (const operation of ["query", "submit"]) {
-  test("legacy reset: a pending " + operation + " still applies its late response", async (context) => {
-    const harness = createHarness(context);
-    let flow;
-    if (operation === "query") {
-      flow = harness.render();
-      flow.handlePrintOpen();
-    } else {
+  for (const outcome of ["success", "failure"]) {
+    test("reset ignores pending " + operation + " " + outcome + " and permits a new generation", async (context) => {
+      const harness = createHarness(context);
+      let flow = operation === "query" ? harness.render() : await openSettings(harness);
+      if (operation === "query") flow.handlePrintOpen();
+      else flow.handlePrintConfirm(settings);
+      const request = operation === "query" ? harness.queries.at(-1) : harness.submissions[0];
+      flow.resetPrintFlow();
+      flow.resetPrintFlow();
+      assertReset(harness.render({ isGenerated: false }));
+      const updatesBeforeResponse = harness.stateUpdates;
+      if (outcome === "success") request.resolve(printTask());
+      else request.reject(new Error("late failure"));
+      await flushResponses();
+      assert.equal(harness.stateUpdates, updatesBeforeResponse, "Stale success, catch and finally must not call setters");
+      assertReset(harness.render());
+      assert.equal(harness.timers.size, 0);
+      harness.render({ isGenerated: true });
       flow = await openSettings(harness);
+      assert.equal(harness.queries.length, 2);
       flow.handlePrintConfirm(settings);
-    }
-    flow.resetPrintFlow();
-    assertReset(harness.render({ isGenerated: false }));
-    if (operation === "query") harness.queries.at(-1).resolve(null);
-    else harness.submissions[0].resolve(printTask());
-    await flushResponses();
-    flow = harness.render();
-    if (operation === "query") assert.equal(flow.isPrintModalOpen, true);
-    else assert.equal(flow.printSuccessPhase, "visible");
-  });
+      flow.handlePrintConfirm(settings);
+      assert.equal(harness.submissions.length, operation === "query" ? 1 : 2);
+      harness.submissions.at(-1).resolve(printTask());
+      await flushResponses();
+      flow = harness.render();
+      assert.equal(flow.isPrintStarting, false);
+      assert.equal(flow.isPrintModalOpen, false);
+      assert.equal(flow.printSuccessPhase, "visible");
+    });
+
+    test("unmount ignores pending " + operation + " " + outcome + " without affecting a fresh mount", async (context) => {
+      const harness = createHarness(context);
+      if (operation === "query") harness.render().handlePrintOpen();
+      else (await openSettings(harness)).handlePrintConfirm(settings);
+      const request = operation === "query" ? harness.queries.at(-1) : harness.submissions[0];
+      harness.unmount();
+      const updatesBeforeResponse = harness.stateUpdates;
+      const fresh = createHarness(context);
+      fresh.render();
+      fresh.replayMountEffects();
+      const initial = operation === "query" ? fresh.render() : await openSettings(fresh);
+      if (operation === "query") initial.handlePrintOpen();
+      else initial.handlePrintConfirm(settings);
+      const freshUpdates = fresh.stateUpdates;
+      if (outcome === "success") request.resolve(printTask());
+      else request.reject(new Error("late failure"));
+      await flushResponses();
+      assert.equal(harness.updatesAfterUnmount, 0);
+      assert.equal(harness.stateUpdates, updatesBeforeResponse);
+      assert.equal(harness.timers.size, 0);
+      assert.equal(fresh.stateUpdates, freshUpdates);
+      if (operation === "query") {
+        initial.handlePrintOpen();
+        assert.equal(fresh.queries.length, 1);
+        assert.equal(fresh.render().isPrintStatusChecking, true);
+        fresh.queries[0].resolve(null);
+      } else {
+        initial.handlePrintConfirm(settings);
+        assert.equal(fresh.submissions.length, 1);
+        assert.equal(fresh.render().isPrintStarting, true);
+        fresh.submissions[0].resolve(printTask());
+      }
+      await flushResponses();
+      const flow = fresh.render();
+      assert.equal(flow.isPrintStatusChecking, false);
+      assert.equal(flow.isPrintStarting, false);
+      assert.equal(flow.isPrintModalOpen, operation === "query");
+      assert.equal(flow.printSuccessPhase, operation === "query" ? "hidden" : "visible");
+    });
+  }
+
+  for (const outcome of ["success", "failure"]) {
+    test("effect replay ignores earlier " + operation + " " + outcome + " and permits retry without reset", async (context) => {
+      const harness = createHarness(context);
+      if (operation === "query") harness.render().handlePrintOpen();
+      else (await openSettings(harness)).handlePrintConfirm(settings);
+      const request = operation === "query" ? harness.queries.at(-1) : harness.submissions[0];
+      harness.replayMountEffects();
+      let flow = harness.render();
+      assert.equal(flow.isPrintStatusChecking, false);
+      assert.equal(flow.isPrintStarting, false);
+      if (operation === "query") flow.handlePrintOpen();
+      else flow.handlePrintConfirm(settings);
+      assert.equal(harness.queries.length, 1, "Effect replay must not release the pending query lock");
+      assert.equal(harness.submissions.length, operation === "query" ? 0 : 1);
+      const updatesBeforeResponse = harness.stateUpdates;
+      if (outcome === "success") request.resolve(printTask());
+      else request.reject(new Error("late failure"));
+      await flushResponses();
+      assert.equal(harness.stateUpdates, updatesBeforeResponse);
+      assert.equal(harness.timers.size, 0);
+      flow = harness.render();
+      assert.equal(flow.isPrintStatusChecking, false);
+      assert.equal(flow.isPrintStarting, false);
+      assert.equal(flow.isPrintModalOpen, operation === "submit");
+      assert.equal(flow.isPrintInProgressModalOpen, false);
+      assert.equal(flow.isPrintCheckFailed, false);
+      assert.equal(flow.printStartError, null);
+      assert.equal(flow.currentPrintTask, null);
+      assert.equal(flow.printSuccessPhase, "hidden");
+      flow = await openSettings(harness);
+      assert.equal(harness.queries.length, 2, "The same instance must permit a new query without reset");
+      flow.handlePrintConfirm(settings);
+      flow.handlePrintConfirm(settings);
+      assert.equal(harness.submissions.length, operation === "query" ? 1 : 2);
+      harness.submissions.at(-1).resolve(printTask());
+      await flushResponses();
+      flow = harness.render();
+      assert.equal(flow.isPrintStarting, false);
+      assert.equal(flow.isPrintModalOpen, false);
+      assert.equal(flow.printSuccessPhase, "visible");
+    });
+  }
 }
 
-for (const operation of ["query", "submit"]) {
-  test("legacy unmount: pending " + operation + " callbacks still attempt state updates", async (context) => {
+for (const outcome of ["success", "failure"]) {
+  test("stale submit " + outcome + " preserves new settings and the new query lock", async (context) => {
     const harness = createHarness(context);
-    if (operation === "query") harness.render().handlePrintOpen();
-    else (await openSettings(harness)).handlePrintConfirm(settings);
-    harness.unmount();
-    if (operation === "query") harness.queries.at(-1).resolve(null);
-    else harness.submissions[0].resolve(printTask());
+    (await openSettings(harness)).handlePrintConfirm(settings);
+    harness.render().resetPrintFlow();
+    const newTask = printTask("COMPLETED");
+    harness.render().handlePrintOpen();
+    harness.queries[1].resolve(newTask);
     await flushResponses();
-    assert(harness.updatesAfterUnmount > 0);
-    assert.equal(harness.timers.size, 0);
+    const newFlow = harness.render();
+    assert.equal(newFlow.isPrintModalOpen, true);
+    newFlow.handlePrintOpen();
+    newFlow.handlePrintConfirm(settings);
+    assert.equal(harness.submissions.length, 1, "Reset must not unlock the old submission");
+    const updatesBeforeResponse = harness.stateUpdates;
+    if (outcome === "success") harness.submissions[0].resolve(printTask());
+    else harness.submissions[0].reject(new Error("late failure"));
+    await flushResponses();
+    const flow = harness.render();
+    assert.equal(harness.stateUpdates, updatesBeforeResponse);
+    assert.equal(flow.isPrintModalOpen, true);
+    assert.equal(flow.isPrintStatusChecking, true);
+    assert.equal(flow.currentPrintTask, newTask);
+    assert.equal(flow.printSuccessPhase, "hidden");
+    assert.equal(flow.printStartError, null);
+    newFlow.handlePrintOpen();
+    assert.equal(harness.queries.length, 3, "Stale submit finally must not unlock the current query");
+    harness.queries[2].resolve(null);
+    await flushResponses();
+    harness.render().handlePrintConfirm(settings);
+    assert.equal(harness.submissions.length, 2);
+    harness.submissions[1].resolve(printTask());
+    await flushResponses();
+    assert.equal(harness.render().printSuccessPhase, "visible");
   });
 }

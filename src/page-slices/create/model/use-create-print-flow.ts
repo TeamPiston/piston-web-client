@@ -24,8 +24,21 @@ export function useCreatePrintFlow({
   const [currentPrintTask, setCurrentPrintTask] = useState<PrintTask | null>(null);
   const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
   const [printSuccessPhase, setPrintSuccessPhase] = useState<PrintSuccessPhase>("hidden");
-  const isPrintCheckInFlightRef = useRef(false);
-  const isPrintStartInFlightRef = useRef(false);
+  const printCheckInFlightEpochRef = useRef<number | null>(null);
+  const printStartInFlightEpochRef = useRef<number | null>(null);
+  const responseEpochRef = useRef(0);
+  const isMountedRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    setIsPrintStatusChecking(printCheckInFlightEpochRef.current === responseEpochRef.current);
+    setIsPrintStarting(printStartInFlightEpochRef.current === responseEpochRef.current);
+
+    return () => {
+      isMountedRef.current = false;
+      responseEpochRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (printSuccessPhase !== "visible") {
@@ -41,17 +54,29 @@ export function useCreatePrintFlow({
     };
   }, [printSuccessPhase]);
 
+  const isCurrentResponse = (requestEpoch: number) => (
+    isMountedRef.current && responseEpochRef.current === requestEpoch
+  );
+
   const handlePrintOpen = () => {
-    if (!isGenerated || isPrintBlocked || isPrintStatusChecking || isPrintCheckInFlightRef.current) {
+    if (
+      !isMountedRef.current || !isGenerated || isPrintBlocked ||
+      isPrintStatusChecking || printCheckInFlightEpochRef.current !== null
+    ) {
       return;
     }
 
-    isPrintCheckInFlightRef.current = true;
+    const requestEpoch = responseEpochRef.current;
+    printCheckInFlightEpochRef.current = requestEpoch;
     setIsPrintStatusChecking(true);
 
     void (async () => {
       try {
         const printTask = await getCurrentPrintTask();
+        if (!isCurrentResponse(requestEpoch)) {
+          return;
+        }
+
         setCurrentPrintTask(printTask);
         setIsPrintCheckFailed(false);
 
@@ -73,40 +98,57 @@ export function useCreatePrintFlow({
         setPrintStartError(null);
         setIsPrintModalOpen(true);
       } catch {
+        if (!isCurrentResponse(requestEpoch)) {
+          return;
+        }
+
         setIsPrintCheckFailed(true);
         setIsPrintModalOpen(false);
         setIsPrintInProgressModalOpen(false);
         setIsPrinterConnectionModalOpen(false);
       } finally {
-        isPrintCheckInFlightRef.current = false;
-        setIsPrintStatusChecking(false);
+        printCheckInFlightEpochRef.current = null;
+        if (isCurrentResponse(requestEpoch)) {
+          setIsPrintStatusChecking(false);
+        }
       }
     })();
   };
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
     if (
-      isPrintStarting || isPrintCheckFailed || isPrintStatusChecking ||
-      !isPrintModalOpen || isPrintStartInFlightRef.current
+      !isMountedRef.current || isPrintStarting || isPrintCheckFailed || isPrintStatusChecking ||
+      !isPrintModalOpen || printStartInFlightEpochRef.current !== null
     ) {
       return;
     }
 
     void colorMode;
-    isPrintStartInFlightRef.current = true;
+    const requestEpoch = responseEpochRef.current;
+    printStartInFlightEpochRef.current = requestEpoch;
     setIsPrintStarting(true);
     setPrintStartError(null);
 
     void (async () => {
       try {
         await createPrintTask();
+        if (!isCurrentResponse(requestEpoch)) {
+          return;
+        }
+
         setIsPrintModalOpen(false);
         setPrintSuccessPhase("visible");
       } catch {
+        if (!isCurrentResponse(requestEpoch)) {
+          return;
+        }
+
         setPrintStartError("출력 시작에 실패했어요. 잠시 후 다시 시도해 주세요.");
       } finally {
-        isPrintStartInFlightRef.current = false;
-        setIsPrintStarting(false);
+        printStartInFlightEpochRef.current = null;
+        if (isCurrentResponse(requestEpoch)) {
+          setIsPrintStarting(false);
+        }
       }
     })();
   };
@@ -129,6 +171,7 @@ export function useCreatePrintFlow({
   }, []);
 
   const resetPrintFlow = () => {
+    responseEpochRef.current += 1;
     closePrintSetup();
     setIsPrintInProgressModalOpen(false);
     setIsPrintStatusChecking(false);
