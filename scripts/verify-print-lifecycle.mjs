@@ -111,13 +111,20 @@ async function verifyFrontendContracts() {
   }
   assert(printFlowSource.includes("createPrintTask()"), "Create: missing print creation");
   for (const statement of [
-    'setPrintSuccessPhase("visible")',
-    'setPrintSuccessPhase("fading"), 3500',
-    'setPrintSuccessPhase("hidden"), 4000',
+    'setPrintSuccess({ phase: "visible", notice: { startedAt: performance.now() } })',
+    'updatePhase("fading"), Math.max(0, 3500 - elapsed)',
+    'updatePhase("hidden"), Math.max(0, 4000 - elapsed)',
+    'printSuccessPhase: printSuccess?.phase ?? "hidden"',
+    'setPrintSuccess(null)',
   ]) {
     assert(printFlowSource.includes(statement), "Create: missing success overlay contract: " + statement);
   }
   for (const statement of [
+    'printSuccessPhase !== "hidden"',
+    'printSuccessPhase === "fading" ? "opacity-0" : "opacity-100"',
+    "transition-opacity duration-500",
+    'role="status"',
+    'aria-live="polite"',
     "출력이 시작되었습니다.",
     "마이페이지에서 출력 상황을 확인해 주세요!",
     'disabled={!isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}',

@@ -106,6 +106,7 @@ function createHarness(context, initialOptions = {}) {
       },
       clearTimeout: (timer) => timers.delete(timer),
     },
+    performance: { now: () => now },
   });
   function render(nextOptions = {}, { flushPassiveEffects = true } = {}) {
     assert(mounted, "Cannot render an unmounted harness");
@@ -131,6 +132,9 @@ function createHarness(context, initialOptions = {}) {
     render, unmount, queries, submissions, timers, api,
     get stateUpdates() { return stateUpdates; },
     get updatesAfterUnmount() { return updatesAfterUnmount; },
+    elapseWithoutTimers(milliseconds) {
+      now += milliseconds;
+    },
     replayMountEffects() {
       for (const effect of effects.values()) effect.cleanup?.();
       for (const phase of ["layout", "passive"]) {
@@ -141,15 +145,15 @@ function createHarness(context, initialOptions = {}) {
     },
     advance(milliseconds) {
       const target = now + milliseconds;
-      let result = render();
+      let result = mounted ? render() : undefined;
       while (true) {
         const next = [...timers.entries()].filter(([, timer]) => timer.due <= target)
           .sort((first, second) => first[1].due - second[1].due)[0];
         if (!next) break;
-        now = next[1].due;
+        now = Math.max(now, next[1].due);
         timers.delete(next[0]);
         next[1].callback();
-        result = render();
+        if (mounted) result = render();
       }
       now = target;
       return result;
@@ -163,6 +167,17 @@ async function openSettings(harness) {
   await flushResponses();
   const flow = harness.render();
   assert.equal(flow.isPrintModalOpen, true);
+  return flow;
+}
+
+async function completePrint(harness) {
+  (await openSettings(harness)).handlePrintConfirm(settings);
+  harness.submissions.at(-1).resolve(printTask());
+  await flushResponses();
+  const flow = harness.render();
+  assert.equal(flow.printSuccessPhase, "visible");
+  assert.equal(flow.isPrintModalOpen, false);
+  assert.equal(flow.isPrintStarting, false);
   return flow;
 }
 
@@ -343,20 +358,209 @@ test("close callbacks stay stable; closing during submission does not cancel its
   assert.equal(harness.timers.size, 0);
 });
 
-test("legacy timing: fading cleans up the pending hide timer; reset still hides the notice", async (context) => {
+test("success fades at 3500 ms and hides at 4000 ms despite ordinary rerenders", async (context) => {
+  const harness = createHarness(context);
+  await completePrint(harness);
+  assert.equal(harness.timers.size, 2);
+  const initialTimers = [...harness.timers.keys()];
+  harness.render({ isPrinterConnected: false });
+  harness.render({ isPrinterConnected: true });
+  assert.deepEqual([...harness.timers.keys()], initialTimers);
+  assert.equal(harness.advance(3499).printSuccessPhase, "visible");
+  assert.equal(harness.advance(1).printSuccessPhase, "fading");
+  assert.equal(harness.timers.size, 1);
+  const hideTimers = [...harness.timers.keys()];
+  harness.render({ isGenerated: false });
+  harness.render({ isGenerated: true });
+  assert.deepEqual([...harness.timers.keys()], hideTimers);
+  assert.equal(harness.advance(499).printSuccessPhase, "fading");
+  const flow = harness.advance(1);
+  assert.equal(flow.printSuccessPhase, "hidden");
+  assert.equal(harness.timers.size, 0);
+  flow.resetPrintFlow();
+  assertReset(harness.render());
+});
+
+for (const elapsed of [1000, 3750]) {
+  test("reset removes success timers at " + elapsed + " ms without later setters", async (context) => {
+    const harness = createHarness(context);
+    await completePrint(harness);
+    const flow = harness.advance(elapsed);
+    assert.equal(flow.printSuccessPhase, elapsed < 3500 ? "visible" : "fading");
+    const oldCallbacks = [...harness.timers.values()].map((timer) => timer.callback);
+    flow.resetPrintFlow();
+    assertReset(harness.render());
+    assert.equal(harness.timers.size, 0);
+    const updates = harness.stateUpdates;
+    for (const callback of oldCallbacks) callback();
+    assertReset(harness.advance(10000));
+    assert.equal(harness.stateUpdates, updates);
+  });
+
+  test("unmount removes success timers at " + elapsed + " ms without later setters", async (context) => {
+    const harness = createHarness(context);
+    await completePrint(harness);
+    harness.advance(elapsed);
+    const oldCallbacks = [...harness.timers.values()].map((timer) => timer.callback);
+    harness.unmount();
+    assert.equal(harness.timers.size, 0);
+    const updates = harness.stateUpdates;
+    for (const callback of oldCallbacks) callback();
+    harness.advance(10000);
+    assert.equal(harness.stateUpdates, updates);
+    assert.equal(harness.updatesAfterUnmount, 0);
+  });
+
+  test("a new success at " + elapsed + " ms gets its own full notice lifetime", async (context) => {
+    const harness = createHarness(context);
+    await completePrint(harness);
+    harness.advance(elapsed);
+    const oldTimers = [...harness.timers.keys()];
+    const oldCallbacks = [...harness.timers.values()].map((timer) => timer.callback);
+    await completePrint(harness);
+    assert.equal(harness.submissions.length, 2);
+    assert.equal(harness.timers.size, 2);
+    for (const timerId of oldTimers) assert.equal(harness.timers.has(timerId), false);
+    const updates = harness.stateUpdates;
+    for (const callback of oldCallbacks) callback();
+    assert.equal(harness.stateUpdates, updates);
+    assert.equal(harness.advance(4000 - elapsed).printSuccessPhase, "visible");
+    assert.equal(harness.advance(elapsed - 501).printSuccessPhase, "visible");
+    assert.equal(harness.advance(1).printSuccessPhase, "fading");
+    assert.equal(harness.advance(500).printSuccessPhase, "hidden");
+    assert.equal(harness.timers.size, 0);
+  });
+
+  test("effect replay at " + elapsed + " ms preserves notice deadlines and removes old timers", async (context) => {
+    const harness = createHarness(context);
+    await completePrint(harness);
+    harness.advance(elapsed);
+    const oldTimers = [...harness.timers.keys()];
+    const oldCallbacks = [...harness.timers.values()].map((timer) => timer.callback);
+    harness.replayMountEffects();
+    harness.replayMountEffects();
+    harness.render();
+    for (const timerId of oldTimers) assert.equal(harness.timers.has(timerId), false);
+    assert(harness.timers.size > 0 && harness.timers.size <= 2);
+    const updates = harness.stateUpdates;
+    for (const callback of oldCallbacks) callback();
+    assert.equal(harness.stateUpdates, updates);
+    if (elapsed < 3500) {
+      assert.equal(harness.advance(3499 - elapsed).printSuccessPhase, "visible");
+      assert.equal(harness.advance(1).printSuccessPhase, "fading");
+      assert.equal(harness.advance(499).printSuccessPhase, "fading");
+    } else {
+      assert.equal(harness.advance(3999 - elapsed).printSuccessPhase, "fading");
+    }
+    assert.equal(harness.advance(1).printSuccessPhase, "hidden");
+    assert.equal(harness.timers.size, 0);
+    harness.replayMountEffects();
+    assertReset(harness.render());
+    assert.equal(harness.timers.size, 0);
+    await completePrint(harness);
+    assert.equal(harness.advance(4000).printSuccessPhase, "hidden");
+  });
+}
+
+test("a first success effect delayed past 4000 ms does not restart the notice lifetime", async (context) => {
   const harness = createHarness(context);
   (await openSettings(harness)).handlePrintConfirm(settings);
   harness.submissions[0].resolve(printTask());
   await flushResponses();
-  assert.equal(harness.render().printSuccessPhase, "visible");
-  assert.equal(harness.timers.size, 2);
+  assert.equal(harness.render({}, { flushPassiveEffects: false }).printSuccessPhase, "visible");
+  assert.equal(harness.timers.size, 0);
+  harness.elapseWithoutTimers(4500);
+  assert.equal(harness.advance(0).printSuccessPhase, "hidden");
+  assert.equal(harness.timers.size, 0);
+  const updates = harness.stateUpdates;
+  assert.equal(harness.advance(10000).printSuccessPhase, "hidden");
+  assert.equal(harness.stateUpdates, updates);
+});
+
+for (const elapsed of [1000, 3750]) {
+  test("effect replay after the deadline clears a notice last rendered at " + elapsed + " ms", async (context) => {
+    const harness = createHarness(context);
+    await completePrint(harness);
+    assert.equal(harness.advance(elapsed).printSuccessPhase, elapsed < 3500 ? "visible" : "fading");
+    const oldCallbacks = [...harness.timers.values()].map((timer) => timer.callback);
+    harness.elapseWithoutTimers(4500 - elapsed);
+    harness.replayMountEffects();
+    const updates = harness.stateUpdates;
+    for (const callback of oldCallbacks) callback();
+    assert.equal(harness.stateUpdates, updates);
+    assert.equal(harness.advance(0).printSuccessPhase, "hidden");
+    assert.equal(harness.timers.size, 0);
+    await completePrint(harness);
+    assert.equal(harness.advance(3499).printSuccessPhase, "visible");
+    assert.equal(harness.advance(1).printSuccessPhase, "fading");
+    assert.equal(harness.advance(500).printSuccessPhase, "hidden");
+  });
+}
+
+test("overdue callbacks hide the old notice without extending or shortening the next one", async (context) => {
+  const harness = createHarness(context);
+  await completePrint(harness);
+  harness.elapseWithoutTimers(4500);
+  assert.equal(harness.advance(0).printSuccessPhase, "hidden");
+  assert.equal(harness.timers.size, 0);
+  await completePrint(harness);
   assert.equal(harness.advance(3499).printSuccessPhase, "visible");
   assert.equal(harness.advance(1).printSuccessPhase, "fading");
+  assert.equal(harness.advance(499).printSuccessPhase, "fading");
+  assert.equal(harness.advance(1).printSuccessPhase, "hidden");
   assert.equal(harness.timers.size, 0);
-  const flow = harness.advance(500);
-  assert.equal(flow.printSuccessPhase, "fading");
-  flow.resetPrintFlow();
-  assertReset(harness.render());
+});
+
+for (const change of ["reset", "new success"]) {
+  test("old callbacks cannot overwrite " + change + " before passive cleanup", async (context) => {
+    const harness = createHarness(context);
+    await completePrint(harness);
+    harness.advance(1000);
+    const oldCallbacks = [...harness.timers.values()].map((timer) => timer.callback);
+    if (change === "reset") {
+      harness.render().resetPrintFlow();
+    } else {
+      (await openSettings(harness)).handlePrintConfirm(settings);
+      harness.submissions.at(-1).resolve(printTask());
+      await flushResponses();
+    }
+    harness.render({}, { flushPassiveEffects: false });
+    oldCallbacks[0]();
+    const flow = harness.render();
+    if (change === "reset") {
+      assertReset(flow);
+      assert.equal(harness.timers.size, 0);
+    } else {
+      assert.equal(flow.printSuccessPhase, "visible");
+      assert.equal(harness.advance(3499).printSuccessPhase, "visible");
+      assert.equal(harness.advance(1).printSuccessPhase, "fading");
+      assert.equal(harness.advance(500).printSuccessPhase, "hidden");
+    }
+    const updates = harness.stateUpdates;
+    oldCallbacks[1]();
+    assert.equal(harness.stateUpdates, updates);
+  });
+}
+
+test("query and submission errors do not start success timers; retry still succeeds", async (context) => {
+  const harness = createHarness(context);
+  harness.render().handlePrintOpen();
+  harness.queries[0].reject(new Error("query failure"));
+  await flushResponses();
+  assert.equal(harness.render().isPrintCheckFailed, true);
+  assert.equal(harness.timers.size, 0);
+  (await openSettings(harness)).handlePrintConfirm(settings);
+  harness.submissions[0].reject(new Error("submission failure"));
+  await flushResponses();
+  const flow = harness.render();
+  assert.equal(flow.isPrintModalOpen, true);
+  assert.equal(flow.isPrintStarting, false);
+  assert.notEqual(flow.printStartError, null);
+  assert.equal(flow.printSuccessPhase, "hidden");
+  assert.equal(harness.timers.size, 0);
+  assert.equal(harness.advance(10000).printSuccessPhase, "hidden");
+  await completePrint(harness);
+  assert.equal(harness.advance(4000).printSuccessPhase, "hidden");
 });
 
 for (const outcome of ["success", "failure"]) {

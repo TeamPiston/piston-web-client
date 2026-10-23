@@ -10,6 +10,11 @@ interface UseCreatePrintFlowOptions {
   isPrinterConnected: boolean;
 }
 
+interface PrintSuccessState {
+  phase: PrintSuccessPhase;
+  notice: { startedAt: number };
+}
+
 export function useCreatePrintFlow({
   isGenerated,
   isPrintBlocked,
@@ -23,7 +28,8 @@ export function useCreatePrintFlow({
   const [printStartError, setPrintStartError] = useState<string | null>(null);
   const [currentPrintTask, setCurrentPrintTask] = useState<PrintTask | null>(null);
   const [isPrinterConnectionModalOpen, setIsPrinterConnectionModalOpen] = useState(false);
-  const [printSuccessPhase, setPrintSuccessPhase] = useState<PrintSuccessPhase>("hidden");
+  const [printSuccess, setPrintSuccess] = useState<PrintSuccessState | null>(null);
+  const successNotice = printSuccess?.notice;
   const printCheckInFlightEpochRef = useRef<number | null>(null);
   const printStartInFlightEpochRef = useRef<number | null>(null);
   const responseEpochRef = useRef(0);
@@ -46,18 +52,34 @@ export function useCreatePrintFlow({
   }, []);
 
   useEffect(() => {
-    if (printSuccessPhase !== "visible") {
+    if (!successNotice) {
       return;
     }
 
-    const fadeTimeoutId = window.setTimeout(() => setPrintSuccessPhase("fading"), 3500);
-    const hideTimeoutId = window.setTimeout(() => setPrintSuccessPhase("hidden"), 4000);
+    let active = true;
+    const updatePhase = (phase: PrintSuccessPhase) => {
+      if (!active) {
+        return;
+      }
+
+      setPrintSuccess((current) => {
+        if (current?.notice !== successNotice) {
+          return current;
+        }
+
+        return phase === "hidden" ? null : { ...current, phase };
+      });
+    };
+    const elapsed = performance.now() - successNotice.startedAt;
+    const fadeTimeoutId = window.setTimeout(() => updatePhase("fading"), Math.max(0, 3500 - elapsed));
+    const hideTimeoutId = window.setTimeout(() => updatePhase("hidden"), Math.max(0, 4000 - elapsed));
 
     return () => {
+      active = false;
       window.clearTimeout(fadeTimeoutId);
       window.clearTimeout(hideTimeoutId);
     };
-  }, [printSuccessPhase]);
+  }, [successNotice]);
 
   const isCurrentResponse = (requestEpoch: number) => (
     isMountedRef.current && responseEpochRef.current === requestEpoch
@@ -142,7 +164,7 @@ export function useCreatePrintFlow({
         }
 
         setIsPrintModalOpen(false);
-        setPrintSuccessPhase("visible");
+        setPrintSuccess({ phase: "visible", notice: { startedAt: performance.now() } });
       } catch {
         if (!isCurrentResponse(requestEpoch)) {
           return;
@@ -184,7 +206,7 @@ export function useCreatePrintFlow({
     setIsPrintStarting(false);
     setPrintStartError(null);
     setCurrentPrintTask(null);
-    setPrintSuccessPhase("hidden");
+    setPrintSuccess(null);
   };
 
   return {
@@ -196,7 +218,7 @@ export function useCreatePrintFlow({
     printStartError,
     currentPrintTask,
     isPrinterConnectionModalOpen,
-    printSuccessPhase,
+    printSuccessPhase: printSuccess?.phase ?? "hidden",
     handlePrintOpen,
     handlePrintConfirm,
     handlePrintModalClose,

@@ -54,11 +54,30 @@ already pending closure. A passive effect alone can leave a post-commit gap.
 Connection changes do not cancel already submitted prints. The Provider, Mock
 connection policy and API contract are unchanged; this is not a physical printer probe.
 
-The `legacy timing` test characterizes an existing limitation, not a desired safety
-guarantee. A rerender at the 3500 ms fading transition
-cleans up the scheduled 4000 ms hide timer, leaving the phase at `fading` until a
-reset or another transition. This timer policy is unchanged and needs a separately
-scoped behavior change, not silent test weakening.
+Success notices fade 3500 ms after success and hide at 4000 ms, preserving the UI's
+500 ms opacity transition. Each success creates a new notice identity and monotonic
+start time within the notice state. Its effect owns two local timers and depends on
+that identity, not the visible/fading phase. Ordinary rerenders and fading therefore
+do not cancel the pending hide timer. A subsequent success replaces the notice even
+while it is visible; reset removes it. Cleanup cancels both timers and deactivates
+their callbacks. A functional state update checks notice identity as well, so an old
+callback cannot overwrite a reset or newer notice before passive cleanup runs.
+Effect replay cancels old timers and schedules only the remaining delays from the
+same start time, rather than restarting a full lifetime. Timer IDs stay local to the
+effect; this lifecycle does not reuse or change API response epochs or request locks.
+
+The former `legacy timing` case now requires visible -> fading -> hidden. A virtual
+monotonic clock advances timer callbacks and rerenders after each callback. Tests
+check both timing boundaries, unchanged timer IDs on ordinary rerenders, reset and
+unmount in either phase, repeated success, effect replay, errors and retry. Captured
+callbacks are also invoked after cleanup or before deferred passive cleanup to test
+defensive ownership checks; this deliberately adversarial invocation is not a claim
+that browsers execute every cancelled timeout. These tests do not measure real CSS
+animation or browser timer throttling. Actual timers may run later than their deadline.
+The clock can also advance without dispatching timers. Delayed first setup, effect
+replay after 4000 ms and overdue callbacks must finish without restarting a lifetime;
+a subsequent notice must still receive its own full lifetime. Overdue callbacks run
+at the current virtual time, never by moving the clock backwards to their due time.
 
 The harness does not run a browser, React's concurrent scheduler or native modal
 focus/keyboard behavior. State cells update immediately, while handlers retain
