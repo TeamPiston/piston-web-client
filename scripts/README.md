@@ -45,18 +45,32 @@ response. This is UI response invalidation, not backend cancellation: a submitte
 print request may still create a server-side job after reset or navigation.
 No cancel API or transport abort is added.
 
-Tests named `legacy` characterize existing limitations, not desired safety
-guarantees: pending checks capture the old connection state.
-A rerender at the 3500 ms fading transition also
+Pending queries read the latest committed frontend connection flag from a ref
+after checking response validity and active-job precedence. A layout effect updates
+only this ref when the input changes, before passive effects; it does not advance
+the response epoch, reset UI or release request locks. Writing the ref during render
+would expose uncommitted values, while replacing a callback would not update an
+already pending closure. A passive effect alone can leave a post-commit gap.
+Connection changes do not cancel already submitted prints. The Provider, Mock
+connection policy and API contract are unchanged; this is not a physical printer probe.
+
+The `legacy timing` test characterizes an existing limitation, not a desired safety
+guarantee. A rerender at the 3500 ms fading transition
 cleans up the scheduled 4000 ms hide timer, leaving the phase at `fading` until a
-reset or another transition. The existing connection and timer policies are unchanged.
-These cases need a separately scoped behavior change, not silent test weakening.
+reset or another transition. This timer policy is unchanged and needs a separately
+scoped behavior change, not silent test weakening.
 
 The harness does not run a browser, React's concurrent scheduler or native modal
 focus/keyboard behavior. State cells update immediately, while handlers retain
 their render's snapshot until the test explicitly rerenders; refs retain the
 same mutable object across renders. This is not a simulation of React's full
-batching or StrictMode behavior. Pending-request effect replay tests exercise
+batching or StrictMode behavior. `render(nextOptions)` merges new hook inputs and
+executes the actual hook, then runs layout effects before passive effects. The
+connection tests can defer the current commit's passive effects until the next render
+and resolve a query in that gap. They cover disconnect, reconnect, active-job/error
+precedence, retry, duplicate calls and connection changes combined with reset/unmount.
+Both Create harnesses support layout effects; attachment assertions remain unchanged.
+Pending-request effect replay tests exercise
 invalidation, retained locks and retry on the same instance without an extra reset;
 fresh-mount tests also replay setup/cleanup before issuing normal requests.
 They do not prove browser event ordering or React's real lifecycle scheduling.

@@ -28,6 +28,24 @@ function createHarness(context, initialOptions = {}) {
   let mounted = true;
   let stateUpdates = 0;
   let updatesAfterUnmount = 0;
+  function registerEffect(setup, dependencies, phase) {
+    const slot = cursor++;
+    const previous = effects.get(slot);
+    if (!previous || dependencies.length !== previous.dependencies.length ||
+        !dependencies.every((value, index) => Object.is(value, previous.dependencies[index]))) {
+      effects.set(slot, { setup, dependencies, phase, cleanup: previous?.cleanup });
+      pendingEffects.add(slot);
+    }
+  }
+  function flushEffects(phase) {
+    for (const slot of pendingEffects) {
+      const effect = effects.get(slot);
+      if (effect.phase !== phase) continue;
+      effect.cleanup?.();
+      effect.cleanup = effect.setup();
+      pendingEffects.delete(slot);
+    }
+  }
   const react = {
     useRef(initial) {
       const slot = cursor++;
@@ -60,13 +78,10 @@ function createHarness(context, initialOptions = {}) {
       return slots[slot].callback;
     },
     useEffect(setup, dependencies) {
-      const slot = cursor++;
-      const previous = effects.get(slot);
-      if (!previous || dependencies.length !== previous.dependencies.length ||
-          !dependencies.every((value, index) => Object.is(value, previous.dependencies[index]))) {
-        effects.set(slot, { setup, dependencies, cleanup: previous?.cleanup });
-        pendingEffects.add(slot);
-      }
+      registerEffect(setup, dependencies, "passive");
+    },
+    useLayoutEffect(setup, dependencies) {
+      registerEffect(setup, dependencies, "layout");
     },
   };
   const enqueue = (requests, args) => new Promise((resolve, reject) => {
@@ -92,23 +107,21 @@ function createHarness(context, initialOptions = {}) {
       clearTimeout: (timer) => timers.delete(timer),
     },
   });
-  function render(nextOptions = {}) {
+  function render(nextOptions = {}, { flushPassiveEffects = true } = {}) {
     assert(mounted, "Cannot render an unmounted harness");
+    flushEffects("passive");
     options = { ...options, ...nextOptions };
     cursor = 0;
     const result = exports.useCreatePrintFlow(options);
-    for (const slot of pendingEffects) {
-      const effect = effects.get(slot);
-      effect.cleanup?.();
-      effect.cleanup = effect.setup();
-    }
-    pendingEffects.clear();
+    flushEffects("layout");
+    if (flushPassiveEffects) flushEffects("passive");
     return result;
   }
   function unmount() {
     mounted = false;
     for (const effect of effects.values()) effect.cleanup?.();
     effects.clear();
+    pendingEffects.clear();
   }
   context.after(() => {
     unmount();
@@ -119,9 +132,11 @@ function createHarness(context, initialOptions = {}) {
     get stateUpdates() { return stateUpdates; },
     get updatesAfterUnmount() { return updatesAfterUnmount; },
     replayMountEffects() {
-      for (const effect of effects.values()) {
-        effect.cleanup?.();
-        effect.cleanup = effect.setup();
+      for (const effect of effects.values()) effect.cleanup?.();
+      for (const phase of ["layout", "passive"]) {
+        for (const effect of effects.values()) {
+          if (effect.phase === phase) effect.cleanup = effect.setup();
+        }
       }
     },
     advance(milliseconds) {
@@ -534,15 +549,132 @@ for (const firstCompleted of ["query", "submit"]) {
   });
 }
 
-test("legacy closure: a pending check uses connection state from its initiating render", async (context) => {
+for (const connections of [[true, true], [true, false], [false, true], [true, false, true], [false, false]]) {
+  test("pending checks use the latest committed connection before passive effects: " + connections.join(" -> "), async (context) => {
+    const harness = createHarness(context, { isPrinterConnected: connections[0] });
+    const initial = harness.render();
+    initial.handlePrintOpen();
+    initial.handlePrintOpen();
+    const updatesBeforeConnection = harness.stateUpdates;
+    for (const isPrinterConnected of connections.slice(1)) {
+      const pending = harness.render({ isPrinterConnected }, { flushPassiveEffects: false });
+      assert.equal(pending.isPrintStatusChecking, true);
+      pending.handlePrintOpen();
+    }
+    assert.equal(harness.stateUpdates, updatesBeforeConnection, "Connection updates must not reset loading or invalidate the request");
+    assert.equal(harness.queries.length, 1);
+    const task = printTask("COMPLETED");
+    harness.queries[0].resolve(task);
+    await flushResponses();
+    const connected = connections.at(-1);
+    let flow = harness.render();
+    assert.equal(flow.currentPrintTask, task);
+    assert.equal(flow.isPrintModalOpen, connected);
+    assert.equal(flow.isPrinterConnectionModalOpen, !connected);
+    assert.equal(flow.isPrintInProgressModalOpen, false);
+    assert.equal(flow.isPrintStatusChecking, false);
+    assert.equal(flow.isPrintCheckFailed, false);
+    assert.equal(harness.submissions.length, 0);
+    if (!connected) {
+      flow.handlePrintConfirm(settings);
+      assert.equal(harness.submissions.length, 0);
+    }
+    flow = harness.render({ isPrinterConnected: !connected }, { flushPassiveEffects: false });
+    flow.handlePrintOpen();
+    flow.handlePrintOpen();
+    assert.equal(harness.queries.length, 2, "The completed query must unlock a fresh check using the changed connection");
+    harness.queries[1].resolve(null);
+    await flushResponses();
+    flow = harness.render();
+    assert.equal(flow.currentPrintTask, null);
+    assert.equal(flow.isPrintModalOpen, !connected);
+    assert.equal(flow.isPrinterConnectionModalOpen, connected);
+    assert.equal(flow.isPrintStatusChecking, false);
+  });
+}
+
+for (const initiallyConnected of [true, false]) {
+  test("active jobs still take precedence after a connection change from " + initiallyConnected, async (context) => {
+    const harness = createHarness(context, { isPrinterConnected: initiallyConnected });
+    harness.render().handlePrintOpen();
+    harness.render({ isPrinterConnected: !initiallyConnected }, { flushPassiveEffects: false });
+    const task = printTask();
+    harness.queries[0].resolve(task);
+    await flushResponses();
+    const flow = harness.render();
+    assert.equal(flow.currentPrintTask, task);
+    assert.equal(flow.isPrintInProgressModalOpen, true);
+    assert.equal(flow.isPrintModalOpen, false);
+    assert.equal(flow.isPrinterConnectionModalOpen, false);
+    assert.equal(flow.isPrintStatusChecking, false);
+    flow.handlePrintConfirm(settings);
+    assert.equal(harness.submissions.length, 0);
+  });
+
+  test("query failure remains an error after a connection change from " + initiallyConnected, async (context) => {
+    const harness = createHarness(context, { isPrinterConnected: initiallyConnected });
+    harness.render().handlePrintOpen();
+    harness.render({ isPrinterConnected: !initiallyConnected }, { flushPassiveEffects: false });
+    harness.queries[0].reject(new Error("query failed"));
+    await flushResponses();
+    const flow = harness.render();
+    assert.equal(flow.isPrintCheckFailed, true);
+    assert.equal(flow.isPrintStatusChecking, false);
+    assert.equal(flow.isPrintModalOpen, false);
+    assert.equal(flow.isPrinterConnectionModalOpen, false);
+    assert.equal(flow.isPrintInProgressModalOpen, false);
+    assert.equal(flow.currentPrintTask, null);
+    flow.handlePrintConfirm(settings);
+    assert.equal(harness.submissions.length, 0);
+    harness.render({ isPrinterConnected: true });
+    assert.equal((await openSettings(harness)).isPrintCheckFailed, false);
+    assert.equal(harness.queries.length, 2);
+  });
+}
+
+for (const lifecycle of ["reset", "unmount"]) {
+  for (const outcome of ["success", "failure"]) {
+    test("connection changes cannot revive a " + lifecycle + " query " + outcome, async (context) => {
+      const harness = createHarness(context);
+      harness.render().handlePrintOpen();
+      let flow = harness.render({ isPrinterConnected: false });
+      if (lifecycle === "reset") {
+        flow.resetPrintFlow();
+        flow = harness.render({ isPrinterConnected: true });
+        assertReset(flow);
+      } else {
+        harness.unmount();
+      }
+      flow.handlePrintOpen();
+      assert.equal(harness.queries.length, 1);
+      const updatesBeforeResponse = harness.stateUpdates;
+      if (outcome === "success") harness.queries[0].resolve(null);
+      else harness.queries[0].reject(new Error("late query failure"));
+      await flushResponses();
+      assert.equal(harness.stateUpdates, updatesBeforeResponse);
+      assert.equal(harness.updatesAfterUnmount, 0);
+      if (lifecycle === "reset") {
+        assertReset(harness.render());
+        await openSettings(harness);
+        assert.equal(harness.queries.length, 2);
+      }
+    });
+  }
+}
+
+test("connection changes leave an already submitted request valid", async (context) => {
   const harness = createHarness(context);
-  harness.render().handlePrintOpen();
-  harness.render({ isPrinterConnected: false });
-  harness.queries[0].resolve(null);
+  (await openSettings(harness)).handlePrintConfirm(settings);
+  const pending = harness.render({ isPrinterConnected: false });
+  assert.equal(pending.isPrintStarting, true);
+  pending.handlePrintConfirm(settings);
+  assert.equal(harness.submissions.length, 1);
+  harness.submissions[0].resolve(printTask());
   await flushResponses();
   const flow = harness.render();
-  assert.equal(flow.isPrintModalOpen, true);
-  assert.equal(flow.isPrinterConnectionModalOpen, false);
+  assert.equal(flow.isPrintStarting, false);
+  assert.equal(flow.isPrintModalOpen, false);
+  assert.equal(flow.printSuccessPhase, "visible");
 });
 
 for (const operation of ["query", "submit"]) {

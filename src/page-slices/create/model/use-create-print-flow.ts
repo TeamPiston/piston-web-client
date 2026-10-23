@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
 import type { PrintSuccessPhase } from "./types";
 
@@ -28,6 +28,11 @@ export function useCreatePrintFlow({
   const printStartInFlightEpochRef = useRef<number | null>(null);
   const responseEpochRef = useRef(0);
   const isMountedRef = useRef(false);
+  const isPrinterConnectedRef = useRef(isPrinterConnected);
+
+  useLayoutEffect(() => {
+    isPrinterConnectedRef.current = isPrinterConnected;
+  }, [isPrinterConnected]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -87,7 +92,7 @@ export function useCreatePrintFlow({
           return;
         }
 
-        if (!isPrinterConnected) {
+        if (!isPrinterConnectedRef.current) {
           setPrintStartError(null);
           setIsPrintModalOpen(false);
           setIsPrinterConnectionModalOpen(true);

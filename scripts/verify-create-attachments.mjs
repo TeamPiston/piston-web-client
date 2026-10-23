@@ -38,6 +38,16 @@ function createHarness(context, { workspace = false, desktop = false } = {}) {
   let cursor = 0;
   let rendering = false;
   let nextTimerId = 0;
+  function registerEffect(setup, dependencies, phase) {
+    const slot = cursor++;
+    const previous = effects.get(slot);
+    if (!previous || !dependencies || !previous.dependencies ||
+        dependencies.length !== previous.dependencies.length ||
+        !dependencies.every((dependency, index) => Object.is(dependency, previous.dependencies[index]))) {
+      effects.set(slot, { setup, dependencies, phase, cleanup: previous?.cleanup });
+      pendingEffects.add(slot);
+    }
+  }
   const react = {
     useState(initial) {
       const slot = cursor++;
@@ -56,14 +66,10 @@ function createHarness(context, { workspace = false, desktop = false } = {}) {
       return slots[slot];
     },
     useEffect(setup, dependencies) {
-      const slot = cursor++;
-      const previous = effects.get(slot);
-      if (!previous || !dependencies || !previous.dependencies ||
-          dependencies.length !== previous.dependencies.length ||
-          !dependencies.every((dependency, index) => Object.is(dependency, previous.dependencies[index]))) {
-        effects.set(slot, { setup, dependencies, cleanup: previous?.cleanup });
-        pendingEffects.add(slot);
-      }
+      registerEffect(setup, dependencies, "passive");
+    },
+    useLayoutEffect(setup, dependencies) {
+      registerEffect(setup, dependencies, "layout");
     },
     useCallback: (callback) => callback,
     useSyncExternalStore: () => desktop,
@@ -150,18 +156,23 @@ function createHarness(context, { workspace = false, desktop = false } = {}) {
       } finally {
         rendering = false;
       }
-      for (const slot of pendingEffects) {
-        const effect = effects.get(slot);
-        effect.cleanup?.();
-        effect.cleanup = effect.setup();
+      for (const phase of ["layout", "passive"]) {
+        for (const slot of pendingEffects) {
+          const effect = effects.get(slot);
+          if (effect.phase !== phase) continue;
+          effect.cleanup?.();
+          effect.cleanup = effect.setup();
+        }
       }
       pendingEffects.clear();
       return result;
     },
     replayMountEffects() {
-      for (const effect of effects.values()) {
-        effect.cleanup?.();
-        effect.cleanup = effect.setup();
+      for (const effect of effects.values()) effect.cleanup?.();
+      for (const phase of ["layout", "passive"]) {
+        for (const effect of effects.values()) {
+          if (effect.phase === phase) effect.cleanup = effect.setup();
+        }
       }
     },
   };
