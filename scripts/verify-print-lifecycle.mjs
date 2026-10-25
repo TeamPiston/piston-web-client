@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { createContext, Script } from "node:vm";
 import ts from "typescript";
+import { verifyGenerationPrintIntegration } from "./lib/create-generation-harness.mjs";
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Set(process.argv.slice(2));
@@ -103,12 +104,13 @@ async function verifyFrontendContracts() {
   collectCallbacks(createAst);
   for (const [callback, call] of [
     ["handleNewChat", "resetPrintFlow()"],
-    ["appendMockResponse", "closePrintSetup()"],
     ["handleOpenPrinterManagement", "closePrintSetup()"],
     ["handleOpenPrinterManagement", 'router.push("/mypage?tab=printer")'],
   ]) {
     assert(callbacks.get(callback)?.includes(call), "Create: missing " + callback + " integration: " + call);
   }
+  await verifyGenerationPrintIntegration();
+  console.log("PASS Create generation acceptance, print setup closure and eligibility (VM execution)");
   assert(printFlowSource.includes("createPrintTask()"), "Create: missing print creation");
   for (const statement of [
     'setPrintSuccess({ phase: "visible", notice: { startedAt: performance.now() } })',

@@ -15,25 +15,15 @@ import { usePrinterQuery } from "@/entities/printer";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import { Header } from "@/widgets/header";
 import {
-  COPYRIGHT_KEYWORDS,
   CREATE_ESTIMATED_PRINT_TIME,
   CREATE_FILAMENT_COLORS,
   CREATE_FILAMENT_USAGE,
   INITIAL_CHAT_HISTORIES,
-  MOCK_COPYRIGHT_WARNING,
-  MOCK_CORRECTED_VERSION,
-  MOCK_PRINT_WARNING,
-  MOCK_VERSIONS,
 } from "../model/mock-data";
-import { createPrintCorrection, resolveModelParams } from "../model/model-utils";
 import { useCreateAttachments } from "../model/use-create-attachments";
+import { useCreateGeneration } from "../model/use-create-generation";
 import { useCreatePrintFlow } from "../model/use-create-print-flow";
-import type {
-  ChatHistory,
-  ChatMessage,
-  DesignVersion,
-  ResolvedArtworkModelParams,
-} from "../model/types";
+import type { ChatHistory } from "../model/types";
 import { ChatPanel } from "./components/chat-panel";
 import { HistorySidebar } from "./components/history-sidebar";
 import { PreviewPanel } from "./components/preview-panel";
@@ -80,8 +70,19 @@ export default function CreateWorkspace() {
   const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
   const [chatHistories, setChatHistories] = useState(INITIAL_CHAT_HISTORIES);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isGenerated, setIsGenerated] = useState(false);
-  const [isPrintBlocked, setIsPrintBlocked] = useState(false);
+  const {
+    messages,
+    isLoading,
+    isGenerated,
+    isPrintBlocked,
+    versions,
+    selectedVersionId,
+    currentModelParams,
+    startGeneration,
+    handleAutoFix,
+    handleVersionSelect,
+    resetGeneration,
+  } = useCreateGeneration();
   const {
     isPrintModalOpen,
     isPrintInProgressModalOpen,
@@ -100,20 +101,10 @@ export default function CreateWorkspace() {
     closePrintSetup,
     resetPrintFlow,
   } = useCreatePrintFlow({ isGenerated, isPrintBlocked, isPrinterConnected });
-  const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [selectedVersionId, setSelectedVersionId] = useState("v3");
-  const [versions, setVersions] = useState<DesignVersion[]>([]);
-  const [currentModelParams, setCurrentModelParams] = useState<ResolvedArtworkModelParams>(
-    () => resolveModelParams(MOCK_VERSIONS[2]),
-  );
   const [cameraDistance, setCameraDistance] = useState(42);
   const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
   const historyTitleInputRef = useRef<HTMLInputElement>(null);
-  const nextVersionNumberRef = useRef(1);
-  const loadingTimeoutRef = useRef<number | null>(null);
   const isCancelingHistoryEditRef = useRef(false);
-  const autoFixedMessageIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (editingHistoryId) {
@@ -133,92 +124,8 @@ export default function CreateWorkspace() {
     textarea.style.overflowY = textarea.scrollHeight > 200 ? "auto" : "hidden";
   }, [draft]);
 
-  useEffect(() => {
-    return () => {
-      if (loadingTimeoutRef.current !== null) {
-        window.clearTimeout(loadingTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const appendVersion = (version: Omit<DesignVersion, "id" | "label">) => {
-    const versionId = `v${nextVersionNumberRef.current++}`;
-    const nextVersion: DesignVersion = {
-      ...version,
-      id: versionId,
-      label: versionId,
-    };
-
-    setVersions((currentVersions) => [...currentVersions, nextVersion]);
-    setSelectedVersionId(versionId);
-    setCurrentModelParams(resolveModelParams(nextVersion));
-    setIsGenerated(true);
-  };
-
-  const appendMockResponse = (userContent: string, prompt: string) => {
-    const normalizedPrompt = prompt.toLowerCase();
-    const hasCopyrightIssue = COPYRIGHT_KEYWORDS.some((keyword) =>
-      normalizedPrompt.includes(keyword),
-    );
-    const hasPrintIssue = !hasCopyrightIssue && ["얇게", "최대한 얇게", "얇은"].some(
-      (keyword) => prompt.includes(keyword),
-    );
-    const assistantMessageId = crypto.randomUUID();
-    const assistantMessage: ChatMessage = hasCopyrightIssue
-      ? {
-          id: assistantMessageId,
-          role: "assistant",
-          content: MOCK_COPYRIGHT_WARNING.title,
-          copyrightWarning: MOCK_COPYRIGHT_WARNING,
-          isCopyrightIssue: true,
-        }
-      : hasPrintIssue
-        ? {
-            id: assistantMessageId,
-            role: "assistant",
-            content: MOCK_PRINT_WARNING.title,
-            hasPrintIssue: true,
-            printWarning: MOCK_PRINT_WARNING,
-          }
-        : {
-            id: assistantMessageId,
-            role: "assistant",
-            content:
-              "육각형 연필꽂이를 생성했어요. 높이와 바닥 지름을 조정하면서 원하는 형태로 다듬어 보세요.",
-          };
-
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: userContent,
-    };
-    setMessages((currentMessages) => [...currentMessages, userMessage]);
-    setIsLoading(true);
-    closePrintSetup();
-
-    loadingTimeoutRef.current = window.setTimeout(() => {
-      loadingTimeoutRef.current = null;
-      setIsLoading(false);
-      setMessages((currentMessages) => [...currentMessages, assistantMessage]);
-
-      if (hasCopyrightIssue) {
-        return;
-      }
-
-      const generatedVersions = nextVersionNumberRef.current === 1
-        ? MOCK_VERSIONS
-        : [MOCK_VERSIONS[2]];
-      generatedVersions.forEach(appendVersion);
-      setIsPrintBlocked(hasPrintIssue);
-    }, 1800);
-  };
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    if (isLoading) {
-      return;
-    }
 
     const prompt = draft.trim();
     if (!prompt && attachedImages.length === 0) {
@@ -230,61 +137,19 @@ export default function CreateWorkspace() {
       ? `${prompt || "참고 이미지를 바탕으로 디자인을 만들어 주세요."}\n참고 이미지: ${imageNames}`
       : prompt;
 
-    appendMockResponse(userContent, prompt);
-    setDraft("");
-    resetAttachments();
-  };
-
-  const handleAutoFix = (messageId: string) => {
-    const warningMessage = [...messages].reverse().find((message) => message.hasPrintIssue);
-    if (
-      isLoading ||
-      !isPrintBlocked ||
-      warningMessage?.id !== messageId ||
-      !warningMessage.printWarning ||
-      warningMessage.isPrintIssueResolved ||
-      autoFixedMessageIdsRef.current.has(messageId)
-    ) {
+    if (!startGeneration({ prompt, userContent })) {
       return;
     }
 
-    // Block repeat events before React commits the disabled button state.
-    autoFixedMessageIdsRef.current.add(messageId);
-    const correction = createPrintCorrection(warningMessage.printWarning);
-    const correctionMessages: ChatMessage[] = [
-      { id: crypto.randomUUID(), role: "user", content: "규격에 맞게 자동 수정" },
-      {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: correction.title,
-        printCorrection: correction,
-      },
-    ];
-
-    setMessages((currentMessages) => [
-      ...currentMessages.map((message) =>
-        message.id === messageId ? { ...message, isPrintIssueResolved: true } : message,
-      ),
-      ...correctionMessages,
-    ]);
-    setIsPrintBlocked(false);
-    appendVersion(MOCK_CORRECTED_VERSION);
+    closePrintSetup();
+    setDraft("");
+    resetAttachments();
   };
 
   const handleOpenPrinterManagement = useCallback(() => {
     closePrintSetup();
     router.push("/mypage?tab=printer");
   }, [closePrintSetup, router]);
-
-  const handleVersionSelect = (versionId: string) => {
-    const nextVersion = versions.find((version) => version.id === versionId);
-    if (!nextVersion) {
-      return;
-    }
-
-    setSelectedVersionId(nextVersion.id);
-    setCurrentModelParams(resolveModelParams(nextVersion));
-  };
 
   const handleDraftChange = (value: string) => {
     setDraft(value);
@@ -311,24 +176,11 @@ export default function CreateWorkspace() {
   };
 
   const handleNewChat = () => {
-    if (loadingTimeoutRef.current !== null) {
-      window.clearTimeout(loadingTimeoutRef.current);
-      loadingTimeoutRef.current = null;
-    }
-
+    resetGeneration();
     setDraft("");
     setEditingHistoryId(null);
-    setIsGenerated(false);
-    setIsPrintBlocked(false);
     resetPrintFlow();
-    setIsLoading(false);
-    setMessages([]);
-    autoFixedMessageIdsRef.current.clear();
     resetAttachments();
-    setSelectedVersionId("v3");
-    setVersions([]);
-    nextVersionNumberRef.current = 1;
-    setCurrentModelParams(resolveModelParams(MOCK_VERSIONS[2]));
     setCameraDistance(42);
     setIsHistoryOpen(false);
   };

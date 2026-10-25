@@ -1,5 +1,47 @@
 # Print Lifecycle Verification
 
+## Create Generation Regression Checks
+
+Run `npm run test:create-generation` for the actual generation hook and its
+CreateWorkspace wiring. The Workspace scenarios were first run against the
+pre-extraction implementation, then retained after extraction. They cover:
+
+- Immediate user messages, ID allocation/order, 1800 ms loading, the first three
+  versions, subsequent single versions and the selected preview model.
+- Copyright keyword precedence and preservation of existing results, selection
+  and print blocking; print warnings still generate versions and block printing.
+- Latest-warning auto-fix, resolved/old/missing warning rejection, same-render
+  duplicate auto-fix prevention, correction messages and shared version numbering.
+- Valid/invalid version selection, reset during generation, fresh numbering and
+  unmount timer cleanup. Reset checks cover both desktop and mobile UI branches.
+- Image-only and text/image messages, filename preservation, input/attachment
+  cleanup only after acceptance, and the IME/Shift+Enter/Enter handler branches.
+- Real generation, attachment and print hooks composed by Workspace: accepted
+  starts close print settings or disconnected guidance; empty/loading rejections
+  preserve them. Generated/blocked/reset results reach print eligibility checks.
+- Direct `startGeneration({ prompt, userContent })` acceptance booleans: `true`
+  means the mock request started, not that generation completed successfully.
+
+`scripts/lib/create-generation-harness.mjs` uses the existing VM testing approach:
+actual TS modules, simulated hook cells/effects, deterministic IDs, a virtual
+clock, deferred print API promises, Object URLs and placeholder child components.
+State updaters are evaluated twice to detect side effects; this is not actual
+React StrictMode, batching, concurrent scheduling or browser rendering.
+`test:print` also executes the shared generation/print integration assertions,
+replacing the former check for `closePrintSetup()` inside `appendMockResponse`.
+The other print source and API/Mock assertions remain in place.
+
+Known limitation intentionally unchanged: generation admission still uses the
+render's `isLoading` snapshot, with one timeout ref and no response epoch. This
+suite does not require same-render duplicate generation or stale callback mutation
+as expected behavior. Their prevention is a separate bug-fix task. Auto-fix's
+existing synchronous duplicate guard is covered. Reset/unmount tests here use
+one pending generation, not a new cancellation or response-invalidation policy.
+
+Actual IME input, native file/clipboard events, responsive layout, modal focus,
+Canvas lifetime/rotation/zoom and fullscreen behavior need browser verification.
+No new dependency, server, AI API, upload or printer hardware is used.
+
 ## Create Attachment Regression Checks
 
 Run `npm run test:create-attachments` for image filtering, the two-image limit,
@@ -105,7 +147,8 @@ for compatibility; this is a module/contract check, not a browser E2E test.
 The default command runs offline and starts no server. It transpiles and runs the
 actual print entity, shared API client, and mock store in isolated VM contexts.
 It ignores the host's mock/API environment settings. `--mock` is an alias for
-this default mode; `--contract-only` runs only the frontend source checks.
+this default mode; `--contract-only` runs the frontend source checks and the
+executed generation/print integration check, without API adapter/Mock lifecycle checks.
 
 Covered behavior:
 

@@ -12,6 +12,7 @@ const hookPath = "src/page-slices/create/model/use-create-attachments.ts";
 const workspacePath = "src/page-slices/create/ui/create-workspace.tsx";
 const sources = new Map([
   hookPath,
+  "src/page-slices/create/model/use-create-generation.ts",
   "src/page-slices/create/model/use-create-print-flow.ts",
   workspacePath,
   "src/page-slices/create/model/model-utils.ts",
