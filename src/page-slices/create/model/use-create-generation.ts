@@ -16,6 +16,10 @@ interface GenerationRequest {
   userContent: string;
 }
 
+interface GenerationTask {
+  timeoutId: number | null;
+}
+
 export function useCreateGeneration() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [isPrintBlocked, setIsPrintBlocked] = useState(false);
@@ -27,13 +31,22 @@ export function useCreateGeneration() {
     () => resolveModelParams(MOCK_VERSIONS[2]),
   );
   const nextVersionNumberRef = useRef(1);
-  const loadingTimeoutRef = useRef<number | null>(null);
+  const activeGenerationRef = useRef<GenerationTask | null>(null);
+  const isMountedRef = useRef(false);
   const autoFixedMessageIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
+    isMountedRef.current = true;
+    // Cleanup cancels local work; effect replay must also restore the idle UI.
+    setIsLoading(activeGenerationRef.current !== null);
+
     return () => {
-      if (loadingTimeoutRef.current !== null) {
-        window.clearTimeout(loadingTimeoutRef.current);
+      isMountedRef.current = false;
+      const task = activeGenerationRef.current;
+      activeGenerationRef.current = null;
+      if (task !== null && task.timeoutId !== null) {
+        window.clearTimeout(task.timeoutId);
+        task.timeoutId = null;
       }
     };
   }, []);
@@ -53,7 +66,7 @@ export function useCreateGeneration() {
   };
 
   const startGeneration = ({ prompt, userContent }: GenerationRequest): boolean => {
-    if (isLoading || !userContent.trim()) {
+    if (!isMountedRef.current || activeGenerationRef.current !== null || !userContent.trim()) {
       return false;
     }
 
@@ -93,25 +106,39 @@ export function useCreateGeneration() {
       role: "user",
       content: userContent,
     };
+    // Finish synchronous preparation before acquiring the task's lock and timer.
+    const task: GenerationTask = { timeoutId: null };
+    activeGenerationRef.current = task;
+    try {
+      task.timeoutId = window.setTimeout(() => {
+        // A cancelled or completed callback cannot touch a newer task or its state.
+        if (!isMountedRef.current || activeGenerationRef.current !== task) {
+          return;
+        }
+
+        activeGenerationRef.current = null;
+        task.timeoutId = null;
+        setIsLoading(false);
+        setMessages((currentMessages) => [...currentMessages, assistantMessage]);
+
+        if (hasCopyrightIssue) {
+          return;
+        }
+
+        const generatedVersions = nextVersionNumberRef.current === 1
+          ? MOCK_VERSIONS
+          : [MOCK_VERSIONS[2]];
+        generatedVersions.forEach(appendVersion);
+        setIsPrintBlocked(hasPrintIssue);
+      }, 1800);
+    } catch (error) {
+      activeGenerationRef.current = null;
+      throw error;
+    }
+
+    // A failed start must leave chat, loading and Workspace cleanup untouched.
     setMessages((currentMessages) => [...currentMessages, userMessage]);
     setIsLoading(true);
-
-    loadingTimeoutRef.current = window.setTimeout(() => {
-      loadingTimeoutRef.current = null;
-      setIsLoading(false);
-      setMessages((currentMessages) => [...currentMessages, assistantMessage]);
-
-      if (hasCopyrightIssue) {
-        return;
-      }
-
-      const generatedVersions = nextVersionNumberRef.current === 1
-        ? MOCK_VERSIONS
-        : [MOCK_VERSIONS[2]];
-      generatedVersions.forEach(appendVersion);
-      setIsPrintBlocked(hasPrintIssue);
-    }, 1800);
-
     return true;
   };
 
@@ -162,9 +189,11 @@ export function useCreateGeneration() {
   };
 
   const resetGeneration = () => {
-    if (loadingTimeoutRef.current !== null) {
-      window.clearTimeout(loadingTimeoutRef.current);
-      loadingTimeoutRef.current = null;
+    const task = activeGenerationRef.current;
+    activeGenerationRef.current = null;
+    if (task !== null && task.timeoutId !== null) {
+      window.clearTimeout(task.timeoutId);
+      task.timeoutId = null;
     }
 
     setIsGenerated(false);

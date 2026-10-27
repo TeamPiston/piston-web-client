@@ -21,22 +21,52 @@ pre-extraction implementation, then retained after extraction. They cover:
   preserve them. Generated/blocked/reset results reach print eligibility checks.
 - Direct `startGeneration({ prompt, userContent })` acceptance booleans: `true`
   means the mock request started, not that generation completed successfully.
+- Same-render and rerendered duplicate starts: only the first request is accepted,
+  with one timer, no extra messages/IDs/versions and no rejected-request cleanup.
+- Reset immediately or at 1799 ms, forced execution of cancelled/completed
+  callbacks, unmount, fresh mounts and effect cleanup/setup replay. Old callbacks
+  must not call setters or release a newer request's lock.
+- Synchronous message-ID and timer-registration failures: no published state,
+  no retained lock, retry without reset, and preserved Workspace input,
+  attachments, results and print settings. Browser-call failures are injected
+  before the harness allocates an ID or registers a timer.
 
 `scripts/lib/create-generation-harness.mjs` uses the existing VM testing approach:
 actual TS modules, simulated hook cells/effects, deterministic IDs, a virtual
 clock, deferred print API promises, Object URLs and placeholder child components.
-State updaters are evaluated twice to detect side effects; this is not actual
-React StrictMode, batching, concurrent scheduling or browser rendering.
+State cells update immediately; handlers retain their render's snapshot until
+an explicit rerender. Setter attempts are counted, and state updaters are evaluated
+twice to detect side effects. Effect cleanup/setup can be replayed, including a
+callback between the two phases. This is not actual React StrictMode, batching,
+concurrent scheduling or browser rendering. Tests retain and invoke real timer
+callbacks after cancellation to check ownership defensively; this does not claim
+that browsers execute every cancelled timeout or measure real timer throttling.
 `test:print` also executes the shared generation/print integration assertions,
 replacing the former check for `closePrintSetup()` inside `appendMockResponse`.
 The other print source and API/Mock assertions remain in place.
 
-Known limitation intentionally unchanged: generation admission still uses the
-render's `isLoading` snapshot, with one timeout ref and no response epoch. This
-suite does not require same-render duplicate generation or stale callback mutation
-as expected behavior. Their prevention is a separate bug-fix task. Auto-fix's
-existing synchronous duplicate guard is covered. Reset/unmount tests here use
-one pending generation, not a new cancellation or response-invalidation policy.
+Generation admission uses an active-task ref as a synchronous lock. Each accepted
+request creates a unique task object that owns its 1800 ms timer; callback validity
+depends on both mounted state and that exact task identity. Reset and effect
+cleanup clear the owner before cancelling its timer. A stale callback returns
+before changing state or unlocking a newer task. Completion releases only its own
+lock, including copyright-warning completion. Reset can admit a fresh request
+immediately, even through a handler that captured the previous loading state.
+Message preparation finishes before lock acquisition; timer registration runs
+under the lock and releases it if registration throws. User messages and loading
+state are published only after successful registration. Synchronous exceptions
+still propagate to the caller; they are not converted to a successful start.
+Effect setup restores mounted state and reconciles the loading UI with the active
+owner, so cleanup/setup replay does not leave the hook permanently loading. Replay
+cancels pending work but does not reset existing messages or design results.
+
+This policy applies only to cancellable local Mock timers. Print HTTP locks retain
+their existing policy; no AI API, AbortController or backend cancellation is added.
+Auto-fix's separate synchronous guard and shared version numbering are unchanged.
+Before this fix, the eight added lifecycle cases and strengthened Workspace
+integration case failed (13 passed, 9 failed); the initial fix passed all 22 cases.
+Final review added four synchronous-failure cases, all of which failed before
+the error-path correction. The full generation suite now passes all 26 cases.
 
 Actual IME input, native file/clipboard events, responsive layout, modal focus,
 Canvas lifetime/rotation/zoom and fullscreen behavior need browser verification.

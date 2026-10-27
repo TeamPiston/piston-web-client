@@ -256,3 +256,254 @@ test("generation hook accepts prepared content and rejects empty or loading requ
   assert.equal(hook.isPrintBlocked, false);
   assert.deepEqual(ids(hook.versions), ["v1", "v2", "v3", "v4"]);
 });
+
+for (const prompt of ["연필꽂이", "pokemon 얇게", "얇은 연필꽂이"]) {
+  test("same-render starts share one timer and release the lock after completion: " + prompt, (context) => {
+    const harness = workspace(context, { hookOnly: true });
+    const initial = harness.render();
+    const request = { prompt, userContent: prompt };
+    assert.equal(initial.startGeneration(request), true);
+    const updates = harness.stateUpdates;
+    assert.equal(initial.startGeneration(request), false);
+    assert.equal(harness.stateUpdates, updates, "Rejected starts must not call any setter");
+    assert.equal(harness.timers.size, 1);
+    const scheduled = [...harness.timers.keys()];
+    let hook = harness.render();
+    const messages = hook.messages;
+    const versions = hook.versions;
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].id, "message-2");
+    assert.equal(versions.length, 0);
+    for (let render = 0; render < 3; render++) {
+      hook = harness.render();
+      assert.equal(hook.isLoading, true);
+      assert.equal(hook.startGeneration(request), false);
+      assert.equal(hook.messages, messages);
+      assert.equal(hook.versions, versions);
+      assert.deepEqual([...harness.timers.keys()], scheduled);
+      assert.equal(harness.stateUpdates, updates);
+    }
+    harness.advance(1800);
+    hook = harness.render();
+    assert.equal(hook.isLoading, false);
+    assert.equal(harness.timers.size, 0);
+    assert.equal(hook.messages.length, 2);
+    assert.equal(hook.messages[1].id, "message-1");
+    assert.equal(hook.isPrintBlocked, prompt === "얇은 연필꽂이");
+    assert.deepEqual(ids(hook.versions), prompt.includes("pokemon") ? [] : ["v1", "v2", "v3"]);
+    assert.equal(hook.startGeneration({ prompt: "다음 디자인", userContent: "다음 디자인" }), true);
+    assert.equal(harness.render().messages.at(-1).id, "message-4", "Rejected starts must not consume IDs");
+    harness.advance(1800);
+    hook = harness.render();
+    assert.equal(hook.messages.length, 4);
+    assert.equal(hook.isPrintBlocked, false);
+    assert.deepEqual(ids(hook.versions), prompt.includes("pokemon") ? ["v1", "v2", "v3"] : ["v1", "v2", "v3", "v4"]);
+  });
+}
+
+for (const elapsed of [0, 1799]) {
+  test("reset invalidates a cancelled callback and immediately admits a fresh request at " + elapsed + " ms", (context) => {
+    const harness = workspace(context, { hookOnly: true });
+    harness.render().startGeneration({ prompt: "얇은 이전 디자인", userContent: "이전 요청" });
+    const cancelledCallback = [...harness.timers.values()][0].callback;
+    harness.advance(elapsed);
+    const pending = harness.render();
+    assert.equal(pending.isLoading, true);
+    pending.resetGeneration();
+    assert.equal(harness.timers.size, 0);
+    const resetUpdates = harness.stateUpdates;
+    cancelledCallback();
+    assert.equal(harness.stateUpdates, resetUpdates, "Cancelled callbacks must not call setters after reset");
+    const reset = harness.render();
+    assert.equal(reset.messages.length, 0);
+    assert.equal(reset.versions.length, 0);
+    assert.equal(reset.isLoading, false);
+    assert.equal(reset.isGenerated, false);
+    assert.equal(reset.isPrintBlocked, false);
+    // Use the handler that captured isLoading=true, without needing a fresh closure.
+    assert.equal(pending.startGeneration({ prompt: "새 디자인", userContent: "새 요청" }), true);
+    const fresh = harness.render();
+    const freshUpdates = harness.stateUpdates;
+    const scheduled = [...harness.timers.keys()];
+    cancelledCallback();
+    assert.equal(harness.stateUpdates, freshUpdates);
+    assert.equal(harness.render().messages, fresh.messages);
+    assert.equal(harness.render().versions, fresh.versions);
+    assert.equal(harness.render().isLoading, true);
+    assert.deepEqual([...harness.timers.keys()], scheduled);
+    assert.equal(pending.startGeneration({ prompt: "중복", userContent: "중복" }), false);
+    harness.advance(1799);
+    assert.equal(harness.render().isLoading, true);
+    assert.equal(harness.render().messages.length, 1);
+    harness.advance(1);
+    const complete = harness.render();
+    assert.equal(complete.messages.length, 2);
+    assert.equal(complete.messages[0].content, "새 요청");
+    assert.deepEqual(ids(complete.versions), ["v1", "v2", "v3"]);
+    assert.equal(complete.isPrintBlocked, false);
+    assert.equal(harness.timers.size, 0);
+    const completeUpdates = harness.stateUpdates;
+    cancelledCallback();
+    assert.equal(harness.stateUpdates, completeUpdates);
+  });
+}
+
+test("a completed callback cannot publish twice or release a newer request's lock", (context) => {
+  const harness = workspace(context, { hookOnly: true });
+  const initial = harness.render();
+  initial.startGeneration({ prompt: "디자인", userContent: "디자인" });
+  const completedCallback = [...harness.timers.values()][0].callback;
+  harness.advance(1800);
+  const completeUpdates = harness.stateUpdates;
+  completedCallback();
+  assert.equal(harness.stateUpdates, completeUpdates);
+  assert.equal(initial.startGeneration({ prompt: "다음", userContent: "다음" }), true);
+  const nextUpdates = harness.stateUpdates;
+  completedCallback();
+  assert.equal(harness.stateUpdates, nextUpdates);
+  assert.equal(initial.startGeneration({ prompt: "중복", userContent: "중복" }), false);
+  assert.equal(harness.timers.size, 1);
+  harness.advance(1800);
+  assert.equal(harness.render().messages.length, 4);
+  assert.deepEqual(ids(harness.render().versions), ["v1", "v2", "v3", "v4"]);
+});
+
+test("unmount rejects delayed callbacks and retained start handlers without setters", (context) => {
+  const harness = workspace(context, { hookOnly: true });
+  const initial = harness.render();
+  initial.startGeneration({ prompt: "이전", userContent: "이전" });
+  const cancelledCallback = [...harness.timers.values()][0].callback;
+  harness.unmount();
+  assert.equal(harness.timers.size, 0);
+  const updates = harness.stateUpdates;
+  assert.doesNotThrow(cancelledCallback);
+  assert.equal(initial.startGeneration({ prompt: "종료 후", userContent: "종료 후" }), false);
+  assert.equal(harness.stateUpdates, updates);
+  assert.equal(harness.timers.size, 0);
+  const fresh = workspace(context, { hookOnly: true });
+  fresh.render();
+  fresh.replayMountEffects();
+  assert.equal(fresh.render().startGeneration({ prompt: "새 마운트", userContent: "새 마운트" }), true);
+  assert.doesNotThrow(cancelledCallback);
+  assert.equal(harness.stateUpdates, updates);
+  fresh.advance(1800);
+  assert.deepEqual(ids(fresh.render().versions), ["v1", "v2", "v3"]);
+});
+
+test("effect replay cancels pending work, clears loading and permits a fresh task without reset", (context) => {
+  const harness = workspace(context, { hookOnly: true });
+  harness.render();
+  harness.replayMountEffects();
+  harness.replayMountEffects();
+  assert.equal(harness.render().startGeneration({ prompt: "얇은 이전", userContent: "이전" }), true);
+  const cancelledCallback = [...harness.timers.values()][0].callback;
+  const pending = harness.render();
+  harness.replayMountEffects(() => {
+    const cleanupUpdates = harness.stateUpdates;
+    cancelledCallback();
+    assert.equal(harness.stateUpdates, cleanupUpdates);
+    assert.equal(pending.startGeneration({ prompt: "cleanup 중", userContent: "cleanup 중" }), false);
+  });
+  assert.equal(harness.timers.size, 0);
+  const idle = harness.render();
+  assert.equal(idle.isLoading, false);
+  assert.equal(idle.messages, pending.messages, "Effect replay does not reset chat history");
+  assert.equal(pending.startGeneration({ prompt: "새 디자인", userContent: "새 디자인" }), true);
+  const updates = harness.stateUpdates;
+  cancelledCallback();
+  assert.equal(harness.stateUpdates, updates);
+  assert.equal(pending.startGeneration({ prompt: "중복", userContent: "중복" }), false);
+  assert.equal(harness.timers.size, 1);
+  harness.advance(1800);
+  const complete = harness.render();
+  assert.equal(complete.isLoading, false);
+  assert.equal(complete.isPrintBlocked, false);
+  assert.equal(complete.messages.length, 3);
+  assert.equal(complete.messages[1].content, "새 디자인");
+  assert.deepEqual(ids(complete.versions), ["v1", "v2", "v3"]);
+});
+
+for (const failure of ["assistant ID", "user ID", "timer registration"]) {
+  test("synchronous start errors release ownership and preserve state: " + failure, (context) => {
+    const expectedError = new Error("Injected " + failure + " failure");
+    let uuidCalls = 0;
+    let failOnce = true;
+    const harness = workspace(context, {
+      hookOnly: true,
+      beforeRandomUUID() {
+        uuidCalls += 1;
+        if (failOnce && uuidCalls === (failure === "assistant ID" ? 1 : failure === "user ID" ? 2 : -1)) {
+          failOnce = false;
+          throw expectedError;
+        }
+      },
+      beforeSetTimeout() {
+        if (failOnce && failure === "timer registration") {
+          failOnce = false;
+          throw expectedError;
+        }
+      },
+    });
+    const initial = harness.render();
+    const request = { prompt: "디자인", userContent: "디자인" };
+    const before = harness.stateUpdates;
+    assert.throws(() => initial.startGeneration(request), (error) => error === expectedError);
+    assert.equal(harness.timers.size, 0);
+    const failed = harness.render();
+    const afterFailure = harness.stateUpdates;
+    // Check retry first so a leaked admission lock is reported directly.
+    assert.equal(initial.startGeneration(request), true, "A failed start must not retain its lock");
+    assert.equal(failed.messages, initial.messages);
+    assert.equal(failed.versions, initial.versions);
+    assert.equal(failed.currentModelParams, initial.currentModelParams);
+    assert.equal(failed.isLoading, false);
+    assert.equal(afterFailure, before, "A failed start must not publish state");
+    assert.equal(harness.timers.size, 1);
+    harness.advance(1800);
+    assert.equal(harness.render().messages.length, 2);
+    assert.deepEqual(ids(harness.render().versions), ["v1", "v2", "v3"]);
+  });
+}
+
+test("Workspace preserves input, attachments, results and print setup after a scheduling error", async (context) => {
+  let failNextTimer = false;
+  const expectedError = new Error("Injected timer registration failure");
+  const harness = workspace(context, {
+    beforeSetTimeout() {
+      if (failNextTimer) {
+        failNextTimer = false;
+        throw expectedError;
+      }
+    },
+  });
+  generate(harness);
+  harness.props("PreviewPanel").onPrint();
+  harness.queries.at(-1).resolve(null);
+  await new Promise((done) => setImmediate(done));
+  assert.equal(harness.props("PrintSettingsModal").isOpen, true);
+  harness.attach("keep.png");
+  harness.props("ChatPanel").onDraftChange("보존할 입력");
+  const before = harness.props("ChatPanel");
+  const versions = history(harness).versions;
+  const previousModel = model(harness);
+  const updates = harness.stateUpdates;
+  failNextTimer = true;
+  assert.throws(() => before.onSubmit(submitEvent()), (error) => error === expectedError);
+  assert.equal(harness.stateUpdates, updates);
+  const failed = harness.props("ChatPanel");
+  assert.equal(failed.messages, before.messages);
+  assert.equal(failed.draft, before.draft);
+  assert.equal(failed.attachedImages, before.attachedImages);
+  assert.equal(failed.isLoading, false);
+  assert.equal(harness.liveUrls.size, 1);
+  assert.equal(harness.timers.size, 0);
+  assert.equal(history(harness).versions, versions);
+  assert.equal(model(harness), previousModel);
+  assert.equal(harness.props("PrintSettingsModal").isOpen, true);
+  failed.onSubmit(submitEvent());
+  assert.equal(harness.props("ChatPanel").draft, "");
+  assert.equal(harness.liveUrls.size, 0);
+  assert.equal(harness.props("PrintSettingsModal").isOpen, false);
+  harness.advance(1800);
+  assert.deepEqual(ids(history(harness).versions), ["v1", "v2", "v3", "v4"]);
+});

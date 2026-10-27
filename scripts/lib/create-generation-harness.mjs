@@ -35,7 +35,10 @@ function findProps(tree, type) {
 
 // Execute real modules with explicit rerenders, simulated hooks and a virtual clock.
 // This is not a React renderer, a browser, or a concurrent scheduling simulation.
-export function createGenerationHarness({ hookOnly = false, connected = true, desktop = false } = {}) {
+export function createGenerationHarness({
+  hookOnly = false, connected = true, desktop = false,
+  beforeRandomUUID = () => {}, beforeSetTimeout = () => {},
+} = {}) {
   const slots = [];
   const effects = new Map();
   const pendingEffects = new Set();
@@ -50,6 +53,7 @@ export function createGenerationHarness({ hookOnly = false, connected = true, de
   let uuid = 0;
   let urlId = 0;
   let mounted = true;
+  let stateUpdates = 0;
   function registerEffect(setup, dependencies, phase) {
     const slot = cursor++;
     const previous = effects.get(slot);
@@ -65,6 +69,7 @@ export function createGenerationHarness({ hookOnly = false, connected = true, de
       if (!(slot in slots)) {
         const cell = { value: typeof initial === "function" ? initial() : initial };
         cell.set = (next) => {
+          stateUpdates += 1;
           assert(mounted, "No setters after unmount");
           // Replay updater evaluation to detect impure version-number allocation.
           if (typeof next === "function") next(cell.value);
@@ -135,7 +140,12 @@ export function createGenerationHarness({ hookOnly = false, connected = true, de
     new Script("(function(require, module, exports) {\n" + sources.get(path) + "\n})", {
       filename: path,
     }).runInNewContext({
-      crypto: { randomUUID: () => "message-" + (++uuid) },
+      crypto: {
+        randomUUID() {
+          beforeRandomUUID();
+          return "message-" + (++uuid);
+        },
+      },
       process: { env: { NODE_ENV: "production", NEXT_PUBLIC_USE_MOCK: "false" } },
       performance: { now: () => now },
       URL: {
@@ -148,6 +158,7 @@ export function createGenerationHarness({ hookOnly = false, connected = true, de
       },
       window: {
         setTimeout(callback, delay) {
+          beforeSetTimeout();
           timers.set(++timerId, { callback, due: now + delay });
           return timerId;
         },
@@ -188,6 +199,17 @@ export function createGenerationHarness({ hookOnly = false, connected = true, de
   }
   return {
     render, props, unmount, timers, liveUrls, queries, submissions,
+    get stateUpdates() { return stateUpdates; },
+    replayMountEffects(betweenCleanupAndSetup = () => {}) {
+      assert(mounted, "Cannot replay effects after unmount");
+      for (const effect of effects.values()) effect.cleanup?.();
+      betweenCleanupAndSetup();
+      for (const phase of ["layout", "passive"]) {
+        for (const effect of effects.values()) {
+          if (effect.phase === phase) effect.cleanup = effect.setup();
+        }
+      }
+    },
     submit(prompt) {
       props("ChatPanel").onDraftChange(prompt);
       props("ChatPanel").onSubmit(submitEvent());
@@ -241,7 +263,13 @@ export async function verifyGenerationPrintIntegration() {
       assert.equal(harness.props(modal).isOpen, true, "Empty requests must not close print setup");
       assert.equal(harness.props("ChatPanel").draft, "   ");
       harness.attach("reference.png");
-      harness.submit("다음 디자인");
+      harness.props("ChatPanel").onDraftChange("다음 디자인");
+      const acceptedSubmit = harness.props("ChatPanel").onSubmit;
+      acceptedSubmit(submitEvent());
+      const acceptedUpdates = harness.stateUpdates;
+      acceptedSubmit(submitEvent());
+      assert.equal(harness.stateUpdates, acceptedUpdates, "Same-render rejection must not clear Workspace state");
+      assert.equal(harness.timers.size, 1);
       assert.equal(harness.props(modal).isOpen, false, "Accepted starts must close print setup");
       let chat = harness.props("ChatPanel");
       assert.equal(chat.draft, "");
@@ -255,6 +283,9 @@ export async function verifyGenerationPrintIntegration() {
       const before = chat.messages;
       const attachments = chat.attachedImages;
       chat.onSubmit(submitEvent());
+      const rejectedUpdates = harness.stateUpdates;
+      acceptedSubmit(submitEvent());
+      assert.equal(harness.stateUpdates, rejectedUpdates, "A stale submit handler must preserve new input, attachments and setup");
       chat = harness.props("ChatPanel");
       assert.equal(chat.messages, before);
       assert.equal(chat.draft, "보존할 입력");
