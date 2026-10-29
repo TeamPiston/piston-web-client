@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { FilamentColor } from "@/entities/artwork";
 import type { Printer } from "@/entities/printer";
 
@@ -19,6 +19,7 @@ interface PrintSettingsModalProps {
   };
   errorMessage?: string | null;
   isSubmitting?: boolean;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onConfirm: (settings: { colorMode: string }) => void;
   onOpenPrinterManagement: () => void;
@@ -40,52 +41,83 @@ export function PrintSettingsModal({
   filamentUsage,
   errorMessage = null,
   isSubmitting = false,
+  returnFocusRef,
   onClose,
   onConfirm,
   onOpenPrinterManagement,
 }: PrintSettingsModalProps) {
   const [colorMode, setColorMode] = useState<PrintColorMode>("color");
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement;
+    const returnFocusTarget = returnFocusRef?.current ?? previousFocus;
     const previousOverflow = document.body.style.overflow;
+    dialog?.showModal();
     document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
+      dialog?.close();
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
+      if (
+        returnFocusTarget instanceof HTMLElement && returnFocusTarget.isConnected &&
+        !returnFocusTarget.matches(":disabled") && returnFocusTarget.getClientRects().length > 0
+      ) {
+        returnFocusTarget.focus({ preventScroll: true });
+      }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, returnFocusRef]);
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    // Disabling the focused submit button can move focus to the document body.
+    if (isOpen && dialog?.open && !dialog.contains(document.activeElement)) {
+      dialog.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    }
+  }, [isOpen, isSubmitting]);
 
   if (!isOpen) {
     return null;
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="presentation"
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="print-settings-title"
+      className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none items-center justify-center bg-transparent p-4 backdrop:bg-black/40 open:flex"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const buttons = Array.from(
+          event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+        ).filter((button) => button.getClientRects().length > 0);
+        const first = buttons[0];
+        const last = buttons[buttons.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
+          event.preventDefault();
           onClose();
         }
       }}
     >
       <section
-        aria-labelledby="print-settings-title"
-        aria-modal="true"
         className="max-h-[calc(100dvh-2rem)] w-full max-w-[460px] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7"
-        role="dialog"
       >
         <div className="relative text-center">
           <h2 id="print-settings-title" className="text-base font-bold text-gray-950">
@@ -228,7 +260,7 @@ export function PrintSettingsModal({
           )}
         </div>
       </section>
-    </div>
+    </dialog>
   );
 }
 

@@ -103,6 +103,7 @@ export default function CreateWorkspace() {
   } = useCreatePrintFlow({ isGenerated, isPrintBlocked, isPrinterConnected });
   const [cameraDistance, setCameraDistance] = useState(42);
   const draftTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const printButtonRef = useRef<HTMLButtonElement>(null);
   const historyTitleInputRef = useRef<HTMLInputElement>(null);
   const isCancelingHistoryEditRef = useRef(false);
 
@@ -282,6 +283,7 @@ export default function CreateWorkspace() {
               modelParams={currentModelParams}
               onPrint={handlePrintOpen}
               printSuccessPhase={printSuccessPhase}
+              printButtonRef={printButtonRef}
               onZoom={handleZoom}
             />
           </section>
@@ -314,6 +316,7 @@ export default function CreateWorkspace() {
         )}
       </main>
       <PrintSettingsModal
+        returnFocusRef={printButtonRef}
         isOpen={isPrintModalOpen && !isPrintCheckFailed && !isPrintStatusChecking}
         errorMessage={printStartError}
         isSubmitting={isPrintStarting}

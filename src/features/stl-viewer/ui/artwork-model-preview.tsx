@@ -167,7 +167,10 @@ export function ArtworkModelPreview({
           onClick={handleFullscreen}
           aria-label={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
           title={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
-          className="absolute bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-sm transition hover:bg-white"
+          className={[
+            "absolute right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-sm transition hover:bg-white",
+            variant === "create" ? "top-4" : "bottom-4",
+          ].join(" ")}
         >
           {isFullscreen ? (
             <Minimize2 className="h-5 w-5" aria-hidden="true" />
