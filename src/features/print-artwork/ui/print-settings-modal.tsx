@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { FilamentColor } from "@/entities/artwork";
 import type { Printer } from "@/entities/printer";
 
@@ -73,14 +73,6 @@ export function PrintSettingsModal({
     };
   }, [isOpen, returnFocusRef]);
 
-  useLayoutEffect(() => {
-    const dialog = dialogRef.current;
-    // Disabling the focused submit button can move focus to the document body.
-    if (isOpen && dialog?.open && !dialog.contains(document.activeElement)) {
-      dialog.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
-    }
-  }, [isOpen, isSubmitting]);
-
   if (!isOpen) {
     return null;
   }
@@ -93,21 +85,6 @@ export function PrintSettingsModal({
       onCancel={(event) => {
         event.preventDefault();
         onClose();
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== "Tab") return;
-        const buttons = Array.from(
-          event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
-        ).filter((button) => button.getClientRects().length > 0);
-        const first = buttons[0];
-        const last = buttons[buttons.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first?.focus();
-        }
       }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -246,13 +223,21 @@ export function PrintSettingsModal({
             </button>
             <button
               type="button"
-              onClick={() => onConfirm({ colorMode })}
-              disabled={!isPrinterConnected || isSubmitting}
-              className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300"
+              onClick={() => {
+                if (!isSubmitting && isPrinterConnected) onConfirm({ colorMode });
+              }}
+              disabled={!isPrinterConnected}
+              aria-disabled={isSubmitting || !isPrinterConnected}
+              className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] aria-disabled:cursor-not-allowed aria-disabled:bg-gray-300"
             >
               {isSubmitting ? "출력 시작 중..." : "출력 시작하기"}
             </button>
           </div>
+          {isSubmitting && (
+            <p role="status" className="mt-3 text-center text-xs font-medium text-gray-500">
+              출력 요청을 처리하고 있어요. 창을 닫아도 전송된 요청은 계속 처리될 수 있어요.
+            </p>
+          )}
           {errorMessage && (
             <p className="mt-3 text-center text-xs font-medium text-red-500" role="alert">
               {errorMessage}

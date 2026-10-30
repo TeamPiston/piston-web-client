@@ -14,6 +14,134 @@ const flushResponses = () => new Promise((resolve) => setImmediate(resolve));
 const settings = { colorMode: "monochrome" };
 const printTask = (status = "PRINTING") => ({ id: 1, status, artworkName: "Existing design" });
 
+function renderPrintModal(isSubmitting) {
+  const modalPath = fileURLToPath(new URL("../src/features/print-artwork/ui/print-settings-modal.tsx", import.meta.url));
+  const modalSource = ts.transpileModule(readFileSync(modalPath, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+    fileName: modalPath,
+  }).outputText;
+  const exports = {};
+  const jsx = (type, props) => ({ type, props });
+  new Script(modalSource, { filename: modalPath }).runInNewContext({
+    exports,
+    require(name) {
+      if (name === "react") return {
+        useState: (initial) => [initial, () => {}], useRef: () => ({ current: null }),
+        useEffect() {}, useLayoutEffect() {},
+      };
+      if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
+      assert.equal(name, "lucide-react");
+      return { X: "X" };
+    },
+  });
+  let confirmations = 0;
+  const tree = exports.PrintSettingsModal({
+    isOpen: true, isSubmitting, isPrinterConnected: true,
+    filamentColors: [], filamentUsage: { length: "1m", weight: "1g" },
+    onClose() {}, onConfirm: () => confirmations++,
+  });
+  const elements = [];
+  const visit = (node) => {
+    if (Array.isArray(node)) node.forEach(visit);
+    else if (node && typeof node === "object") { elements.push(node); visit(node.props?.children); }
+  };
+  visit(tree);
+  return { tree, elements, get confirmations() { return confirmations; } };
+}
+
+test("pending print keeps the submit button focusable, rejects activation and announces status", () => {
+  const modal = renderPrintModal(true);
+  const submit = modal.elements.find(node => node.type === "button" && node.props.children === "출력 시작 중...");
+  assert(submit);
+  assert.equal(Boolean(submit.props.disabled), false, "Native disabling must not discard submit focus");
+  assert.equal(submit.props["aria-disabled"], true);
+  submit.props.onClick();
+  submit.props.onClick();
+  assert.equal(modal.confirmations, 0);
+  assert(modal.elements.some(node => node.props?.role === "status" && node.props.children));
+  const idle = renderPrintModal(false);
+  idle.elements.find(node => node.type === "button" && node.props.children === "출력 시작하기").props.onClick();
+  assert.equal(idle.confirmations, 1);
+});
+
+test("print modal delegates Tab to the native dialog", () => {
+  assert.equal(renderPrintModal(false).tree.props.onKeyDown, undefined);
+});
+
+for (const close of ["closePrintSetup", "handlePrintModalClose", "handlePrinterConnectionModalClose"]) {
+  for (const outcome of ["empty", "active", "failure"]) {
+    test(close + " invalidates only its pending query: " + outcome, async (context) => {
+      const harness = createHarness(context);
+      const initial = harness.render();
+      initial.handlePrintOpen();
+      harness.render()[close]();
+      const updates = harness.stateUpdates;
+      if (outcome === "failure") harness.queries[0].reject(new Error("late"));
+      else harness.queries[0].resolve(outcome === "active" ? printTask() : null);
+      await flushResponses();
+      assert.equal(harness.stateUpdates, updates, "Closed queries must not publish even loading updates");
+      assertReset(harness.render());
+      await openSettings(harness);
+    });
+  }
+}
+
+for (const invalidate of ["closePrintSetup", "resetPrintFlow", "effect replay"]) {
+  for (const order of ["old first", "new first"]) {
+    test(invalidate + " admits a new query and owns its finally: " + order, async (context) => {
+      const harness = createHarness(context);
+      harness.render().handlePrintOpen();
+      if (invalidate === "effect replay") harness.replayMountEffects();
+      else harness.render()[invalidate]();
+      harness.render().handlePrintOpen();
+      assert.equal(harness.queries.length, 2, "Invalidation must admit a replacement GET");
+      const fresh = printTask("COMPLETED");
+      if (order === "new first") {
+        harness.queries[1].resolve(fresh);
+        await flushResponses();
+      }
+      const updates = harness.stateUpdates;
+      harness.queries[0].reject(new Error("stale query failure"));
+      await flushResponses();
+      assert.equal(harness.stateUpdates, updates);
+      if (order === "old first") {
+        assert.equal(harness.render().isPrintStatusChecking, true);
+        harness.render().handlePrintOpen();
+        assert.equal(harness.queries.length, 2, "Old finally must not unlock the replacement GET");
+        harness.queries[1].resolve(fresh);
+        await flushResponses();
+      }
+      const flow = harness.render();
+      assert.equal(flow.currentPrintTask, fresh);
+      assert.equal(flow.isPrintModalOpen, true);
+      assert.equal(flow.isPrintCheckFailed, false);
+    });
+  }
+}
+
+test("reset keeps POST ownership and requires a check after the uncertain POST settles", async (context) => {
+  const harness = createHarness(context);
+  (await openSettings(harness)).handlePrintConfirm(settings);
+  harness.render().resetPrintFlow();
+  let flow = await openSettings(harness); // GET may be performed even while the old POST is pending.
+  flow.handlePrintConfirm(settings);
+  assert.equal(harness.submissions.length, 1);
+  assert.match(harness.render().printStartError, /이전 출력 요청/);
+  const updates = harness.stateUpdates;
+  harness.submissions[0].resolve(printTask());
+  await flushResponses();
+  assert.equal(harness.stateUpdates, updates, "Stale POST must not close the new modal or show success");
+  harness.render().handlePrintConfirm(settings);
+  assert.equal(harness.submissions.length, 1, "A check made before POST completion cannot authorize another POST");
+  flow = await openSettings(harness);
+  assert.equal(flow.printStartError, null);
+  flow.handlePrintConfirm(settings);
+  assert.equal(harness.submissions.length, 2);
+  harness.submissions[1].resolve(printTask());
+  await flushResponses();
+  assert.equal(harness.render().printSuccessPhase, "visible");
+});
+
 function createHarness(context, initialOptions = {}) {
   const slots = [];
   const effects = new Map();
@@ -574,7 +702,6 @@ for (const outcome of ["success", "failure"]) {
     flow = harness.render();
     assert.equal(flow.isPrintStatusChecking, true);
     flow.handlePrintOpen();
-    flow.closePrintSetup();
     harness.render().handlePrintOpen();
     initial.handlePrintOpen();
     assert.equal(harness.queries.length, 1);
@@ -634,7 +761,7 @@ for (const outcome of ["success", "failure"]) {
 }
 
 for (const operation of ["query", "submit"]) {
-  test("reset does not release an in-flight " + operation + " lock", async (context) => {
+  test("reset replaces GET ownership but retains POST ownership: " + operation, async (context) => {
     const harness = createHarness(context);
     const initial = operation === "query" ? harness.render() : await openSettings(harness);
     if (operation === "query") initial.handlePrintOpen();
@@ -644,7 +771,7 @@ for (const operation of ["query", "submit"]) {
     if (operation === "query") {
       initial.handlePrintOpen();
       harness.render().handlePrintOpen();
-      assert.equal(harness.queries.length, 1);
+      assert.equal(harness.queries.length, 2);
       harness.queries[0].resolve(null);
     } else {
       initial.handlePrintConfirm(settings);
@@ -657,8 +784,9 @@ for (const operation of ["query", "submit"]) {
     await flushResponses();
     let flow = harness.render();
     if (operation === "query") {
-      assertReset(flow);
-      flow.handlePrintOpen();
+      assert.equal(flow.isPrintStatusChecking, true);
+      assert.equal(flow.isPrintModalOpen, false);
+      flow.handlePrintOpen(); // Old finally must not release the replacement lock.
       assert.equal(harness.queries.length, 2);
       harness.queries[1].resolve(null);
     } else {
@@ -849,7 +977,7 @@ for (const lifecycle of ["reset", "unmount"]) {
       } else {
         harness.unmount();
       }
-      flow.handlePrintOpen();
+      if (lifecycle === "unmount") flow.handlePrintOpen();
       assert.equal(harness.queries.length, 1);
       const updatesBeforeResponse = harness.stateUpdates;
       if (outcome === "success") harness.queries[0].resolve(null);
@@ -964,9 +1092,8 @@ for (const operation of ["query", "submit"]) {
       let flow = harness.render();
       assert.equal(flow.isPrintStatusChecking, false);
       assert.equal(flow.isPrintStarting, false);
-      if (operation === "query") flow.handlePrintOpen();
-      else flow.handlePrintConfirm(settings);
-      assert.equal(harness.queries.length, 1, "Effect replay must not release the pending query lock");
+      if (operation === "submit") flow.handlePrintConfirm(settings);
+      assert.equal(harness.queries.length, 1);
       assert.equal(harness.submissions.length, operation === "query" ? 0 : 1);
       const updatesBeforeResponse = harness.stateUpdates;
       if (outcome === "success") request.resolve(printTask());
@@ -980,7 +1107,8 @@ for (const operation of ["query", "submit"]) {
       assert.equal(flow.isPrintModalOpen, operation === "submit");
       assert.equal(flow.isPrintInProgressModalOpen, false);
       assert.equal(flow.isPrintCheckFailed, false);
-      assert.equal(flow.printStartError, null);
+      if (operation === "submit") assert.match(flow.printStartError, /이전 출력 요청/);
+      else assert.equal(flow.printStartError, null);
       assert.equal(flow.currentPrintTask, null);
       assert.equal(flow.printSuccessPhase, "hidden");
       flow = await openSettings(harness);
@@ -1022,12 +1150,15 @@ for (const outcome of ["success", "failure"]) {
     assert.equal(flow.isPrintStatusChecking, true);
     assert.equal(flow.currentPrintTask, newTask);
     assert.equal(flow.printSuccessPhase, "hidden");
-    assert.equal(flow.printStartError, null);
+    assert.match(flow.printStartError, /이전 출력 요청/);
     newFlow.handlePrintOpen();
     assert.equal(harness.queries.length, 3, "Stale submit finally must not unlock the current query");
     harness.queries[2].resolve(null);
     await flushResponses();
     harness.render().handlePrintConfirm(settings);
+    assert.equal(harness.submissions.length, 1, "The pending GET began before the POST settled");
+    assert.match(harness.render().printStartError, /이전 출력 요청/);
+    (await openSettings(harness)).handlePrintConfirm(settings);
     assert.equal(harness.submissions.length, 2);
     harness.submissions[1].resolve(printTask());
     await flushResponses();

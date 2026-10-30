@@ -90,10 +90,13 @@ Run `npm run test:create-print-flow` to execute the actual Create print hook wit
 deferred API promises and simulated React state, refs, callback identity, effects and
 timers. It covers eligibility, connection/active-job precedence, query and submit
 errors, same-render and rerendered duplicate calls, explicit confirmation, modal
-closure, reset and timer cleanup. Independent in-flight guards remain locked
-across modal closure and reset until their own request settles. Success, rejected
-promises and synchronous API exceptions release the lock and allow subsequent
-requests; completion of one operation does not release the other's lock.
+closure, reset and timer cleanup. GET and POST have different ownership policies.
+A GET owns a unique request object. Closing setup (including accepted prompts and
+printer-management navigation), reset and effect cleanup invalidate that owner
+and permit a replacement GET immediately. Success, error and finally check both
+identity and the UI epoch, so an old GET cannot reopen a modal or unlock a new GET.
+An in-flight POST retains its lock across closure, reset and effect cleanup until
+its own request settles; completing a GET never releases this POST lock.
 Requests retain their original zero-argument contract;
 colorMode and printerId are not added to the API payload.
 
@@ -101,21 +104,37 @@ Reset increments the UI response epoch before clearing state. Effect cleanup
 also advances the epoch and marks the hook inactive; setup marks it active again.
 Requests capture their starting epoch. Success, error and loading updates are
 ignored after reset or cleanup, even if a later setup reactivates the hook.
-The request's own in-flight lock still releases in finally, including for stale
-responses. Reset and cleanup do not release these locks, so a newer request of
-the same kind cannot acquire the lock before the old one finishes. Each independent
-lock stores its request epoch (or null when idle). Setup derives the loading flags
-from these owners and the active epoch, so effect replay does not leave the same
-instance stuck loading. This does not revive the old response or release its lock.
-A request that never settles keeps its own lock indefinitely in that instance,
-including after reset or effect replay; no timeout or cancellation is introduced.
+The POST lock releases in finally even for stale responses. Reset/cleanup during
+a POST also marks its outcome as requiring a fresh status check. Confirmation
+then displays an instruction to close/reopen setup and does not send another POST.
+Only a successful current GET that started after the previous POST settled can
+clear this requirement. A GET started during that POST is insufficient even if
+its response arrives later. Ordinary closure does not invalidate POST results.
+Setup reconciles loading flags with the active owners; replay does not restore
+invalid responses. A POST that never settles retains its lock in that instance.
+No timeout, abort, server cancellation or server idempotency guarantee is added.
 
 Tests count setter attempts as well as visible state. They cover stale success
 and failure, new-generation state and lock preservation, fresh hook instances,
-and effect cleanup/setup replay. Ordinary modal closure does not invalidate a
-response. This is UI response invalidation, not backend cancellation: a submitted
+and effect cleanup/setup replay. This is UI response invalidation, not backend cancellation: a submitted
 print request may still create a server-side job after reset or navigation.
 No cancel API or transport abort is added.
+
+PR-review regressions cover both response orders, old finally execution during a
+replacement GET, pending-POST feedback/rechecking, and an accepted Workspace
+prompt superseding a pending print check. Former assertions that reset must keep
+a GET locked were changed to the replacement-GET contract; POST assertions remain.
+The print suite also executes the actual modal's JSX/handlers to check pending
+submission semantics (focusable aria-disabled button, activation guard, live
+status) and native Tab delegation. This is a component contract check with stubbed
+effects, not DOM focus verification. The print suite has 82 cases and generation
+has 27 cases following these review fixes.
+
+The modal retains submit-button focus while pending instead of disabling it and
+moving focus to the first button. Its handler and the hook's synchronous lock both
+reject repeated activation. Native showModal handles background inertness and Tab;
+the button-only manual trap and fallback focus effect have been removed. Actual
+Chromium keyboard/focus validation is separate from the VM checks.
 
 Pending queries read the latest committed frontend connection flag from a ref
 after checking response validity and active-job precedence. A layout effect updates

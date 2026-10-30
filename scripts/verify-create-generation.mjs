@@ -18,6 +18,26 @@ function generate(harness, prompt = "연필꽂이") {
   return harness.props("ChatPanel");
 }
 
+test("an accepted prompt invalidates a pending print check without blocking a new check", async (context) => {
+  const harness = workspace(context);
+  generate(harness);
+  harness.props("PreviewPanel").onPrint();
+  assert.equal(harness.queries.length, 1);
+  harness.submit("새 디자인");
+  harness.advance(1800);
+  harness.props("PreviewPanel").onPrint();
+  assert.equal(harness.queries.length, 2);
+  harness.queries[1].resolve(null);
+  await new Promise((done) => setImmediate(done));
+  assert.equal(harness.props("PrintSettingsModal").isOpen, true);
+  const updates = harness.stateUpdates;
+  harness.queries[0].resolve({ id: 1, status: "PRINTING" });
+  await new Promise((done) => setImmediate(done));
+  assert.equal(harness.stateUpdates, updates);
+  assert.equal(harness.props("PrintSettingsModal").isOpen, true);
+  assert.equal(harness.props("PreviewPanel").isPrintStatusChecking, false);
+});
+
 test("first generation keeps message order, 1800 ms loading, three versions and v3 selection", (context) => {
   const harness = workspace(context);
   assert.equal(history(harness).selectedVersionId, "v3");
