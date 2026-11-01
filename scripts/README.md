@@ -1,5 +1,194 @@
 # Print Lifecycle Verification
 
+## Create Generation Regression Checks
+
+Run `npm run test:create-generation` for the actual generation hook and its
+CreateWorkspace wiring. The Workspace scenarios were first run against the
+pre-extraction implementation, then retained after extraction. They cover:
+
+- Immediate user messages, ID allocation/order, 1800 ms loading, the first three
+  versions, subsequent single versions and the selected preview model.
+- Copyright keyword precedence and preservation of existing results, selection
+  and print blocking; print warnings still generate versions and block printing.
+- Latest-warning auto-fix, resolved/old/missing warning rejection, same-render
+  duplicate auto-fix prevention, correction messages and shared version numbering.
+- Valid/invalid version selection, reset during generation, fresh numbering and
+  unmount timer cleanup. Reset checks cover both desktop and mobile UI branches.
+- Image-only and text/image messages, filename preservation, input/attachment
+  cleanup only after acceptance, and the IME/Shift+Enter/Enter handler branches.
+- Real generation, attachment and print hooks composed by Workspace: accepted
+  starts close print settings or disconnected guidance; empty/loading rejections
+  preserve them. Generated/blocked/reset results reach print eligibility checks.
+- Direct `startGeneration({ prompt, userContent })` acceptance booleans: `true`
+  means the mock request started, not that generation completed successfully.
+- Same-render and rerendered duplicate starts: only the first request is accepted,
+  with one timer, no extra messages/IDs/versions and no rejected-request cleanup.
+- Reset immediately or at 1799 ms, forced execution of cancelled/completed
+  callbacks, unmount, fresh mounts and effect cleanup/setup replay. Old callbacks
+  must not call setters or release a newer request's lock.
+- Synchronous message-ID and timer-registration failures: no published state,
+  no retained lock, retry without reset, and preserved Workspace input,
+  attachments, results and print settings. Browser-call failures are injected
+  before the harness allocates an ID or registers a timer.
+
+`scripts/lib/create-generation-harness.mjs` uses the existing VM testing approach:
+actual TS modules, simulated hook cells/effects, deterministic IDs, a virtual
+clock, deferred print API promises, Object URLs and placeholder child components.
+State cells update immediately; handlers retain their render's snapshot until
+an explicit rerender. Setter attempts are counted, and state updaters are evaluated
+twice to detect side effects. Effect cleanup/setup can be replayed, including a
+callback between the two phases. This is not actual React StrictMode, batching,
+concurrent scheduling or browser rendering. Tests retain and invoke real timer
+callbacks after cancellation to check ownership defensively; this does not claim
+that browsers execute every cancelled timeout or measure real timer throttling.
+`test:print` also executes the shared generation/print integration assertions,
+replacing the former check for `closePrintSetup()` inside `appendMockResponse`.
+The other print source and API/Mock assertions remain in place.
+
+Generation admission uses an active-task ref as a synchronous lock. Each accepted
+request creates a unique task object that owns its 1800 ms timer; callback validity
+depends on both mounted state and that exact task identity. Reset and effect
+cleanup clear the owner before cancelling its timer. A stale callback returns
+before changing state or unlocking a newer task. Completion releases only its own
+lock, including copyright-warning completion. Reset can admit a fresh request
+immediately, even through a handler that captured the previous loading state.
+Message preparation finishes before lock acquisition; timer registration runs
+under the lock and releases it if registration throws. User messages and loading
+state are published only after successful registration. Synchronous exceptions
+still propagate to the caller; they are not converted to a successful start.
+Effect setup restores mounted state and reconciles the loading UI with the active
+owner, so cleanup/setup replay does not leave the hook permanently loading. Replay
+cancels pending work but does not reset existing messages or design results.
+
+This policy applies only to cancellable local Mock timers. Print HTTP locks retain
+their existing policy; no AI API, AbortController or backend cancellation is added.
+Auto-fix's separate synchronous guard and shared version numbering are unchanged.
+Before this fix, the eight added lifecycle cases and strengthened Workspace
+integration case failed (13 passed, 9 failed); the initial fix passed all 22 cases.
+Final review added four synchronous-failure cases, all of which failed before
+the error-path correction. The full generation suite now passes all 26 cases.
+
+Actual IME input, native file/clipboard events, responsive layout, modal focus,
+Canvas lifetime/rotation/zoom and fullscreen behavior need browser verification.
+No new dependency, server, AI API, upload or printer hardware is used.
+
+## Create Attachment Regression Checks
+
+Run `npm run test:create-attachments` for image filtering, the two-image limit,
+file/paste/drop handlers, repeated add/remove/reset operations and Object URL
+ownership. It also executes CreateWorkspace submit and new-chat handlers to check
+image-name messages and attachment cleanup. The actual TypeScript modules run in
+memory with simulated hook state/effects, URL APIs and child components; no server
+or new dependency is required. Mount-effect replay and repeated state-updater
+calls are simulated, not actual React StrictMode or concurrent scheduling.
+Native file dialogs, clipboard/drag events, image decoding, layout and browser
+accessibility still require browser verification.
+
+## Create Print Flow Regression Checks
+
+Run `npm run test:create-print-flow` to execute the actual Create print hook with
+deferred API promises and simulated React state, refs, callback identity, effects and
+timers. It covers eligibility, connection/active-job precedence, query and submit
+errors, same-render and rerendered duplicate calls, explicit confirmation, modal
+closure, reset and timer cleanup. GET and POST have different ownership policies.
+A GET owns a unique request object. Closing setup (including accepted prompts and
+printer-management navigation), reset and effect cleanup invalidate that owner
+and permit a replacement GET immediately. Success, error and finally check both
+identity and the UI epoch, so an old GET cannot reopen a modal or unlock a new GET.
+An in-flight POST retains its lock across closure, reset and effect cleanup until
+its own request settles; completing a GET never releases this POST lock.
+Requests retain their original zero-argument contract;
+colorMode and printerId are not added to the API payload.
+
+Reset increments the UI response epoch before clearing state. Effect cleanup
+also advances the epoch and marks the hook inactive; setup marks it active again.
+Requests capture their starting epoch. Success, error and loading updates are
+ignored after reset or cleanup, even if a later setup reactivates the hook.
+The POST lock releases in finally even for stale responses. Reset/cleanup during
+a POST also marks its outcome as requiring a fresh status check. Confirmation
+then displays an instruction to close/reopen setup and does not send another POST.
+Only a successful current GET that started after the previous POST settled can
+clear this requirement. A GET started during that POST is insufficient even if
+its response arrives later. Ordinary closure does not invalidate POST results.
+Setup reconciles loading flags with the active owners; replay does not restore
+invalid responses. A POST that never settles retains its lock in that instance.
+No timeout, abort, server cancellation or server idempotency guarantee is added.
+
+Tests count setter attempts as well as visible state. They cover stale success
+and failure, new-generation state and lock preservation, fresh hook instances,
+and effect cleanup/setup replay. This is UI response invalidation, not backend cancellation: a submitted
+print request may still create a server-side job after reset or navigation.
+No cancel API or transport abort is added.
+
+PR-review regressions cover both response orders, old finally execution during a
+replacement GET, pending-POST feedback/rechecking, and an accepted Workspace
+prompt superseding a pending print check. Former assertions that reset must keep
+a GET locked were changed to the replacement-GET contract; POST assertions remain.
+The print suite also executes the actual modal's JSX/handlers to check pending
+submission semantics (focusable aria-disabled button, activation guard, live
+status) and native Tab delegation. This is a component contract check with stubbed
+effects, not DOM focus verification. The print suite has 82 cases and generation
+has 27 cases following these review fixes.
+
+The modal retains submit-button focus while pending instead of disabling it and
+moving focus to the first button. Its handler and the hook's synchronous lock both
+reject repeated activation. Native showModal handles background inertness and Tab;
+the button-only manual trap and fallback focus effect have been removed. Actual
+Chromium keyboard/focus validation is separate from the VM checks.
+
+Pending queries read the latest committed frontend connection flag from a ref
+after checking response validity and active-job precedence. A layout effect updates
+only this ref when the input changes, before passive effects; it does not advance
+the response epoch, reset UI or release request locks. Writing the ref during render
+would expose uncommitted values, while replacing a callback would not update an
+already pending closure. A passive effect alone can leave a post-commit gap.
+Connection changes do not cancel already submitted prints. The Provider, Mock
+connection policy and API contract are unchanged; this is not a physical printer probe.
+
+Success notices fade 3500 ms after success and hide at 4000 ms, preserving the UI's
+500 ms opacity transition. Each success creates a new notice identity and monotonic
+start time within the notice state. Its effect owns two local timers and depends on
+that identity, not the visible/fading phase. Ordinary rerenders and fading therefore
+do not cancel the pending hide timer. A subsequent success replaces the notice even
+while it is visible; reset removes it. Cleanup cancels both timers and deactivates
+their callbacks. A functional state update checks notice identity as well, so an old
+callback cannot overwrite a reset or newer notice before passive cleanup runs.
+Effect replay cancels old timers and schedules only the remaining delays from the
+same start time, rather than restarting a full lifetime. Timer IDs stay local to the
+effect; this lifecycle does not reuse or change API response epochs or request locks.
+
+The former `legacy timing` case now requires visible -> fading -> hidden. A virtual
+monotonic clock advances timer callbacks and rerenders after each callback. Tests
+check both timing boundaries, unchanged timer IDs on ordinary rerenders, reset and
+unmount in either phase, repeated success, effect replay, errors and retry. Captured
+callbacks are also invoked after cleanup or before deferred passive cleanup to test
+defensive ownership checks; this deliberately adversarial invocation is not a claim
+that browsers execute every cancelled timeout. These tests do not measure real CSS
+animation or browser timer throttling. Actual timers may run later than their deadline.
+The clock can also advance without dispatching timers. Delayed first setup, effect
+replay after 4000 ms and overdue callbacks must finish without restarting a lifetime;
+a subsequent notice must still receive its own full lifetime. Overdue callbacks run
+at the current virtual time, never by moving the clock backwards to their due time.
+
+The harness does not run a browser, React's concurrent scheduler or native modal
+focus/keyboard behavior. State cells update immediately, while handlers retain
+their render's snapshot until the test explicitly rerenders; refs retain the
+same mutable object across renders. This is not a simulation of React's full
+batching or StrictMode behavior. `render(nextOptions)` merges new hook inputs and
+executes the actual hook, then runs layout effects before passive effects. The
+connection tests can defer the current commit's passive effects until the next render
+and resolve a query in that gap. They cover disconnect, reconnect, active-job/error
+precedence, retry, duplicate calls and connection changes combined with reset/unmount.
+Both Create harnesses support layout effects; attachment assertions remain unchanged.
+Pending-request effect replay tests exercise
+invalidation, retained locks and retry on the same instance without an extra reset;
+fresh-mount tests also replay setup/cleanup before issuing normal requests.
+They do not prove browser event ordering or React's real lifecycle scheduling.
+API adapter/Mock contracts remain covered by the print
+checks below, which use the actual entity and transport modules.
+
+## Print Checks
+
 Run `node scripts/verify-print-lifecycle.mjs` or `npm run test:print` after
 installing the project's dependencies. `npm run test:e2e:print` remains an alias
 for compatibility; this is a module/contract check, not a browser E2E test.
@@ -7,7 +196,8 @@ for compatibility; this is a module/contract check, not a browser E2E test.
 The default command runs offline and starts no server. It transpiles and runs the
 actual print entity, shared API client, and mock store in isolated VM contexts.
 It ignores the host's mock/API environment settings. `--mock` is an alias for
-this default mode; `--contract-only` runs only the frontend source checks.
+this default mode; `--contract-only` runs the frontend source checks and the
+executed generation/print integration check, without API adapter/Mock lifecycle checks.
 
 Covered behavior:
 
