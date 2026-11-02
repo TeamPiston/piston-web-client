@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, Minus, Move3d, Plus, RotateCw } from "lucide-react";
+import type { RefObject } from "react";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import { PistonLogo } from "@/shared/ui";
 import type { PrintSuccessPhase, ResolvedArtworkModelParams } from "../../model/types";
@@ -15,6 +16,7 @@ interface PreviewPanelProps {
   onPrint: () => void;
   onRetryPrintCheck: () => void;
   printSuccessPhase: PrintSuccessPhase;
+  printButtonRef: RefObject<HTMLButtonElement | null>;
   onZoom: (direction: "in" | "out") => void;
 }
 
@@ -28,6 +30,7 @@ export function PreviewPanel({
   onPrint,
   onRetryPrintCheck,
   printSuccessPhase,
+  printButtonRef,
   onZoom,
 }: PreviewPanelProps) {
   return (
@@ -56,6 +59,7 @@ export function PreviewPanel({
               scale={modelParams.scale}
               stlUrl={modelParams.stlUrl}
               variant="create"
+              fullscreenButtonPosition="top-right"
             />
             <div className="absolute left-1/2 top-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white px-4 py-2 text-xs text-gray-500 shadow-md ring-1 ring-black/[0.04]">
               <Move3d className="h-4 w-4 text-gray-950" aria-hidden="true" />
@@ -91,6 +95,7 @@ export function PreviewPanel({
 
       <div className="mt-5 grid w-full max-w-[432px] grid-cols-[minmax(0,1fr)_48px] gap-7">
         <button
+          ref={printButtonRef}
           type="button"
           onClick={onPrint}
           disabled={!isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}

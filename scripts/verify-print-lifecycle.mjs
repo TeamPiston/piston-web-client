@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { createContext, Script } from "node:vm";
 import ts from "typescript";
+import { verifyGenerationPrintIntegration } from "./lib/create-generation-harness.mjs";
 
 const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Set(process.argv.slice(2));
@@ -65,20 +66,67 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", fetchImpl }) {
 }
 
 async function verifyFrontendContracts() {
-  const [createSource, previewSource, myPageSource] = await Promise.all([
+  const [createSource, printFlowSource, previewSource, myPageSource] = await Promise.all([
     readFile(resolve(ROOT_DIR, "src/page-slices/create/ui/create-workspace.tsx"), "utf8"),
+    readFile(resolve(ROOT_DIR, "src/page-slices/create/model/use-create-print-flow.ts"), "utf8"),
     readFile(resolve(ROOT_DIR, "src/page-slices/create/ui/components/preview-panel.tsx"), "utf8"),
     readFile(resolve(ROOT_DIR, "src/page-slices/mypage/ui/mypage-page.tsx"), "utf8"),
   ]);
-  assert(createSource.includes("createPrintTask()"), "Create: missing print creation");
+  assert(
+    createSource.includes("useCreatePrintFlow({ isGenerated, isPrintBlocked, isPrinterConnected })"),
+    "Create: missing print flow integration",
+  );
   for (const statement of [
-    'setPrintSuccessPhase("visible")',
-    'setPrintSuccessPhase("fading"), 3500',
-    'setPrintSuccessPhase("hidden"), 4000',
+    "onPrint={handlePrintOpen}",
+    "onRetryPrintCheck={handlePrintOpen}",
+    "onConfirm={handlePrintConfirm}",
+    "onClose={handlePrintModalClose}",
+    "onClose={handlePrinterConnectionModalClose}",
+    "onClose={handlePrintInProgressModalClose}",
+    "isOpen={isPrintModalOpen && !isPrintCheckFailed && !isPrintStatusChecking}",
+    "isOpen={isPrinterConnectionModalOpen}",
+    "isOpen={isPrintInProgressModalOpen}",
+    'currentPrintTask?.status === "PRINTING"',
+    "isSubmitting={isPrintStarting}",
+    "errorMessage={printStartError}",
+    "printSuccessPhase={printSuccessPhase}",
   ]) {
-    assert(createSource.includes(statement), "Create: missing success overlay contract: " + statement);
+    assert(createSource.includes(statement), "Create: missing print flow wiring: " + statement);
+  }
+  const createAst = ts.createSourceFile("create-workspace.tsx", createSource, ts.ScriptTarget.ES2022, true);
+  const callbacks = new Map();
+  const collectCallbacks = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      callbacks.set(node.name.text, node.initializer.getText(createAst));
+    }
+    ts.forEachChild(node, collectCallbacks);
+  };
+  collectCallbacks(createAst);
+  for (const [callback, call] of [
+    ["handleNewChat", "resetPrintFlow()"],
+    ["handleOpenPrinterManagement", "closePrintSetup()"],
+    ["handleOpenPrinterManagement", 'router.push("/mypage?tab=printer")'],
+  ]) {
+    assert(callbacks.get(callback)?.includes(call), "Create: missing " + callback + " integration: " + call);
+  }
+  await verifyGenerationPrintIntegration();
+  console.log("PASS Create generation acceptance, print setup closure and eligibility (VM execution)");
+  assert(printFlowSource.includes("createPrintTask()"), "Create: missing print creation");
+  for (const statement of [
+    'setPrintSuccess({ phase: "visible", notice: { startedAt: performance.now() } })',
+    'updatePhase("fading"), Math.max(0, 3500 - elapsed)',
+    'updatePhase("hidden"), Math.max(0, 4000 - elapsed)',
+    'printSuccessPhase: printSuccess?.phase ?? "hidden"',
+    'setPrintSuccess(null)',
+  ]) {
+    assert(printFlowSource.includes(statement), "Create: missing success overlay contract: " + statement);
   }
   for (const statement of [
+    'printSuccessPhase !== "hidden"',
+    'printSuccessPhase === "fading" ? "opacity-0" : "opacity-100"',
+    "transition-opacity duration-500",
+    'role="status"',
+    'aria-live="polite"',
     "출력이 시작되었습니다.",
     "마이페이지에서 출력 상황을 확인해 주세요!",
     'disabled={!isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}',

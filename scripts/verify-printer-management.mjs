@@ -154,6 +154,7 @@ function runtime(initialPrinters) {
     const requireSource = (specifier) => {
       if (specifier === "react") return react;
       if (specifier === "react/jsx-runtime") return { jsx, jsxs: jsx };
+      if (specifier === "@/shared/ui") return load(resolve(root, "src/shared/ui/use-native-dialog.ts"));
       const target = specifier.startsWith("@/")
         ? resolve(root, "src", specifier.slice(2))
         : resolve(dirname(path), specifier);

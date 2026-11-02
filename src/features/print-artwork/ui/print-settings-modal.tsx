@@ -1,7 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState, type RefObject } from "react";
+import { useNativeDialog } from "@/shared/ui";
 import type { FilamentColor } from "@/entities/artwork";
 import type { Printer } from "@/entities/printer";
 
@@ -19,6 +20,7 @@ interface PrintSettingsModalProps {
   };
   errorMessage?: string | null;
   isSubmitting?: boolean;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onConfirm: (settings: { colorMode: string }) => void;
   onOpenPrinterManagement: () => void;
@@ -40,52 +42,33 @@ export function PrintSettingsModal({
   filamentUsage,
   errorMessage = null,
   isSubmitting = false,
+  returnFocusRef,
   onClose,
   onConfirm,
   onOpenPrinterManagement,
 }: PrintSettingsModalProps) {
   const [colorMode, setColorMode] = useState<PrintColorMode>("color");
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose]);
+  const { dialogRef, onCancel } = useNativeDialog({ isOpen, onClose, returnFocusRef });
 
   if (!isOpen) {
     return null;
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="presentation"
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="print-settings-title"
+      className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none items-center justify-center bg-transparent p-4 backdrop:bg-black/40 open:flex"
+      onCancel={onCancel}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
+          event.preventDefault();
           onClose();
         }
       }}
     >
       <section
-        aria-labelledby="print-settings-title"
-        aria-modal="true"
         className="max-h-[calc(100dvh-2rem)] w-full max-w-[460px] overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7"
-        role="dialog"
       >
         <div className="relative text-center">
           <h2 id="print-settings-title" className="text-base font-bold text-gray-950">
@@ -214,13 +197,21 @@ export function PrintSettingsModal({
             </button>
             <button
               type="button"
-              onClick={() => onConfirm({ colorMode })}
-              disabled={!isPrinterConnected || isSubmitting}
-              className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300"
+              onClick={() => {
+                if (!isSubmitting && isPrinterConnected) onConfirm({ colorMode });
+              }}
+              disabled={!isPrinterConnected}
+              aria-disabled={isSubmitting || !isPrinterConnected}
+              className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] aria-disabled:cursor-not-allowed aria-disabled:bg-gray-300"
             >
               {isSubmitting ? "출력 시작 중..." : "출력 시작하기"}
             </button>
           </div>
+          {isSubmitting && (
+            <p role="status" className="mt-3 text-center text-xs font-medium text-gray-500">
+              출력 요청을 처리하고 있어요. 창을 닫아도 전송된 요청은 계속 처리될 수 있어요.
+            </p>
+          )}
           {errorMessage && (
             <p className="mt-3 text-center text-xs font-medium text-red-500" role="alert">
               {errorMessage}
@@ -228,7 +219,7 @@ export function PrintSettingsModal({
           )}
         </div>
       </section>
-    </div>
+    </dialog>
   );
 }
 
