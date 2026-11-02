@@ -16,7 +16,7 @@ const source = ts.transpileModule(readFileSync(path, "utf8"), {
 
 // Simulate DOM focus and the passive-effect cleanup after DOM removal.
 // Native browser focus trapping and React commit scheduling are not emulated.
-function modalHarness() {
+function modalHarness({ print = false } = {}) {
   const document = { activeElement: null, body: { style: { overflow: "auto" } } };
   class Element {
     isConnected = true;
@@ -37,36 +37,50 @@ function modalHarness() {
     }
   }
   const effects = [];
-  const exports = {};
-  const dialog = new Element();
-  let opened = false;
-  let closed = false;
-  dialog.showModal = () => { opened = true; document.activeElement = dialog; };
-  dialog.close = () => { closed = true; document.activeElement = document.body; };
-  dialog.getBoundingClientRect = () => ({ left: 10, right: 100, top: 10, bottom: 100 });
   const jsx = (type, props) => ({ type, props });
-  new Script(source, { filename: path }).runInNewContext({
-    exports,
+  const react = {
+    useRef: () => ({ current: null }),
+    useState: (initial) => [initial, () => {}],
+    useEffect: (effect) => effects.push(effect),
+  };
+  const globals = {
     document,
     HTMLElement: Element,
     getComputedStyle: (element) => ({ visibility: element.visibility }),
-    require(specifier) {
+  };
+  function load(modulePath) {
+    const exports = {};
+    const compiled = modulePath === path ? source : ts.transpileModule(readFileSync(modulePath, "utf8"), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+      fileName: modulePath,
+    }).outputText;
+    new Script(compiled, { filename: modulePath }).runInNewContext({ ...globals, exports, require(specifier) {
       if (specifier === "react/jsx-runtime") return { jsx, jsxs: jsx };
+      if (specifier === "@/shared/ui") return load(fileURLToPath(new URL("../src/shared/ui/use-native-dialog.ts", import.meta.url)));
+      if (specifier === "lucide-react") return { X: "X" };
       assert.equal(specifier, "react");
-      return {
-        useRef: () => ({ current: null }),
-        useEffect: (effect) => effects.push(effect),
-      };
-    },
-  });
+      return react;
+    } });
+    return exports;
+  }
+  const exports = load(print ? fileURLToPath(new URL("../src/features/print-artwork/ui/print-settings-modal.tsx", import.meta.url)) : path);
   return {
     document,
     element: () => new Element(),
-    mount(previous, getFallbackFocusTargets) {
+    mount(previous, getFallbackFocusTargets, returnFocusRef) {
+      const dialog = new Element();
+      let opened = false;
+      let closed = false;
+      dialog.showModal = () => { opened = true; document.activeElement = dialog; };
+      dialog.close = () => { closed = true; document.activeElement = document.body; };
+      dialog.getBoundingClientRect = () => ({ left: 10, right: 100, top: 10, bottom: 100 });
       document.activeElement = previous;
       let closeRequests = 0;
-      const tree = exports.PrinterModalShell({
+      const render = print ? exports.PrintSettingsModal : exports.PrinterModalShell;
+      const tree = render({
         labelledBy: "title",
+        isOpen: true, returnFocusRef,
+        filamentColors: [], filamentUsage: { length: "1m", weight: "1g" },
         onClose: () => { closeRequests += 1; },
         getFallbackFocusTargets,
       });
@@ -78,10 +92,10 @@ function modalHarness() {
       tree.props.onCancel({ preventDefault: () => { prevented = true; } });
       assert.equal(prevented, true);
       assert.equal(closeRequests, 1, "Native ESC cancel must retain the close handler");
-      return () => {
+      return (expectedOverflow = "auto") => {
         cleanup();
         assert.equal(closed, true);
-        assert.equal(document.body.style.overflow, "auto");
+        assert.equal(document.body.style.overflow, expectedOverflow);
       };
     },
   };
@@ -138,3 +152,35 @@ const editButton = otherModal.element();
 otherModal.mount(editButton)();
 assert.equal(otherModal.document.activeElement, editButton);
 console.log("PASS simulated DOM modal focus: cancel, deletion, unavailable targets, ordinary close and ESC handler");
+
+const printModal = modalHarness({ print: true });
+const previous = printModal.element();
+const printTrigger = printModal.element();
+printModal.mount(previous, undefined, { current: printTrigger })();
+assert.equal(printModal.document.activeElement, printTrigger, "Print must prefer its explicit return target");
+
+for (const reason of ["disabled", "hidden", "inert", "disconnected", "visibility"]) {
+  const print = modalHarness({ print: true });
+  const trigger = print.element();
+  const cleanup = print.mount(trigger);
+  if (reason === "disconnected") trigger.isConnected = false;
+  else if (reason === "visibility") trigger.visibility = "hidden";
+  else trigger[reason] = true;
+  cleanup();
+  assert.equal(trigger.focusCalls, 0, "Print return target must reject " + reason);
+  assert.equal(print.document.activeElement, print.document.body);
+}
+console.log("PASS print modal uses the same native dialog lifecycle and rejects hidden/inert/disabled return targets");
+
+const overlapping = modalHarness();
+const closeFirst = overlapping.mount(overlapping.element());
+const closeSecond = overlapping.mount(overlapping.element());
+closeFirst("hidden");
+closeSecond();
+const stacked = modalHarness();
+stacked.document.body.style.overflow = "clip";
+const closeLower = stacked.mount(stacked.element());
+const closeUpper = stacked.mount(stacked.element());
+closeUpper("hidden");
+closeLower("clip");
+console.log("PASS shared dialog scroll lock remains owned until the last overlapping dialog closes");

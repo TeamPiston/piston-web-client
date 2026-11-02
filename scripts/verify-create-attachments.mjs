@@ -18,6 +18,8 @@ const sources = new Map([
   "src/page-slices/create/model/model-utils.ts",
   "src/page-slices/create/model/mock-data.ts",
   "src/shared/mock/mock-data.ts",
+  "src/shared/lib/index.ts",
+  "src/shared/lib/use-mounted-ref.ts",
 ].map((path) => [resolve(root, path), ts.transpileModule(readFileSync(resolve(root, path), "utf8"), {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,
@@ -102,7 +104,8 @@ function createHarness(context, { workspace = false, desktop = false } = {}) {
       const target = specifier.startsWith("@/")
         ? resolve(root, "src", specifier.slice(2))
         : resolve(dirname(path), specifier);
-      return load(sources.has(target + ".ts") ? target + ".ts" : target + ".tsx");
+      return load(sources.has(target + ".ts") ? target + ".ts"
+        : sources.has(target + ".tsx") ? target + ".tsx" : resolve(target, "index.ts"));
     };
     new Script("(function(require, module, exports) {\n" + sources.get(path) + "\n})", {
       filename: path,

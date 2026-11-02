@@ -82,6 +82,7 @@ interface ArtworkModelPreviewProps {
   color?: string;
   scale?: ArtworkModelScale;
   showFullscreenControl?: boolean;
+  fullscreenButtonPosition?: "top-right" | "bottom-right";
   static?: boolean;
   stlUrl: string;
   variant?: "detail" | "detail-compact" | "create";
@@ -92,6 +93,7 @@ export function ArtworkModelPreview({
   color = "#9ca3af",
   scale = [1, 1, 1],
   showFullscreenControl = true,
+  fullscreenButtonPosition = "bottom-right",
   static: isStatic = false,
   stlUrl,
   variant = "detail",
@@ -169,7 +171,7 @@ export function ArtworkModelPreview({
           title={isFullscreen ? "전체화면 닫기" : "전체화면으로 보기"}
           className={[
             "absolute right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-sm transition hover:bg-white",
-            variant === "create" ? "top-4" : "bottom-4",
+            fullscreenButtonPosition === "top-right" ? "top-4" : "bottom-4",
           ].join(" ")}
         >
           {isFullscreen ? (

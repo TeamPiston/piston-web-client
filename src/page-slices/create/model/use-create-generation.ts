@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useMountedRef } from "@/shared/lib";
 import {
   COPYRIGHT_KEYWORDS,
   MOCK_COPYRIGHT_WARNING,
@@ -32,16 +33,15 @@ export function useCreateGeneration() {
   );
   const nextVersionNumberRef = useRef(1);
   const activeGenerationRef = useRef<GenerationTask | null>(null);
-  const isMountedRef = useRef(false);
+  const isMountedRef = useMountedRef();
   const autoFixedMessageIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
-    isMountedRef.current = true;
-    // Cleanup cancels local work; effect replay must also restore the idle UI.
+    // Activity can reconnect effects while preserving loading state. Reconcile it
+    // with timer ownership after cleanup cancels local work (not only initial mount).
     setIsLoading(activeGenerationRef.current !== null);
 
     return () => {
-      isMountedRef.current = false;
       const task = activeGenerationRef.current;
       activeGenerationRef.current = null;
       if (task !== null && task.timeoutId !== null) {

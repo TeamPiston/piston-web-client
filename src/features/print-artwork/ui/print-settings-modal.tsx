@@ -1,7 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useState, type RefObject } from "react";
+import { useNativeDialog } from "@/shared/ui";
 import type { FilamentColor } from "@/entities/artwork";
 import type { Printer } from "@/entities/printer";
 
@@ -47,31 +48,7 @@ export function PrintSettingsModal({
   onOpenPrinterManagement,
 }: PrintSettingsModalProps) {
   const [colorMode, setColorMode] = useState<PrintColorMode>("color");
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const dialog = dialogRef.current;
-    const previousFocus = document.activeElement;
-    const returnFocusTarget = returnFocusRef?.current ?? previousFocus;
-    const previousOverflow = document.body.style.overflow;
-    dialog?.showModal();
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      dialog?.close();
-      document.body.style.overflow = previousOverflow;
-      if (
-        returnFocusTarget instanceof HTMLElement && returnFocusTarget.isConnected &&
-        !returnFocusTarget.matches(":disabled") && returnFocusTarget.getClientRects().length > 0
-      ) {
-        returnFocusTarget.focus({ preventScroll: true });
-      }
-    };
-  }, [isOpen, returnFocusRef]);
+  const { dialogRef, onCancel } = useNativeDialog({ isOpen, onClose, returnFocusRef });
 
   if (!isOpen) {
     return null;
@@ -82,10 +59,7 @@ export function PrintSettingsModal({
       ref={dialogRef}
       aria-labelledby="print-settings-title"
       className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none items-center justify-center bg-transparent p-4 backdrop:bg-black/40 open:flex"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
+      onCancel={onCancel}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           event.preventDefault();

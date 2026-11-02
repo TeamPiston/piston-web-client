@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import "./verify-stl-preview.mjs";
 import {
   createGenerationHarness, plain, submitEvent, verifyGenerationPrintIntegration,
 } from "./lib/create-generation-harness.mjs";

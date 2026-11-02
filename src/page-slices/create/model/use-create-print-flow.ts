@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useMountedRef } from "@/shared/lib";
 import { createPrintTask, getCurrentPrintTask, type PrintTask } from "@/entities/print";
 import type { PrintSuccessPhase } from "./types";
 
@@ -38,7 +39,7 @@ export function useCreatePrintFlow({
   const printStartInFlightEpochRef = useRef<number | null>(null);
   const printStartNeedsRecheckRef = useRef(false);
   const responseEpochRef = useRef(0);
-  const isMountedRef = useRef(false);
+  const isMountedRef = useMountedRef();
   const isPrinterConnectedRef = useRef(isPrinterConnected);
 
   useLayoutEffect(() => {
@@ -46,12 +47,10 @@ export function useCreatePrintFlow({
   }, [isPrinterConnected]);
 
   useEffect(() => {
-    isMountedRef.current = true;
     setIsPrintStatusChecking(activePrintCheckRef.current !== null);
     setIsPrintStarting(printStartInFlightEpochRef.current === responseEpochRef.current);
 
     return () => {
-      isMountedRef.current = false;
       responseEpochRef.current += 1;
       activePrintCheckRef.current = null;
       if (printStartInFlightEpochRef.current !== null) {
@@ -90,9 +89,8 @@ export function useCreatePrintFlow({
     };
   }, [successNotice]);
 
-  const isCurrentResponse = (requestEpoch: number) => (
-    isMountedRef.current && responseEpochRef.current === requestEpoch
-  );
+  // Reset and cleanup advance the epoch; mounted state guards request admission only.
+  const isCurrentResponse = (requestEpoch: number) => responseEpochRef.current === requestEpoch;
 
   const handlePrintOpen = () => {
     if (

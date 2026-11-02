@@ -15,6 +15,8 @@ const allowedPaths = new Set([
   "src/page-slices/create/model/model-utils.ts",
   "src/page-slices/create/model/mock-data.ts",
   "src/shared/mock/mock-data.ts",
+  "src/shared/lib/index.ts",
+  "src/shared/lib/use-mounted-ref.ts",
 ].map((path) => resolve(root, path)));
 const sources = new Map();
 export const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -135,7 +137,8 @@ export function createGenerationHarness({
       if (Object.hasOwn(stubs, specifier)) return stubs[specifier];
       const target = specifier.startsWith("@/")
         ? resolve(root, "src", specifier.slice(2)) : resolve(dirname(path), specifier);
-      return load(allowedPaths.has(target + ".ts") ? target + ".ts" : target + ".tsx");
+      return load(allowedPaths.has(target + ".ts") ? target + ".ts"
+        : allowedPaths.has(target + ".tsx") ? target + ".tsx" : resolve(target, "index.ts"));
     };
     new Script("(function(require, module, exports) {\n" + sources.get(path) + "\n})", {
       filename: path,

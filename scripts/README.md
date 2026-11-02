@@ -66,7 +66,7 @@ Auto-fix's separate synchronous guard and shared version numbering are unchanged
 Before this fix, the eight added lifecycle cases and strengthened Workspace
 integration case failed (13 passed, 9 failed); the initial fix passed all 22 cases.
 Final review added four synchronous-failure cases, all of which failed before
-the error-path correction. The full generation suite now passes all 26 cases.
+the error-path correction. That review brought the generation suite to 26 cases.
 
 Actual IME input, native file/clipboard events, responsive layout, modal focus,
 Canvas lifetime/rotation/zoom and fullscreen behavior need browser verification.
@@ -128,7 +128,8 @@ The print suite also executes the actual modal's JSX/handlers to check pending
 submission semantics (focusable aria-disabled button, activation guard, live
 status) and native Tab delegation. This is a component contract check with stubbed
 effects, not DOM focus verification. The print suite has 82 cases and generation
-has 27 cases following these review fixes.
+has 27 lifecycle/integration cases following these review fixes. The generation
+command also runs two viewer position contract cases, for 29 cases in total.
 
 The modal retains submit-button focus while pending instead of disabling it and
 moving focus to the first button. Its handler and the hook's synchronous lock both
@@ -186,6 +187,39 @@ fresh-mount tests also replay setup/cleanup before issuing normal requests.
 They do not prove browser event ordering or React's real lifecycle scheduling.
 API adapter/Mock contracts remain covered by the print
 checks below, which use the actual entity and transport modules.
+
+## Shared Lifecycle and Viewer Regression Checks
+
+`useMountedRef` is exported through `@/shared/lib` and tracks committed passive
+effect lifetime only. Generation still owns its cancellable local timer/task;
+printing still owns response epochs, replaceable GET identities and the retained
+POST lock. Request admission checks mounted state; print response validity checks
+the epoch advanced by reset/cleanup. The harnesses execute the actual common hook,
+including cleanup/setup replay and stale callbacks, rather than stubbing its result.
+
+Generation's loading reconciliation is retained: React Activity can disconnect
+effects while keeping state, so cancellation must be reflected when effects
+reconnect. A separate Chromium check with the installed React development build
+exercised real StrictMode setup/cleanup/setup and Activity hide/show during a
+pending generation. This is distinct from the deterministic VM replay and does
+not claim coverage of every concurrent scheduling interleaving.
+
+`useNativeDialog` is exported through `@/shared/ui`. PrintSettingsModal and
+PrinterModalShell share showModal/close, Escape cancellation, return-target
+validation and scroll-lock ownership. Domain forms and submit/delete actions stay
+in their features. Native dialog retains Tab trapping/background inertness.
+`test:printer` executes both actual modal implementations and the shared hook with
+a simulated DOM. Checks cover explicit focus targets, removed/disabled/hidden/
+inert/invisible targets, fallback focus and independent overlapping dialogs closed
+in either order. The last dialog restores the original overflow value. These
+checks do not prove native browser focus handling or React DOM commit order.
+
+`scripts/verify-stl-preview.mjs`, included by `test:create-generation`, executes
+the actual viewer/PreviewPanel JSX with child components stubbed. It checks the
+explicit fullscreenButtonPosition option independently of variant, default
+bottom-right placement, Create's top-right placement and unchanged initial camera
+distance. It does not render WebGL, measure CSS positions or prove rotation/zoom;
+those require a separate browser check.
 
 ## Print Checks
 

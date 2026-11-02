@@ -14,6 +14,19 @@ const flushResponses = () => new Promise((resolve) => setImmediate(resolve));
 const settings = { colorMode: "monochrome" };
 const printTask = (status = "PRINTING") => ({ id: 1, status, artworkName: "Existing design" });
 
+function loadReactModule(relative, react) {
+  const modulePath = fileURLToPath(new URL(relative, import.meta.url));
+  const compiled = ts.transpileModule(readFileSync(modulePath, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }, fileName: modulePath,
+  }).outputText;
+  const exports = {};
+  new Script(compiled, { filename: modulePath }).runInNewContext({ exports, require(name) {
+    assert.equal(name, "react");
+    return react;
+  } });
+  return exports;
+}
+
 function renderPrintModal(isSubmitting) {
   const modalPath = fileURLToPath(new URL("../src/features/print-artwork/ui/print-settings-modal.tsx", import.meta.url));
   const modalSource = ts.transpileModule(readFileSync(modalPath, "utf8"), {
@@ -22,13 +35,15 @@ function renderPrintModal(isSubmitting) {
   }).outputText;
   const exports = {};
   const jsx = (type, props) => ({ type, props });
+  const react = {
+    useState: (initial) => [initial, () => {}], useRef: () => ({ current: null }),
+    useEffect() {},
+  };
   new Script(modalSource, { filename: modalPath }).runInNewContext({
     exports,
     require(name) {
-      if (name === "react") return {
-        useState: (initial) => [initial, () => {}], useRef: () => ({ current: null }),
-        useEffect() {}, useLayoutEffect() {},
-      };
+      if (name === "react") return react;
+      if (name === "@/shared/ui") return loadReactModule("../src/shared/ui/use-native-dialog.ts", react);
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       assert.equal(name, "lucide-react");
       return { X: "X" };
@@ -224,6 +239,7 @@ function createHarness(context, initialOptions = {}) {
     exports,
     require(specifier) {
       if (specifier === "react") return react;
+      if (specifier === "@/shared/lib") return loadReactModule("../src/shared/lib/use-mounted-ref.ts", react);
       assert.equal(specifier, "@/entities/print");
       return api;
     },
