@@ -26,7 +26,6 @@ export function useRegisterForm() {
   const handleEmailAuth = () => {
     setEmailTouched(true);
     if (!emailValid) return;
-    console.log("인증번호 발송 대상:", email);
   };
 
   const handleAuthConfirm = () => {
@@ -45,7 +44,6 @@ export function useRegisterForm() {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!isFormValid) return;
-    console.log("회원가입 완료:", { email, authCode, id, password });
   };
 
   return {
