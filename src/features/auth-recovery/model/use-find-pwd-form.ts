@@ -10,7 +10,6 @@ export function useFindPwdForm() {
     event.preventDefault();
 
     if (email.trim()) {
-      console.log({ email });
       setIsSubmitted(true);
     }
   };

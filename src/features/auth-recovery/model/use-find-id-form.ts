@@ -10,7 +10,6 @@ export function useFindIdForm() {
     event.preventDefault();
 
     if (email.trim()) {
-      console.log({ email });
       setIsSubmitted(true);
     }
   };
