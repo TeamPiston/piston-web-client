@@ -136,11 +136,15 @@ export async function getCurrentPrintTask() {
   return withMockFallback(
     async () => {
       const response = await apiClient.get<unknown>("/api/prints/current");
-      if (response === null) {
+      if (unwrapResponse(response) === null) {
         return null;
       }
 
-      return normalizePrintTask(response);
+      const task = normalizePrintTask(response);
+      if (!task) {
+        throw new Error("출력 상태 응답 형식이 올바르지 않습니다.");
+      }
+      return task;
     },
     fetchMockPrintStatus,
   );

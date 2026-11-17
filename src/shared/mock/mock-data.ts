@@ -487,26 +487,8 @@ export async function withMockFallback<T>(
     return mockOperation();
   }
 
-  try {
-    return await apiOperation();
-  } catch (error) {
-    if (process.env.NODE_ENV === "production" || isHttpError(error)) {
-      throw error;
-    }
-
-    return mockOperation();
-  }
-}
-
-function isHttpError(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    typeof error.status === "number" &&
-    error.status >= 400 &&
-    error.status < 600
-  );
+  // The historical name is retained for callers; API mode never falls back.
+  return apiOperation();
 }
 
 export async function fetchMockPrintStatus(): Promise<MockPrintTask | null> {

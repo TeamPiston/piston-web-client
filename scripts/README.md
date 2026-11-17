@@ -1,5 +1,50 @@
 # Print Lifecycle Verification
 
+## API 통신 준비 및 모드 구분
+
+공통 HTTP 클라이언트는 `NEXT_PUBLIC_API_BASE_URL`을 사용합니다. 제공된 서버
+주소는 `https://piston.https.gsmsv.site/`입니다. 사용자 환경 파일을 자동으로
+변경하지 않습니다. 프린터에 영향을 주지 않는 로컬 UI 검증에는 다음 설정을
+사용하고, 환경 변수 변경 후에는 다음 실행/빌드에 반영되는지 확인하세요.
+
+```dotenv
+NEXT_PUBLIC_API_BASE_URL=https://piston.https.gsmsv.site/
+NEXT_PUBLIC_USE_MOCK=true
+```
+
+`NEXT_PUBLIC_USE_MOCK`이 정확히 `true`일 때만 `withMockFallback` 호출부가
+Mock을 선택합니다. 그 외에는 API 모드이며 개발/운영 모두 HTTP 오류,
+네트워크/CORS 오류, 응답 검증 실패를 Mock 성공으로 바꾸지 않습니다.
+함수 이름은 기존 호출부 호환을 위해 유지합니다. URL이 비어 있으면 기존처럼
+동일 Origin의 상대 경로를 사용하므로 외부 서버 연동 시 URL을 명시해야 합니다.
+
+`ApiError.status`는 HTTP 응답 코드를 유지하며, 응답이 없는 네트워크 오류는
+`0`입니다. `kind`는 `http`, `network`, `response`를 구분합니다. 브라우저에서
+CORS 실패와 일반 연결 실패는 확정적으로 구별할 수 없습니다. 오류 객체나
+요청 Body, 토큰을 로그에 출력하지 마세요. HTTP 오류의 `data`에는 서버 응답이
+남아 있을 수 있습니다. 보호 요청의 401 세션 정리·로그인 이동 정책은 유지합니다.
+`apiClient`의 `decode` 옵션으로 `unknown` 응답을 검사할 수 있습니다.
+제네릭 타입 선언만으로 JSON 검증이 되지는 않습니다. 기존 출력 어댑터는
+직접 검증하며 조회의 명시적 `null`, `{ data: null }`, 204만 빈 결과로 인정합니다.
+
+### 출력 계약의 미확인 범위
+
+기존 출력 어댑터의 payload와 취소 ID 경로는 프론트엔드의 기존 계약이며,
+배포 서버와 합의/검증 완료된 계약이 아닙니다. `POST /api/prints`는 물리 출력까지
+시작할 수 있으므로 3D 미리보기 생성에 사용하거나 테스트 목적으로 호출하지
+마세요. 이전에 관찰된 배포 404·CORS 문제와 서버 인증 보안은 백엔드 담당자에게
+확인이 필요합니다. 이번 테스트는 배포 서버 상태를 재확인하지 않습니다.
+
+### 격리된 HTTP 회귀 검사
+
+`npm run test:print`는 실제 TypeScript 클라이언트·Mock 선택 함수·출력 어댑터를
+VM에서 실행합니다. 추가 통신 검사는 개발/운영 각각 정상 응답, 400/401/404/500,
+깨진 오류 JSON에서도 401 세션 정리, Bearer 헤더/skipAuth, 네트워크·CORS 모사,
+취소 전달, 잘못된 JSON/응답 형태, 명시적 빈 결과 및 Mock의 HTTP 미호출을
+검사합니다. 모든 응답은 주입되며 실제 서버·인증·프린터 요청은 0건입니다.
+실제 CORS 정책, React 렌더링 및 브라우저 인증 검증을 대체하지 않습니다.
+`--api`는 이 작업에서 사용하지 않습니다.
+
 ## Create Generation Regression Checks
 
 Run `npm run test:create-generation` for the actual generation hook and its
