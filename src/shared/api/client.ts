@@ -6,9 +6,11 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
-export interface ApiRequestOptions extends Omit<RequestInit, "body"> {
+export interface ApiRequestOptions<T = unknown> extends Omit<RequestInit, "body"> {
+  /** Public request: omit stored credentials and do not expire the session on 401. */
   skipAuth?: boolean;
   body?: unknown;
+  decode?: (data: unknown) => T;
 }
 
 export class ApiError extends Error {
@@ -16,6 +18,7 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly data: unknown,
+    public readonly kind: "http" | "network" | "response" = "http",
   ) {
     super(message);
     this.name = "ApiError";
@@ -74,7 +77,7 @@ function isFormData(body: unknown): body is FormData {
   return typeof FormData !== "undefined" && body instanceof FormData;
 }
 
-async function parseResponse(response: Response) {
+async function parseResponse(response: Response): Promise<unknown> {
   if (response.status === 204) {
     return null;
   }
@@ -87,8 +90,8 @@ async function parseResponse(response: Response) {
   return response.text();
 }
 
-async function request<T>(path: string, options: ApiRequestOptions = {}) {
-  const { skipAuth = false, body, ...requestOptions } = options;
+async function request<T = unknown>(path: string, options: ApiRequestOptions<T> = {}) {
+  const { skipAuth = false, body, decode, ...requestOptions } = options;
   const headers = new Headers(requestOptions.headers);
 
   if (body !== undefined && !isFormData(body) && !headers.has("Content-Type")) {
@@ -102,14 +105,33 @@ async function request<T>(path: string, options: ApiRequestOptions = {}) {
     }
   }
 
-  const response = await fetch(resolveUrl(path), {
+  const url = resolveUrl(path);
+  const init = {
     ...requestOptions,
     body: serializeBody(body),
     headers,
-  });
-  const data = await parseResponse(response);
+  };
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (error) {
+    if (requestOptions.signal?.aborted) throw error;
+    // Browsers do not distinguish a CORS rejection from other network failures.
+    throw new ApiError("서버에 연결할 수 없습니다. 네트워크 연결 및 서버 설정을 확인해 주세요.", 0, null, "network");
+  }
+  let data: unknown;
+  try {
+    data = await parseResponse(response);
+  } catch (error) {
+    if (requestOptions.signal?.aborted) throw error;
+    // Malformed error bodies must not hide HTTP status or bypass 401 handling.
+    if (response.ok) {
+      throw new ApiError("API 응답 형식이 올바르지 않습니다.", response.status, null, "response");
+    }
+    data = null;
+  }
 
-  if (response.status === 401) {
+  if (response.status === 401 && !skipAuth) {
     clearStoredAuth();
     throw new ApiError("인증이 만료되었습니다.", response.status, data);
   }
@@ -118,24 +140,34 @@ async function request<T>(path: string, options: ApiRequestOptions = {}) {
     throw new ApiError("API 요청에 실패했습니다.", response.status, data);
   }
 
+  if (decode) {
+    try {
+      return decode(data);
+    } catch {
+      throw new ApiError("API 응답 형식이 올바르지 않습니다.", response.status, null, "response");
+    }
+  }
+
+  // Generic types alone do not validate JSON. Contract-aware callers use decode
+  // or request unknown and validate in their existing domain adapter.
   return data as T;
 }
 
 export const apiClient = {
   request,
-  get<T>(path: string, options?: Omit<ApiRequestOptions, "body" | "method">) {
+  get<T = unknown>(path: string, options?: Omit<ApiRequestOptions<T>, "body" | "method">) {
     return request<T>(path, { ...options, method: "GET" });
   },
-  post<T>(path: string, body?: unknown, options?: Omit<ApiRequestOptions, "body" | "method">) {
+  post<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "body" | "method">) {
     return request<T>(path, { ...options, body, method: "POST" });
   },
-  put<T>(path: string, body?: unknown, options?: Omit<ApiRequestOptions, "body" | "method">) {
+  put<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "body" | "method">) {
     return request<T>(path, { ...options, body, method: "PUT" });
   },
-  patch<T>(path: string, body?: unknown, options?: Omit<ApiRequestOptions, "body" | "method">) {
+  patch<T = unknown>(path: string, body?: unknown, options?: Omit<ApiRequestOptions<T>, "body" | "method">) {
     return request<T>(path, { ...options, body, method: "PATCH" });
   },
-  delete<T>(path: string, options?: Omit<ApiRequestOptions, "body" | "method">) {
+  delete<T = unknown>(path: string, options?: Omit<ApiRequestOptions<T>, "body" | "method">) {
     return request<T>(path, { ...options, method: "DELETE" });
   },
 };

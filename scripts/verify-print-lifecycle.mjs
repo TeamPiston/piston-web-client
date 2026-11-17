@@ -13,7 +13,7 @@ const args = new Set(process.argv.slice(2));
 const requests = [];
 
 // Execute the real TS modules without a Next server or generated files.
-async function loadPrintRuntime({ mock = false, baseUrl = "", fetchImpl }) {
+async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "production", fetchImpl }) {
   const paths = [
     "src/entities/print/model/print.ts",
     "src/shared/mock/mock-data.ts",
@@ -35,7 +35,7 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", fetchImpl }) {
   };
   const context = createContext({
     process: { env: {
-      NODE_ENV: "production",
+      NODE_ENV: nodeEnv,
       NEXT_PUBLIC_USE_MOCK: String(mock),
       NEXT_PUBLIC_API_BASE_URL: baseUrl,
     } },
@@ -61,6 +61,7 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", fetchImpl }) {
   return {
     print: load(resolve(ROOT_DIR, paths[0])),
     mock: load(resolve(ROOT_DIR, paths[1])),
+    api: load(resolve(ROOT_DIR, "src/shared/api/index.ts")),
     window,
   };
 }
@@ -291,6 +292,116 @@ async function verifyApiAdapter() {
   console.log("PASS API HTTP errors propagate without mock fallback");
 }
 
+async function verifyTransportIsolation() {
+  let checks = 0;
+  const json = (body, status = 200) => new Response(JSON.stringify(body), {
+    status, headers: { "Content-Type": "application/json" },
+  });
+  // These are injected responses, never real authentication or printer requests.
+  for (const nodeEnv of ["development", "production"]) {
+    let respond;
+    let mockCalls = 0;
+    let fetchCalls = 0;
+    const runtime = await loadPrintRuntime({
+      nodeEnv, baseUrl: "https://api-contract.invalid/",
+      fetchImpl: async (url, options) => {
+        fetchCalls += 1;
+        assert.equal(url, "https://api-contract.invalid/api/prints/current");
+        return respond(options);
+      },
+    });
+    const { api: { apiClient, ApiError }, mock, print, window } = runtime;
+    const path = "/api/prints/current";
+    const call = () => mock.withMockFallback(
+      () => apiClient.get(path), () => { mockCalls += 1; return "unexpected mock success"; },
+    );
+    const removed = [];
+    const events = [];
+    const redirects = [];
+    window.localStorage.getItem = () => "test-token-not-a-credential";
+    window.localStorage.removeItem = (key) => removed.push(key);
+    window.dispatchEvent = (event) => events.push(event.type);
+    window.location.assign = (url) => redirects.push(url);
+
+    respond = (options) => {
+      assert.equal(options.headers.get("Authorization"), "Bearer test-token-not-a-credential");
+      return json({ data: null });
+    };
+    assert.equal((await call()).data, null);
+    checks += 1;
+    respond = (options) => {
+      assert.equal(options.headers.has("Authorization"), false);
+      assert.equal("decode" in options, false);
+      return json({ data: null });
+    };
+    const decode = (data) => {
+      if (!data || typeof data !== "object" || data.data !== null) throw new Error("invalid fixture");
+      return null;
+    };
+    assert.equal(await apiClient.get(path, { skipAuth: true, decode }), null);
+    checks += 1;
+
+    for (const status of [400, 401, 404, 500]) {
+      for (const malformed of [false, true]) {
+        respond = () => malformed
+          ? new Response("{broken-json", { status, headers: { "Content-Type": "application/json" } })
+          : json({ message: "failure fixture" }, status);
+        await assert.rejects(call, (error) => error instanceof ApiError && error.status === status && error.kind === "http");
+        checks += 1;
+      }
+    }
+    assert.deepEqual(removed, ["piston-access-token", "piston-auth", "piston-access-token", "piston-auth"]);
+    assert.deepEqual(events, ["piston-auth-expired", "piston-auth-expired"]);
+    assert.deepEqual(redirects, ["/login", "/login"]);
+    for (const message of ["Network disconnected", "Failed to fetch (simulated CORS rejection)"]) {
+      respond = () => { throw new TypeError(message); };
+      await assert.rejects(call, (error) => error instanceof ApiError && error.status === 0 && error.kind === "network" && error.data === null);
+      checks += 1;
+    }
+    respond = () => new Response("{broken-json", { headers: { "Content-Type": "application/json" } });
+    await assert.rejects(call, (error) => error instanceof ApiError && error.kind === "response");
+    checks += 1;
+    for (const body of [{}, { data: {} }, [], "proxy HTML", { id: 1, status: "UNKNOWN" }]) {
+      respond = () => json(body);
+      await assert.rejects(() => print.getCurrentPrintTask(), /응답 형식/);
+      await assert.rejects(() => apiClient.get(path, { decode }), (error) => error instanceof ApiError && error.kind === "response");
+      checks += 2;
+    }
+    for (const body of [null, { data: null }]) {
+      respond = () => json(body);
+      assert.equal(await print.getCurrentPrintTask(), null);
+      checks += 1;
+    }
+    respond = () => new Response(null, { status: 204 });
+    assert.equal(await print.getCurrentPrintTask(), null);
+    checks += 1;
+    const abort = new DOMException("Cancelled", "AbortError");
+    const controller = new AbortController();
+    controller.abort();
+    respond = () => { throw abort; };
+    await assert.rejects(() => apiClient.get(path, { signal: controller.signal }), (error) => error === abort);
+    checks += 1;
+    const bodyController = new AbortController();
+    respond = () => ({
+      status: 200, ok: true, headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => { bodyController.abort(); throw abort; },
+    });
+    await assert.rejects(() => apiClient.get(path, { signal: bodyController.signal }), (error) => error === abort);
+    checks += 1;
+    assert(fetchCalls > 0);
+    assert.equal(mockCalls, 0, "API mode must never execute a fallback");
+
+    const explicitMock = await loadPrintRuntime({
+      nodeEnv, mock: true,
+      fetchImpl: () => { throw new Error("Explicit Mock mode must not call HTTP"); },
+    });
+    const task = await explicitMock.print.createPrintTask("Isolated Mock fixture");
+    assert.equal((await explicitMock.print.getCurrentPrintTask()).id, task.id);
+    checks += 1;
+  }
+  console.log(`PASS API transport/mode isolation: ${checks} assertions (development + production); real HTTP=0`);
+}
+
 async function verifyLiveApi(baseUrl) {
   assert(baseUrl, "--api requires PISTON_API_BASE_URL pointing to a test backend");
   const { print } = await loadPrintRuntime({
@@ -336,6 +447,7 @@ async function main() {
   } else {
     await verifyMockLifecycle();
     await verifyApiAdapter();
+    await verifyTransportIsolation();
   }
   console.log("PASS print lifecycle verification; HTTP contract requests=" + requests.length);
 }
