@@ -163,6 +163,16 @@ async function verifyMockLifecycle() {
       throw new Error("Explicit mock mode must not send HTTP requests");
     },
   });
+  for (const profile of [mock.MOCK_USER_PROFILE, mock.MOCK_ACCOUNT_PROFILE]) {
+    assert.match(profile.email, /^[^@]+@example\.com$/, "Public profile emails must use example.com");
+  }
+  assert.equal(mock.MOCK_ACCOUNT_PROFILE.id, "demo-user");
+  assert.equal(mock.MOCK_ACCOUNT_PROFILE.name, "데모 사용자");
+  assert.equal(print.PRINT_USER_ID, mock.MOCK_ACCOUNT_PROFILE.id);
+  assert.match(mock.MOCK_ACCOUNT_SETTINGS.printerAddress, /^192\.0\.2\.\d+$/);
+  assert(mock.MOCK_FEED_POSTS.every((post) => /^(작가|데모 작가)\d+$/.test(post.author)));
+  assert(mock.MOCK_PRINT_STATUS_LIST.every((task) => task.userId === mock.MOCK_ACCOUNT_PROFILE.id));
+  console.log("PASS public demo profiles, authors and printer address use synthetic fixtures");
   mock.resetMockData("EMPTY");
   assert.equal(await print.getCurrentPrintTask(), null);
   const created = await print.createPrintTask("화분 받침 트레이");

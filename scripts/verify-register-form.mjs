@@ -279,7 +279,7 @@ test("actual form JSX wires API handlers, status, disabled fields and server-sid
   const h = harness({ component: true });
   let tree = h.render();
   const input = (placeholder) => nodes(tree).find((node) => node.props?.placeholder === placeholder);
-  input("예: s25045@gsm.hs.kr").props.onChange({ target: { value: "fixture@gsm.hs.kr" } });
+  input("학교 이메일을 입력해 주세요.").props.onChange({ target: { value: "fixture@gsm.hs.kr" } });
   input("아이디를 입력해 주세요.").props.onChange({ target: { value: "fixture1" } });
   input("비밀번호를 입력해 주세요.").props.onChange({ target: { value: "Fixture123!" } });
   input("인증번호 6자리를 입력해 주세요.").props.onChange({ target: { value: "123456" } });

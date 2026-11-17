@@ -5,14 +5,14 @@ export const MOCK_PRINTERS: Printer[] = [
     id: "printer-max4-02",
     name: "MAX4_02",
     model: "QIDI X-Max 4",
-    ipAddress: "192.168.0.24",
+    ipAddress: "192.0.2.24",
     connectionStatus: "connected",
   },
   {
     id: "printer-classroom",
     name: "교실 프린터",
     model: "QIDI X-Max 4",
-    ipAddress: "192.168.0.31",
+    ipAddress: "192.0.2.31",
     connectionStatus: "disconnected",
   },
 ];
