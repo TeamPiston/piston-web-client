@@ -7,6 +7,7 @@ import {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 export interface ApiRequestOptions<T = unknown> extends Omit<RequestInit, "body"> {
+  /** Public request: omit stored credentials and do not expire the session on 401. */
   skipAuth?: boolean;
   body?: unknown;
   decode?: (data: unknown) => T;
@@ -130,7 +131,7 @@ async function request<T = unknown>(path: string, options: ApiRequestOptions<T> 
     data = null;
   }
 
-  if (response.status === 401) {
+  if (response.status === 401 && !skipAuth) {
     clearStoredAuth();
     throw new ApiError("인증이 만료되었습니다.", response.status, data);
   }
