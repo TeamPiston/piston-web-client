@@ -53,7 +53,8 @@ function clearStoredAuth() {
   window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 
   if (window.location.pathname !== "/login") {
-    window.location.assign("/login");
+    // Expired sessions require a full reload; this transport cannot use Router hooks.
+    window.location.assign(window.location.origin + "/login");
   }
 }
 

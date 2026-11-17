@@ -21,7 +21,7 @@ const context = createContext({
   console: Object.fromEntries(["log", "warn", "error", "debug", "info"].map((key) => [key, (...args) => logs.push(args)])),
   window: {
     localStorage: { getItem: () => "synthetic-token", removeItem: (key) => removed.push(key) },
-    location: { pathname: "/register", search: "", assign: (url) => redirects.push(url) },
+    location: { origin: "https://frontend.invalid", pathname: "/register", search: "", assign: (url) => redirects.push(url) },
     dispatchEvent: (event) => events.push(event.type),
   },
   fetch: async (url, options) => { requests.push({ url, ...options }); return response(); },
@@ -92,7 +92,7 @@ await assert.rejects(() => apiClient.get("/protected-fixture"), (error) => error
 assert.equal(requests.at(-1).headers.get("Authorization"), "Bearer synthetic-token");
 assert.deepEqual(removed, ["piston-access-token", "piston-auth"]);
 assert.deepEqual(events, ["piston-auth-expired"]);
-assert.deepEqual(redirects, ["/login"]);
+assert.deepEqual(redirects, ["https://frontend.invalid/login"]);
 response = () => new Response(null, { status: 204 });
 const form = new FormData();
 form.append("message", "fixture");

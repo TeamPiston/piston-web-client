@@ -29,7 +29,7 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "product
     }).outputText,
   ])));
   const window = {
-    location: { search: "", pathname: "/mypage", assign() {} },
+    location: { origin: "https://frontend.invalid", search: "", pathname: "/mypage", assign() {} },
     localStorage: { getItem: () => null, removeItem() {} },
     dispatchEvent() {},
   };
@@ -352,7 +352,7 @@ async function verifyTransportIsolation() {
     }
     assert.deepEqual(removed, ["piston-access-token", "piston-auth", "piston-access-token", "piston-auth"]);
     assert.deepEqual(events, ["piston-auth-expired", "piston-auth-expired"]);
-    assert.deepEqual(redirects, ["/login", "/login"]);
+    assert.deepEqual(redirects, ["https://frontend.invalid/login", "https://frontend.invalid/login"]);
     for (const message of ["Network disconnected", "Failed to fetch (simulated CORS rejection)"]) {
       respond = () => { throw new TypeError(message); };
       await assert.rejects(call, (error) => error instanceof ApiError && error.status === 0 && error.kind === "network" && error.data === null);
