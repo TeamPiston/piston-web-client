@@ -56,16 +56,16 @@ export const MOCK_USER_PROFILE: MockUserProfile = {
 };
 
 export const MOCK_ACCOUNT_PROFILE: MockUserProfile = {
-  id: "dlskawls",
-  email: "penamjin@gmail.com",
-  name: "dlskawls",
+  id: "demo-user",
+  email: "demo@example.com",
+  name: "데모 사용자",
 };
 
 export const MOCK_ACCOUNT_SETTINGS = {
   printerConnected: true,
   printerName: "MAX4_02",
   printerModel: "QIDI X-Max 4",
-  printerAddress: "192.168.0.24",
+  printerAddress: "192.0.2.24",
   filamentRemaining: "12 m / 36 g",
 };
 
@@ -157,7 +157,7 @@ export const MOCK_FEED_POSTS: MockFeedPost[] = [
   {
     id: "2",
     title: "미니 큐브",
-    author: "dlskawls",
+    author: "데모 작가1",
     stlUrl: "/models/cube.stl",
     description: "작은 공간에 장식품으로 놓기 좋은 기본 큐브입니다. 모서리가 단순해 출력 테스트와 컬러 샘플 제작에도 사용할 수 있습니다.",
     filamentColors: [
@@ -174,7 +174,7 @@ export const MOCK_FEED_POSTS: MockFeedPost[] = [
   {
     id: "3",
     title: "데스크 스탠드",
-    author: "JJY",
+    author: "데모 작가2",
     stlUrl: "/models/desk-stand.stl",
     description: "스마트폰이나 작은 태블릿을 세워둘 수 있는 데스크 스탠드입니다. 케이블이 지나갈 수 있는 홈을 고려한 디자인입니다.",
     filamentColors: [
@@ -191,7 +191,7 @@ export const MOCK_FEED_POSTS: MockFeedPost[] = [
   {
     id: "4",
     title: "미니 화분",
-    author: "JJY",
+    author: "데모 작가2",
     stlUrl: "/models/mini-planter.stl",
     description: "작은 다육 식물을 위한 미니 화분입니다. 책상이나 선반에 놓기 좋은 크기로 제작되며 가벼운 소재와 잘 어울립니다.",
     filamentColors: [
@@ -208,7 +208,7 @@ export const MOCK_FEED_POSTS: MockFeedPost[] = [
   {
     id: "5",
     title: "체스 타워",
-    author: "ㅎㅇ",
+    author: "데모 작가3",
     stlUrl: "/models/chess-tower.stl",
     description: "게임 보드 위에 포인트로 놓을 수 있는 체스 타워 모형입니다. 높은 형태의 출력 안정성을 확인할 수 있는 작품입니다.",
     filamentColors: [

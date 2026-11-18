@@ -7,7 +7,7 @@ import {
   withMockFallback,
 } from "@/shared/mock/mock-data";
 
-export const PRINT_USER_ID = "dlskawls";
+export const PRINT_USER_ID = "demo-user";
 export const PRINT_ARTWORK_NAME = "육각형 연필꽂이";
 
 export type PrintStatus =

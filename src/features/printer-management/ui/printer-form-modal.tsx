@@ -121,9 +121,9 @@ export function PrinterFormModal({
               required
               inputMode="decimal"
               pattern={IP_ADDRESS_PATTERN}
-              title="올바른 IPv4 주소를 입력해 주세요. 예: 192.168.0.24"
+              title="올바른 IPv4 주소를 입력해 주세요. 예: 192.0.2.24"
               maxLength={15}
-              placeholder={printer ? "192.168.0.24" : "192.168.0.31"}
+              placeholder={printer ? "192.0.2.24" : "192.0.2.31"}
               aria-describedby={connectionFeedback ? feedbackId : undefined}
               value={draft.ipAddress}
               onChange={(event) => {

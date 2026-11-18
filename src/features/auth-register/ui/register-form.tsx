@@ -54,7 +54,7 @@ export function RegisterForm() {
           <div className="flex min-w-0 gap-2">
             <input
               type="email"
-              placeholder="예: s25045@gsm.hs.kr"
+              placeholder="학교 이메일을 입력해 주세요."
               value={email}
               onBlur={() => setEmailTouched(true)}
               onChange={(e) => {

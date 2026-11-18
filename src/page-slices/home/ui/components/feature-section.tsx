@@ -127,7 +127,7 @@ function PrinterSetupCard() {
           <p className="mb-1.5 text-xs font-semibold text-zinc-600">IP 주소</p>
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <div className="rounded-lg border border-zinc-200 px-3 py-2.5 text-xs font-semibold text-zinc-700">
-              192.168.0.31
+              192.0.2.31
             </div>
             <button className="rounded-lg border border-zinc-200 px-3 text-xs font-bold text-zinc-700">
               연결 테스트

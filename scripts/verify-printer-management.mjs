@@ -221,13 +221,13 @@ assert.equal(view.query.isPrinterConnected, false);
 assert.deepEqual(Object.keys(view.query).sort(), [
   "connectedPrinter", "isPrinterConnected", "printJob", "printStatus", "printers",
 ]);
-const draft = { name: "Classroom", model: "QIDI X-Max 4", ipAddress: "192.168.0.31" };
+const draft = { name: "Classroom", model: "QIDI X-Max 4", ipAddress: "192.0.2.31" };
 view.management.openAddForm();
 view = render();
 assert.equal(view.management.isFormOpen, true);
 view.management.savePrinter(draft, null);
 assert.equal(render().query.printers.length, 0);
-assert.equal(view.management.testPrinterConnection({ ...draft, ipAddress: "192.168.0.99" }).status, "disconnected");
+assert.equal(view.management.testPrinterConnection({ ...draft, ipAddress: "192.0.2.99" }).status, "disconnected");
 const tested = view.management.testPrinterConnection(draft);
 assert.equal(tested.status, "connected");
 view.management.savePrinter(draft, tested.status);
@@ -252,7 +252,7 @@ view = render();
 assert.equal(view.query.connectedPrinter.name, "Renamed");
 view.management.openEditForm(view.query.printers[0]);
 view = render();
-view.management.savePrinter({ ...draft, ipAddress: "192.168.0.99" }, null);
+view.management.savePrinter({ ...draft, ipAddress: "192.0.2.99" }, null);
 view = render();
 assert.equal(view.query.connectedPrinter, null);
 assert.equal(view.actions.startPrint(job), false);
@@ -286,6 +286,8 @@ console.log("PASS edit, connection invalidation/recheck and confirmed deletion")
 const first = runtime();
 const second = runtime();
 const original = first().query.printers[0];
+assert(first().query.printers.every((printer) => /^192\.0\.2\.\d+$/.test(printer.ipAddress)),
+  "Public printer fixtures must use documentation addresses");
 let firstView = first();
 firstView.management.openDeleteForm(original);
 firstView = first();
@@ -381,10 +383,10 @@ assert.equal(references.actions.startPrint(jobA), false, "Updated actions must r
 assert.equal(references.actions.removePrinter, initialActions.removePrinter);
 console.log("PASS stable Actions value across unrelated updates and fresh printer-dependent actions");
 
-const editedPrinter = { ...printerA, ipAddress: "192.168.0.20" };
+const editedPrinter = { ...printerA, ipAddress: "192.0.2.20" };
 const otherPrinter = {
   ...printerB,
-  ipAddress: "192.168.0.30",
+  ipAddress: "192.0.2.30",
   model: "QIDI X-Plus 4",
   connectionStatus: "disconnected",
 };
@@ -398,13 +400,13 @@ const otherAddressResult = connections.management.testPrinterConnection(otherPri
 assert.equal(otherAddressResult.status, "connected", "Changed input must use a fresh mock, not another printer's disconnected state");
 assert.equal(otherAddressResult.model, otherPrinter.model);
 assert.equal(connections.management.testPrinterConnection({
-  ...editedPrinter, ipAddress: "192.168.0.42",
+  ...editedPrinter, ipAddress: "192.0.2.42",
 }).status, "connected");
 assert.equal(connections.management.testPrinterConnection({
   ...editedPrinter, model: "QIDI Q1 Pro",
 }).status, "connected");
 assert.equal(connections.management.testPrinterConnection({
-  ...editedPrinter, ipAddress: " 192.168.0.99 ",
+  ...editedPrinter, ipAddress: " 192.0.2.99 ",
 }).status, "disconnected");
 assert.equal(renderConnections().query.printers, originalPrinters, "Connection previews must not mutate stored printers");
 
@@ -433,10 +435,10 @@ assert.equal(connections.management.testPrinterConnection(otherPrinter).status, 
 
 connections.management.openAddForm();
 connections = renderConnections();
-const newDraft = { ...draft, ipAddress: "192.168.0.44" };
+const newDraft = { ...draft, ipAddress: "192.0.2.44" };
 assert.equal(connections.management.testPrinterConnection(newDraft).status, "connected");
 const failedRegistration = connections.management.testPrinterConnection({
-  ...newDraft, ipAddress: "192.168.0.99",
+  ...newDraft, ipAddress: "192.0.2.99",
 });
 assert.equal(failedRegistration.status, "disconnected");
 connections.management.savePrinter(newDraft, failedRegistration.status);
