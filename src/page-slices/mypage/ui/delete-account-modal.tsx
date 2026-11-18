@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AccountDeletionUnavailableError } from "@/entities/session";
 
 interface DeleteAccountModalProps {
   isOpen: boolean;
@@ -57,8 +58,10 @@ export function DeleteAccountModal({ isOpen, onClose, onConfirm }: DeleteAccount
 
     try {
       await onConfirm();
-    } catch {
-      setErrorMessage("회원탈퇴 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.");
+    } catch (error) {
+      setErrorMessage(error instanceof AccountDeletionUnavailableError
+        ? error.message
+        : "회원탈퇴 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsSubmitting(false);
     }
