@@ -20,10 +20,11 @@ if (!process.argv.includes("--child")) {
   const mockMode = process.env.NEXT_PUBLIC_USE_MOCK === "true";
   // Execute actual hook, form, session Provider and mode helper. Hook cells and
   // context delivery are synchronous simulations, not React DOM or scheduling.
-  function harness(existingUser = null) {
+  function harness(existingUser = null, { storedSession } = {}) {
     const modules = new Map();
     const slots = new Map();
     const storage = new Map(existingUser ? [["piston-auth", JSON.stringify(existingUser)], ["piston-access-token", "synthetic-existing-token"]] : []);
+    if (storedSession !== undefined) storage.set("piston-auth", storedSession);
     const writes = [], routes = [], logs = [];
     let owner, cursor, sessionContext, httpCount = 0;
     const render = (key, fn) => {
@@ -90,6 +91,7 @@ if (!process.argv.includes("--child")) {
     return {
       mock, storage, writes, routes, logs, provider,
       httpCount: () => httpCount,
+      remountProvider() { slots.delete("provider"); return provider(); },
       form() { provider(); return render("form", useLoginForm); },
       tree() { provider(); return render("form", LoginForm); },
     };
@@ -103,6 +105,63 @@ if (!process.argv.includes("--child")) {
     assert(prevented); assert.equal(result, undefined, "Login remains synchronous without pending work");
   }
   function assertNoTransport(h) { assert.equal(h.httpCount(), 0); assert.deepEqual(h.logs, []); }
+  test("stored Mock profile restores only in explicit Mock mode without rewriting data", () => {
+    const h = harness();
+    h.storage.set("piston-auth", JSON.stringify(h.mock.MOCK_USER_PROFILE));
+    h.storage.set("piston-access-token", "synthetic-existing-token");
+    const saved = JSON.stringify([...h.storage]);
+    assert.equal(h.provider().isLoggedIn, mockMode);
+    assert.equal(JSON.stringify(h.provider().user), JSON.stringify(mockMode ? h.mock.MOCK_USER_PROFILE : null));
+    assert.equal(h.remountProvider().isLoggedIn, mockMode);
+    assert.equal(JSON.stringify([...h.storage]), saved);
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(h.routes, []);
+    assertNoTransport(h);
+  });
+  test("legacy true session restores only in explicit Mock mode and remains intact", () => {
+    const h = harness(null, { storedSession: "true" });
+    assert.equal(h.provider().isLoggedIn, mockMode);
+    assert.equal(h.provider().user, mockMode ? h.mock.MOCK_USER_PROFILE : null);
+    assert.equal(h.storage.get("piston-auth"), "true");
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(h.routes, []);
+    assertNoTransport(h);
+  });
+  test("missing and malformed sessions remain signed out without data deletion", () => {
+    for (const storedSession of [undefined, "", "{broken", "null", "false", "{}", '{"id":"fixture"}']) {
+      const h = harness(null, { storedSession });
+      const saved = JSON.stringify([...h.storage]);
+      assert.equal(h.provider().isLoggedIn, false);
+      assert.equal(h.provider().user, null);
+      assert.equal(JSON.stringify([...h.storage]), saved);
+      assert.deepEqual(h.writes, []);
+      assert.deepEqual(h.routes, []);
+      assertNoTransport(h);
+    }
+  });
+  test("explicit logout clears auth data, keeps unrelated storage and prevents restoration", () => {
+    const h = harness({ id: "fixture", email: "fixture@example.com", name: "Fixture" });
+    h.storage.set("fixture-preference", "preserved");
+    h.provider().logout();
+    assert.equal(h.provider().isLoggedIn, false);
+    assert.equal(h.storage.has("piston-auth"), false);
+    assert.equal(h.storage.has("piston-access-token"), false);
+    assert.equal(h.storage.get("fixture-preference"), "preserved");
+    assert.deepEqual(h.writes, ["piston-auth", "piston-access-token"]);
+    assert.equal(h.remountProvider().isLoggedIn, false);
+    assert.deepEqual(h.routes, []);
+    assertNoTransport(h);
+  });
+  test("Provider login creates a profile only in Mock mode and never creates tokens", () => {
+    const h = harness();
+    h.provider().login(h.mock.MOCK_USER_PROFILE);
+    assert.equal(h.provider().isLoggedIn, mockMode);
+    assert.equal(h.remountProvider().isLoggedIn, mockMode);
+    assert.deepEqual([...h.storage.keys()], mockMode ? ["piston-auth"] : []);
+    assert.deepEqual(h.writes, mockMode ? ["piston-auth"] : []);
+    assert.deepEqual(h.routes, []);
+    assertNoTransport(h);
+  });
   if (mockMode) {
     for (const id of ["admin", "  ADMIN@EXAMPLE.COM  "]) {
       test("Mock accepts existing demo ID/email " + id.trim(), () => {
@@ -111,6 +170,8 @@ if (!process.argv.includes("--child")) {
         assert.equal(h.provider().isLoggedIn, true);
         assert.equal(JSON.parse(h.storage.get("piston-auth")).id, h.mock.MOCK_USER_PROFILE.id);
         assert.equal(h.storage.has("piston-access-token"), false);
+        assert.equal(h.remountProvider().user.id, h.mock.MOCK_USER_PROFILE.id);
+        assert.equal(h.provider().isLoggedIn, true);
         assert.deepEqual(h.routes, ["/feed"]); assertNoTransport(h);
       });
     }
@@ -125,13 +186,13 @@ if (!process.argv.includes("--child")) {
     });
   } else {
     for (const existing of [null, { id: "existing-user", email: "existing@example.com", name: "Existing fixture" }]) {
-      test("API rejects demo credentials and preserves session, existing=" + Boolean(existing), () => {
+      test("API rejects demo credentials and preserves stored data, existing=" + Boolean(existing), () => {
         const h = harness(existing), saved = JSON.stringify([...h.storage]);
         const form = fill(h, h.mock.MOCK_LOGIN_CREDENTIALS.id, h.mock.MOCK_LOGIN_CREDENTIALS.password);
         submit(form); submit(form);
         assert.match(h.form().error, /아직 지원하지 않습니다/);
-        assert.equal(h.provider().isLoggedIn, Boolean(existing));
-        assert.equal(JSON.stringify(h.provider().user), JSON.stringify(existing));
+        assert.equal(h.provider().isLoggedIn, false);
+        assert.equal(h.provider().user, null);
         assert.equal(JSON.stringify([...h.storage]), saved);
         assert.deepEqual(h.writes, []); assert.deepEqual(h.routes, []); assertNoTransport(h);
       });
