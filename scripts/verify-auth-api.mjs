@@ -100,8 +100,9 @@ await apiClient.post("/multipart-fixture", form);
 assert.equal(requests.at(-1).body, form);
 assert.equal(requests.at(-1).headers.has("Content-Type"), false);
 
-// Execute unchanged form hooks with minimal synchronous hook cells, not React DOM.
+// Execute Mock form hooks with minimal synchronous hook cells, not React DOM.
 const before = requests.length;
+context.process.env.NEXT_PUBLIC_USE_MOCK = "true";
 const render = (hook) => { cursor = 0; return hook(); };
 const { useLoginForm } = load("src/features/auth-login/model/use-login-form.ts");
 let login = render(useLoginForm);
@@ -116,7 +117,6 @@ render(useLoginForm).handleSubmit({ preventDefault() {} });
 assert.equal(loggedIn, mock.MOCK_USER_PROFILE);
 assert.equal(redirects.at(-1), "/feed");
 cells = [];
-context.process.env.NEXT_PUBLIC_USE_MOCK = "true";
 const { useRegisterForm } = load("src/features/auth-register/model/use-register-form.ts");
 let register = render(useRegisterForm);
 register.setEmail("fixture@gsm.hs.kr");
