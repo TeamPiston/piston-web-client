@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/entities/session";
-import { MOCK_LOGIN_CREDENTIALS, MOCK_USER_PROFILE } from "@/shared/mock/mock-data";
+import { isMockModeEnabled, MOCK_LOGIN_CREDENTIALS, MOCK_USER_PROFILE } from "@/shared/mock/mock-data";
 
 interface LoginCredentials {
   id: string;
@@ -24,6 +24,11 @@ export function useLoginForm() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!isMockModeEnabled()) {
+      setError("실제 서버 로그인은 아직 지원하지 않습니다. 현재는 데모 모드에서만 로그인할 수 있습니다.");
+      return;
+    }
 
     const credentials: LoginCredentials = {
       id: id.trim().toLowerCase(),
