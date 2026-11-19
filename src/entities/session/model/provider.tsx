@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { SessionContext, type SessionContextValue } from "./context";
 import type { UserProfile } from "./context";
 import { ACCESS_TOKEN_STORAGE_KEY, AUTH_EXPIRED_EVENT, SESSION_STORAGE_KEY } from "./config";
-import { MOCK_USER_PROFILE } from "@/shared/mock/mock-data";
+import { isMockModeEnabled, MOCK_USER_PROFILE } from "@/shared/mock/mock-data";
 
 function isUserProfile(value: unknown): value is UserProfile {
   if (!value || typeof value !== "object") {
@@ -19,8 +19,9 @@ function isUserProfile(value: unknown): value is UserProfile {
   );
 }
 
+// Stored profiles belong to Mock mode until API session restoration is implemented.
 function getStoredUser(): UserProfile | null {
-  if (typeof window === "undefined") {
+  if (!isMockModeEnabled() || typeof window === "undefined") {
     return null;
   }
 
@@ -52,6 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (nextUser: UserProfile) => {
+    if (!isMockModeEnabled()) {
+      return;
+    }
+
     if (typeof window !== "undefined") {
       window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextUser));
     }

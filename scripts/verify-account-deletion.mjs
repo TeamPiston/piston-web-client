@@ -130,7 +130,7 @@ else {
     }
     function assertRetained(h, saved) {
         assert.equal(JSON.stringify([...h.storage]), saved);
-        assert(h.provider().isLoggedIn);
+        assert.equal(h.provider().isLoggedIn, process.env.NEXT_PUBLIC_USE_MOCK === "true");
         assert.deepEqual(h.writes, []);
         assert.deepEqual(h.routes, []);
         assert.equal(h.requests.length, 0);
@@ -183,7 +183,7 @@ else {
             assert.equal((await h.mock.fetchMockAccountSettings()).isDeleted, false);
             assertRetained(h, saved);
         });
-        test("API modal shows unsupported status, preserves login and restores buttons after retries", async () => {
+        test("API modal shows unsupported status, preserves stored auth data and restores buttons after retries", async () => {
             const h = harness(), saved = JSON.stringify([...h.storage]);
             h.open();
             for (let attempt = 0; attempt < 2; attempt += 1) {
