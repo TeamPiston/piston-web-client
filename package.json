@@ -6,12 +6,27 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:account-deletion": "node scripts/verify-account-deletion.mjs",
+    "test:login-form": "node scripts/verify-login-form.mjs",
+    "test:auth-api": "node scripts/verify-auth-api.mjs",
+    "test:register-form": "node scripts/verify-register-form.mjs",
+    "test:create-generation": "node scripts/verify-create-generation.mjs",
+    "test:create-attachments": "node scripts/verify-create-attachments.mjs",
+    "test:create-print-flow": "node scripts/verify-create-print-flow.mjs",
+    "test:print": "node scripts/verify-print-lifecycle.mjs",
+    "test:printer": "node scripts/verify-printer-management.mjs",
+    "test:e2e:print": "npm run test:print",
+    "test:print:api": "node scripts/verify-print-lifecycle.mjs --api"
   },
   "dependencies": {
-    "next": "16.2.10",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "9.8.1",
+    "lucide-react": "^1.23.0",
+    "next": "16.4.6",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -19,7 +34,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.4.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
