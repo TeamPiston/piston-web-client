@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useState, type RefObject } from "react";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
 import { useNativeDialog } from "@/shared/ui";
 import type { FilamentColor } from "@/entities/artwork";
 import type { Printer } from "@/entities/printer";
@@ -47,6 +48,7 @@ export function PrintSettingsModal({
   onConfirm,
   onOpenPrinterManagement,
 }: PrintSettingsModalProps) {
+  const isMockMode = isMockModeEnabled();
   const [colorMode, setColorMode] = useState<PrintColorMode>("color");
   const { dialogRef, onCancel } = useNativeDialog({ isOpen, onClose, returnFocusRef });
 
@@ -58,6 +60,7 @@ export function PrintSettingsModal({
     <dialog
       ref={dialogRef}
       aria-labelledby="print-settings-title"
+      aria-describedby="print-settings-description"
       className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none items-center justify-center bg-transparent p-4 backdrop:bg-black/40 open:flex"
       onCancel={onCancel}
       onMouseDown={(event) => {
@@ -74,8 +77,10 @@ export function PrintSettingsModal({
           <h2 id="print-settings-title" className="text-base font-bold text-gray-950">
             출력 전 꼭 확인해 주세요
           </h2>
-          <p className="mt-3 text-xs text-gray-400">
-            아래 항목을 확인한 뒤 출력을 시작해 주세요.
+          <p id="print-settings-description" className={`mt-3 text-xs ${isMockMode ? "font-medium break-keep text-blue-800" : "text-gray-400"}`}>
+            {isMockMode
+              ? "데모 출력은 시뮬레이션이에요. 실제 프린터는 작동하지 않습니다."
+              : "아래 항목을 확인한 뒤 출력을 시작해 주세요."}
           </p>
           <button
             type="button"
@@ -106,8 +111,8 @@ export function PrintSettingsModal({
                 <span className="h-2 w-2 shrink-0 rounded-full bg-gray-400" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-gray-950">연결된 프린터가 없어요</p>
-                  <p className="mt-1 truncate text-xs text-gray-400">
-                    프린터를 등록하면 바로 출력할 수 있어요.
+                  <p className="mt-1 text-xs break-keep text-gray-500">
+                    {isMockMode ? "데모 프린터를 등록해 출력을 체험할 수 있어요." : "프린터를 등록하면 바로 출력할 수 있어요."}
                   </p>
                 </div>
                 <button

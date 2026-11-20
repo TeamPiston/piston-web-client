@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore, type MouseEvent } from "react";
 import { useAuth } from "@/entities/session";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
 import { PistonLogo } from "@/shared/ui";
 import { LoginRequiredModal } from "./login-required-modal";
 
@@ -19,6 +20,7 @@ const getServerMountState = () => false;
 
 export function Header() {
   const pathname = usePathname();
+  const isMockMode = isMockModeEnabled();
   const { isLoggedIn } = useAuth();
   const isMounted = useSyncExternalStore(
     subscribeToMount,
@@ -36,7 +38,7 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 grid h-[var(--header-height)] w-full shrink-0 grid-cols-[1fr_auto] items-center border-b border-gray-200 bg-white/85 px-4 py-4 backdrop-blur-sm sm:grid-cols-3 sm:px-8 lg:px-12">
+      <header className={`sticky top-0 z-20 grid h-[var(--header-height)] w-full shrink-0 grid-cols-[1fr_auto] items-center border-b border-gray-200 bg-white/85 px-4 backdrop-blur-sm sm:grid-cols-3 sm:px-8 lg:px-12 ${isMockMode ? "py-1" : "py-4"}`}>
         <Link
           href="/"
           aria-label="PISTON 메인으로 이동"
@@ -85,6 +87,11 @@ export function Header() {
           >
             로그인
           </Link>
+        )}
+        {isMockMode && (
+          <p lang="ko" className="col-span-full row-start-3 justify-self-center rounded-md bg-blue-50 px-2 py-0.5 text-center text-xs leading-4 break-keep text-blue-900 sm:row-start-2">
+            PISTON 데모 버전입니다. 실제 서버 연동 및 3D 프린터 출력은 지원하지 않습니다.
+          </p>
         )}
       </header>
       <LoginRequiredModal

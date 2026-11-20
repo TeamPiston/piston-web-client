@@ -27,7 +27,7 @@ function loadReactModule(relative, react) {
   return exports;
 }
 
-function renderPrintModal(isSubmitting) {
+function renderPrintModal(isSubmitting, { isMockMode = false, isPrinterConnected = true } = {}) {
   const modalPath = fileURLToPath(new URL("../src/features/print-artwork/ui/print-settings-modal.tsx", import.meta.url));
   const modalSource = ts.transpileModule(readFileSync(modalPath, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
@@ -43,6 +43,7 @@ function renderPrintModal(isSubmitting) {
     exports,
     require(name) {
       if (name === "react") return react;
+      if (name === "@/shared/mock/mock-data") return { isMockModeEnabled: () => isMockMode };
       if (name === "@/shared/ui") return loadReactModule("../src/shared/ui/use-native-dialog.ts", react);
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       assert.equal(name, "lucide-react");
@@ -51,7 +52,7 @@ function renderPrintModal(isSubmitting) {
   });
   let confirmations = 0;
   const tree = exports.PrintSettingsModal({
-    isOpen: true, isSubmitting, isPrinterConnected: true,
+    isOpen: true, isSubmitting, isPrinterConnected,
     filamentColors: [], filamentUsage: { length: "1m", weight: "1g" },
     onClose() {}, onConfirm: () => confirmations++,
   });
@@ -63,6 +64,16 @@ function renderPrintModal(isSubmitting) {
   visit(tree);
   return { tree, elements, get confirmations() { return confirmations; } };
 }
+
+test("the print dialog describes simulated output only in Mock mode", () => {
+  for (const isMockMode of [true, false]) {
+    const { tree, elements } = renderPrintModal(false, { isMockMode, isPrinterConnected: false });
+    const description = elements.find(node => node.props.id === tree.props["aria-describedby"]);
+    assert(description, "The dialog must have an accessible description");
+    assert.match(description.props.children, isMockMode ? /실제 프린터는 작동하지 않습니다/ : /아래 항목을 확인/);
+    assert.equal(elements.some(node => String(node.props.children).includes("데모 프린터를 등록해")), isMockMode);
+  }
+});
 
 test("pending print keeps the submit button focusable, rejects activation and announces status", () => {
   const modal = renderPrintModal(true);

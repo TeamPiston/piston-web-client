@@ -3,6 +3,8 @@
 import { X } from "lucide-react";
 import { useEffect } from "react";
 import type { PrintTask } from "@/entities/print";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
+import { DemoNotice } from "@/shared/ui/demo-notice";
 
 interface PrintInProgressModalProps {
   isOpen: boolean;
@@ -77,6 +79,10 @@ export function PrintInProgressModal({
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+
+        <DemoNotice isVisible={isMockModeEnabled()} className="mt-4">
+          <p>데모 출력은 시뮬레이션이에요. 실제 프린터는 작동하지 않습니다.</p>
+        </DemoNotice>
 
         <div className="mt-6 flex items-center gap-4 rounded-lg bg-gray-50 p-4">
           <div className="h-12 w-12 shrink-0 rounded-lg bg-white" aria-hidden="true" />

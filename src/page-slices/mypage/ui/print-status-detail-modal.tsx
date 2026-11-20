@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import type { PrintTask } from "@/entities/print";
-import { MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
+import { isMockModeEnabled, MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
+import { DemoNotice } from "@/shared/ui/demo-notice";
 
 interface PrintStatusDetailModalProps {
   filamentRemaining: string;
@@ -79,6 +80,9 @@ export function PrintStatusDetailModal({
         className="w-full max-w-[480px] rounded-3xl bg-white p-6 shadow-2xl"
         role="dialog"
       >
+        <DemoNotice isVisible={isMockModeEnabled()} className="mb-3">
+          <p>화면에 표시된 출력 상태는 데모 데이터예요. 실제 프린터는 작동하지 않습니다.</p>
+        </DemoNotice>
         <div className="relative flex h-[220px] items-center justify-center rounded-2xl bg-[#F7F7F8] p-5">
           <ArtworkModelPreview
             stlUrl={modelUrl}

@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
+import { isMockModeEnabled, MOCK_LOGIN_CREDENTIALS } from "@/shared/mock/mock-data";
 import { Button, TextInput } from "@/shared/ui";
+import { DemoNotice } from "@/shared/ui/demo-notice";
 import { useLoginForm } from "../model/use-login-form";
 
 export function LoginForm() {
@@ -20,6 +22,19 @@ export function LoginForm() {
   return (
     <div className="box-border w-full bg-white p-5 sm:p-8">
       <p className="mb-4 text-xs font-medium text-gray-500">아이디로 로그인</p>
+      <DemoNotice isVisible={isMockModeEnabled()} className="mb-4">
+        <p>데모 계정을 채운 뒤 로그인 버튼을 눌러 주세요. 실제 계정이나 비밀번호는 입력하지 마세요.</p>
+        <button
+          type="button"
+          className="mt-2 min-h-8 rounded-md border border-blue-200 bg-white px-3 font-semibold text-blue-900 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          onClick={() => {
+            setId(MOCK_LOGIN_CREDENTIALS.id);
+            setPassword(MOCK_LOGIN_CREDENTIALS.password);
+          }}
+        >
+          데모 계정 채우기
+        </button>
+      </DemoNotice>
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* 아이디 */}
         <div className="relative">
