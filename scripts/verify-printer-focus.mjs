@@ -55,6 +55,7 @@ function modalHarness({ print = false } = {}) {
       fileName: modulePath,
     }).outputText;
     new Script(compiled, { filename: modulePath }).runInNewContext({ ...globals, exports, require(specifier) {
+      if (specifier === "@/shared/mock/mock-data") return { isMockModeEnabled: () => true };
       if (specifier === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (specifier === "@/shared/ui") return load(fileURLToPath(new URL("../src/shared/ui/use-native-dialog.ts", import.meta.url)));
       if (specifier === "lucide-react") return { X: "X" };
