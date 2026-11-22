@@ -3,6 +3,8 @@
 import { CornerDownLeft, Menu, Plus, X } from "lucide-react";
 import Image from "next/image";
 import type { ChangeEvent, ClipboardEvent, DragEvent, FormEvent, KeyboardEvent } from "react";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
+import { DemoNotice } from "@/shared/ui/demo-notice";
 import type { AttachedImage, ChatMessage } from "../../model/types";
 import {
   AiLoadingCard,
@@ -67,6 +69,10 @@ export function ChatPanel({
       >
         <Menu className="h-6 w-6" aria-hidden="true" />
       </button>
+
+      <DemoNotice isVisible={isMockModeEnabled()} className="mx-auto mb-3 w-full max-w-[480px] shrink-0">
+        <p>3D 모델 생성과 출력은 데모 시뮬레이션이에요. 실제 프린터는 작동하지 않습니다.</p>
+      </DemoNotice>
 
       <div
         className={[

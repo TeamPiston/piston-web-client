@@ -1,6 +1,7 @@
 "use client";
 
 import { Eye, EyeOff } from "lucide-react";
+import { DemoNotice } from "@/shared/ui/demo-notice";
 import { useRegisterForm } from "../model/use-register-form";
 
 export function RegisterForm() {
@@ -40,6 +41,18 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} className="box-border w-full max-w-[500px] space-y-5 text-sm">
+      <DemoNotice isVisible={isMockMode}>
+        <p>회원가입 입력을 체험할 수 있어요. 실제 계정이 생성되거나 인증 메일이 발송되지 않습니다.</p>
+        <p className="mt-1">실제 학교 이메일, 개인정보, 사용 중인 비밀번호 대신 아래 가상 예시를 사용해 주세요.</p>
+        <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+          <dt className="font-semibold">이메일</dt>
+          <dd className="wrap-anywhere">piston.demo.fixture+preview@gsm.hs.kr</dd>
+          <dt className="font-semibold">아이디</dt>
+          <dd>pistonDemo</dd>
+          <dt className="font-semibold">비밀번호</dt>
+          <dd>DemoOnly24!</dd>
+        </dl>
+      </DemoNotice>
       {!isRegistrationAvailable && (
         <p role="status" className="text-sm text-gray-600">회원가입 서비스 준비 중입니다. 현재 가입 및 인증코드 발송을 이용할 수 없습니다.</p>
       )}
@@ -54,7 +67,7 @@ export function RegisterForm() {
           <div className="flex min-w-0 gap-2">
             <input
               type="email"
-              placeholder="학교 이메일을 입력해 주세요."
+              placeholder={isMockMode ? "데모 이메일을 입력해 주세요." : "학교 이메일을 입력해 주세요."}
               value={email}
               onBlur={() => setEmailTouched(true)}
               onChange={(e) => {

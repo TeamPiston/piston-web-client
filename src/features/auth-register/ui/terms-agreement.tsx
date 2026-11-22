@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
+import { DemoNotice } from "@/shared/ui/demo-notice";
 import { useTermsAgreement } from "../model/use-terms-agreement";
 
 export function TermsAgreement() {
@@ -9,6 +11,9 @@ export function TermsAgreement() {
 
   return (
     <>
+      <DemoNotice isVisible={isMockModeEnabled()} className="mb-4 w-full max-w-[600px]">
+        <p>데모에서는 회원가입 화면만 체험할 수 있어요. 실제 계정 생성과 이메일 인증은 진행되지 않습니다.</p>
+      </DemoNotice>
       <div className="box-border max-h-[calc(100dvh-220px)] w-full max-w-[600px] overflow-y-auto rounded-sm border border-gray-100 bg-gray-50 p-5 text-sm leading-relaxed sm:max-h-[488px] sm:p-7">
         <p>이용약관</p>
 

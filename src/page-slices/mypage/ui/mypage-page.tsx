@@ -21,6 +21,7 @@ import {
   MOCK_MY_DESIGNS,
   toggleMockDesignPublish,
 } from "@/shared/mock/mock-data";
+import { DemoNotice } from "@/shared/ui/demo-notice";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import { Header } from "@/widgets/header";
 import { DeleteAccountModal } from "./delete-account-modal";
@@ -297,6 +298,9 @@ function PrintStatusSection({
   return (
     <section className="mt-12">
       <h2 className="text-xl font-bold text-gray-950">내 출력</h2>
+      <DemoNotice isVisible={isMockModeEnabled()} className="mt-2">
+        <p>화면에 표시된 출력 상태는 데모 데이터예요. 실제 프린터는 작동하지 않습니다.</p>
+      </DemoNotice>
       <article className="mt-6 flex w-full flex-col gap-6 rounded-2xl border border-gray-300 bg-white p-6 sm:flex-row sm:items-center sm:p-7">
         <div className="h-40 w-full shrink-0 overflow-hidden rounded-xl bg-[#f6f6f6] sm:w-40" aria-hidden="true">
           <ArtworkModelPreview

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { PrintTask } from "@/entities/print";
-import { MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
+import { isMockModeEnabled, MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
+import { DemoNotice } from "@/shared/ui/demo-notice";
 
 interface PrintRetryConfirmModalProps {
   onClose: () => void;
@@ -82,6 +83,10 @@ export function PrintRetryConfirmModal({
             같은 문제가 반복되지 않도록 아래를 점검해 주세요.
           </p>
         </header>
+
+        <DemoNotice isVisible={isMockModeEnabled()} className="mt-3">
+          <p>데모 재출력은 시뮬레이션이에요. 실제 프린터는 작동하지 않습니다.</p>
+        </DemoNotice>
 
         <div className="my-4 flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50/30 p-3 text-xs font-semibold text-red-500">
           <span aria-hidden="true">●</span>

@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
 
 interface PrinterDisconnectedModalProps {
   isOpen: boolean;
@@ -102,9 +103,11 @@ export function PrinterDisconnectedModal({
             프린터에 연결되지 않았어요
           </h2>
           <p className="mt-3 text-xs leading-5 text-gray-500">
-            프린터 연결을 진행 했는지 확인해 주세요.
-            <br />
-            연결 정보는 프린터 관리에서 확인할 수 있어요.
+            {isMockModeEnabled() ? (
+              <>데모 프린터의 연결 상태는 프린터 관리에서 확인할 수 있어요. 실제 프린터는 작동하지 않습니다.</>
+            ) : (
+              <>프린터 연결을 진행 했는지 확인해 주세요.<br />연결 정보는 프린터 관리에서 확인할 수 있어요.</>
+            )}
           </p>
           <button
             type="button"
