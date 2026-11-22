@@ -10,7 +10,7 @@ export interface ApiRequestOptions<T = unknown> extends Omit<RequestInit, "body"
   /** Public request: omit stored credentials and do not expire the session on 401. */
   skipAuth?: boolean;
   body?: unknown;
-  decode?: (data: unknown) => T;
+  decode?: (data: unknown, status: number) => T;
 }
 
 export class ApiError extends Error {
@@ -143,7 +143,7 @@ async function request<T = unknown>(path: string, options: ApiRequestOptions<T> 
 
   if (decode) {
     try {
-      return decode(data);
+      return decode(data, response.status);
     } catch {
       throw new ApiError("API 응답 형식이 올바르지 않습니다.", response.status, null, "response");
     }
