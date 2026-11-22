@@ -10,6 +10,7 @@
     "test:account-deletion": "node scripts/verify-account-deletion.mjs",
     "test:login-form": "node scripts/verify-login-form.mjs",
     "test:auth-api": "node scripts/verify-auth-api.mjs",
+    "test:chat-api": "node scripts/verify-chat-api.mjs",
     "test:register-form": "node scripts/verify-register-form.mjs",
     "test:create-generation": "node scripts/verify-create-generation.mjs",
     "test:create-attachments": "node scripts/verify-create-attachments.mjs",
