@@ -8,13 +8,17 @@ import {
   type ClipboardEvent,
   type DragEvent,
 } from "react";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
 import type { AttachedImage } from "./types";
 
-const MAX_ATTACHED_IMAGES = 2;
+const API_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_API_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export function useCreateAttachments() {
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
-  const [isLimitExceeded, setIsLimitExceeded] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const isMockMode = isMockModeEnabled();
+  const maxImages = isMockMode ? 2 : 1;
   const attachedImagesRef = useRef<AttachedImage[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -25,8 +29,7 @@ export function useCreateAttachments() {
     };
   }, []);
 
-  const clearLimitExceeded = () => setIsLimitExceeded(false);
-
+  const clearAttachmentError = () => setAttachmentError(null);
   const resetFileInput = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -37,32 +40,46 @@ export function useCreateAttachments() {
     attachedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.url));
     attachedImagesRef.current = [];
     setAttachedImages([]);
-    clearLimitExceeded();
+    clearAttachmentError();
     resetFileInput();
   };
 
   const addImages = (files: File[]) => {
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length === 0) {
-      return;
+    const availableSlots = maxImages - attachedImagesRef.current.length;
+    const filesToAdd: File[] = [];
+    let error: string | null = null;
+
+    for (const file of files) {
+      if (isMockMode) {
+        if (!file.type.startsWith("image/")) continue;
+      } else if (!API_IMAGE_TYPES.includes(file.type)) {
+        error ??= "JPEG, PNG 또는 WebP 이미지만 첨부할 수 있어요.";
+        continue;
+      } else if (file.size > MAX_API_IMAGE_BYTES) {
+        error ??= "이미지 크기는 최대 10 MiB까지 허용돼요.";
+        continue;
+      }
+
+      if (filesToAdd.length >= availableSlots) {
+        error ??= `사진은 최대 ${maxImages}장까지 첨부할 수 있어요.`;
+        continue;
+      }
+      filesToAdd.push(file);
     }
 
-    const availableSlots = MAX_ATTACHED_IMAGES - attachedImagesRef.current.length;
-    if (availableSlots <= 0) {
-      setIsLimitExceeded(true);
-      return;
+    if (error !== null || filesToAdd.length > 0) {
+      setAttachmentError(error);
     }
+    if (filesToAdd.length === 0) return;
 
-    const filesToAdd = imageFiles.slice(0, availableSlots);
     const nextImages = filesToAdd.map((file) => ({
+      file,
       id: crypto.randomUUID(),
       name: file.name || "붙여넣은 이미지",
       url: URL.createObjectURL(file),
     }));
-
     attachedImagesRef.current = [...attachedImagesRef.current, ...nextImages];
     setAttachedImages(attachedImagesRef.current);
-    setIsLimitExceeded(imageFiles.length > availableSlots);
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -71,14 +88,11 @@ export function useCreateAttachments() {
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const imageFiles = Array.from(event.clipboardData.files).filter((file) =>
-      file.type.startsWith("image/"),
-    );
-
-    if (imageFiles.length > 0) {
+    const files = Array.from(event.clipboardData.files);
+    if (files.some((file) => file.type.startsWith("image/"))) {
       event.preventDefault();
-      addImages(imageFiles);
     }
+    addImages(files);
   };
 
   const handleDrop = (event: DragEvent<HTMLFormElement>) => {
@@ -98,13 +112,14 @@ export function useCreateAttachments() {
 
     attachedImagesRef.current = attachedImagesRef.current.filter((image) => image.id !== imageId);
     setAttachedImages(attachedImagesRef.current);
-    clearLimitExceeded();
+    clearAttachmentError();
     resetFileInput();
   };
 
   return {
     attachedImages,
-    isLimitExceeded,
+    attachmentError,
+    imageAccept: isMockMode ? "image/*" : API_IMAGE_TYPES.join(","),
     fileInputRef,
     handleFileChange,
     handlePaste,
@@ -112,6 +127,6 @@ export function useCreateAttachments() {
     handleDragOver,
     handleRemoveAttachment,
     resetAttachments,
-    clearLimitExceeded,
+    clearAttachmentError,
   };
 }

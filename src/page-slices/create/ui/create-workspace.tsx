@@ -56,7 +56,8 @@ export default function CreateWorkspace() {
   const [draft, setDraft] = useState("");
   const {
     attachedImages,
-    isLimitExceeded,
+    attachmentError,
+    imageAccept,
     fileInputRef,
     handleFileChange,
     handlePaste,
@@ -64,7 +65,7 @@ export default function CreateWorkspace() {
     handleDragOver,
     handleRemoveAttachment,
     resetAttachments,
-    clearLimitExceeded,
+    clearAttachmentError,
   } = useCreateAttachments();
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingHistoryTitle, setEditingHistoryTitle] = useState("");
@@ -154,7 +155,7 @@ export default function CreateWorkspace() {
 
   const handleDraftChange = (value: string) => {
     setDraft(value);
-    clearLimitExceeded();
+    clearAttachmentError();
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -254,7 +255,8 @@ export default function CreateWorkspace() {
           <section className="grid min-h-[calc(100dvh-var(--header-height))] min-w-0 lg:grid-cols-2 xl:min-h-0 xl:grid-rows-[minmax(0,1fr)]">
             <ChatPanel
               attachedImages={attachedImages}
-              isLimitExceeded={isLimitExceeded}
+              attachmentError={attachmentError}
+              imageAccept={imageAccept}
               draft={draft}
               draftTextareaRef={draftTextareaRef}
               fileInputRef={fileInputRef}
