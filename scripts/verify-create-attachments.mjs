@@ -10,11 +10,13 @@ import ts from "typescript";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const hookPath = "src/page-slices/create/model/use-create-attachments.ts";
 const workspacePath = "src/page-slices/create/ui/create-workspace.tsx";
+const chatPanelPath = "src/page-slices/create/ui/components/chat-panel.tsx";
 const sources = new Map([
   hookPath,
   "src/page-slices/create/model/use-create-generation.ts",
   "src/page-slices/create/model/use-create-print-flow.ts",
   workspacePath,
+  chatPanelPath,
   "src/page-slices/create/model/model-utils.ts",
   "src/page-slices/create/model/mock-data.ts",
   "src/shared/mock/mock-data.ts",
@@ -29,7 +31,7 @@ const sources = new Map([
   fileName: path,
 }).outputText]));
 
-function createHarness(context, { workspace = false, desktop = false } = {}) {
+function createHarness(context, { workspace = false, desktop = false, mock = true } = {}) {
   const slots = [];
   const effects = new Map();
   const pendingEffects = new Set();
@@ -41,6 +43,7 @@ function createHarness(context, { workspace = false, desktop = false } = {}) {
   let cursor = 0;
   let rendering = false;
   let nextTimerId = 0;
+  let networkRequests = 0;
   function registerEffect(setup, dependencies, phase) {
     const slot = cursor++;
     const previous = effects.get(slot);
@@ -82,6 +85,10 @@ function createHarness(context, { workspace = false, desktop = false } = {}) {
   const stubs = {
     react,
     "react/jsx-runtime": { jsx, jsxs: jsx },
+    "next/image": { default: "Image" },
+    "lucide-react": { CornerDownLeft: "Send", Menu: "Menu", Plus: "Plus", X: "X" },
+    "@/shared/ui/demo-notice": { DemoNotice: "DemoNotice" },
+    "./chat-message-cards": {},
     "next/navigation": { useRouter: () => ({ push: unexpected }) },
     "@/entities/printer": { usePrinterQuery: () => ({ connectedPrinter: null, isPrinterConnected: false }) },
     "@/entities/print": { createPrintTask: unexpected, getCurrentPrintTask: unexpected },
@@ -111,6 +118,8 @@ function createHarness(context, { workspace = false, desktop = false } = {}) {
       filename: path,
     }).runInNewContext({
       crypto: { randomUUID },
+      process: { env: { NODE_ENV: "production", NEXT_PUBLIC_USE_MOCK: String(mock) } },
+      fetch() { networkRequests++; return unexpected(); },
       URL: {
         createObjectURL(file) {
           assert.equal(rendering, false, "URLs must not be allocated during render");
@@ -148,9 +157,11 @@ function createHarness(context, { workspace = false, desktop = false } = {}) {
     assert.equal(liveUrls.size, 0, "Every allocated URL must be released");
     assert.equal(created.length, revoked.length);
     assert.equal(timers.size, 0);
+    assert.equal(networkRequests, 0, "Create attachment and Mock generation must not fetch");
   });
   return {
     created, revoked, liveUrls, timers, unmount,
+    renderChatPanel: (props) => load(resolve(root, chatPanelPath)).ChatPanel(props),
     render() {
       cursor = 0;
       rendering = true;
@@ -192,15 +203,15 @@ const eventWith = (fields = {}) => ({
 const selectFiles = (files) => ({ target: { files, value: "selected-file" } });
 const names = (images) => Array.from(images, (image) => image.name);
 
-function findProps(tree, type) {
+function findProps(tree, type, matches = () => true) {
   if (Array.isArray(tree)) {
     for (const child of tree) {
-      const props = findProps(child, type);
+      const props = findProps(child, type, matches);
       if (props) return props;
     }
   } else if (tree && typeof tree === "object") {
-    if (tree.type === type) return tree.props;
-    return findProps(tree.props?.children, type);
+    if (tree.type === type && matches(tree.props)) return tree.props;
+    return findProps(tree.props?.children, type, matches);
   }
 }
 
@@ -217,8 +228,9 @@ test("file selection filters non-images, clears input and keeps the fallback nam
   hook.handleFileChange(selectFiles([textFile(), selected, imageFile("")]));
   hook = harness.render();
   assert.deepEqual(names(hook.attachedImages), ["reference.png", "붙여넣은 이미지"]);
-  assert.equal(hook.isLimitExceeded, false);
+  assert.equal(hook.attachmentError, null);
   assert.equal(harness.liveUrls.get(hook.attachedImages[0].url), selected);
+  assert.equal(hook.attachedImages[0].file, selected);
   assert.notEqual(hook.attachedImages[0].id, hook.attachedImages[1].id);
 });
 
@@ -231,12 +243,12 @@ for (const method of ["handleFileChange", "handlePaste", "handleDrop"]) {
     hook[method](event);
     hook = harness.render();
     assert.deepEqual(names(hook.attachedImages), ["first.png", "second.png"]);
-    assert.equal(hook.isLimitExceeded, true);
+    assert.equal(hook.attachmentError, "사진은 최대 2장까지 첨부할 수 있어요.");
     assert.equal(harness.created.length, 2);
     if (method !== "handleFileChange") assert.equal(event.defaultPrevented, true);
     hook[method](event);
     hook.handleFileChange(selectFiles([textFile()]));
-    assert.equal(harness.render().isLimitExceeded, true);
+    assert.equal(harness.render().attachmentError, "사진은 최대 2장까지 첨부할 수 있어요.");
     assert.equal(harness.created.length, 2);
     assert.equal(harness.revoked.length, 0);
   });
@@ -265,7 +277,7 @@ test("back-to-back additions, removals and resets use current ownership before r
   hook.handleFileChange(selectFiles([imageFile("also-rejected.png")]));
   hook = harness.render();
   assert.deepEqual(names(hook.attachedImages), ["first.png", "second.png"]);
-  assert.equal(hook.isLimitExceeded, true);
+  assert.equal(hook.attachmentError, "사진은 최대 2장까지 첨부할 수 있어요.");
   assert.equal(harness.created.length, 2);
   const [removed, retained] = hook.attachedImages;
   hook.fileInputRef.current = { value: "selected-file" };
@@ -274,7 +286,7 @@ test("back-to-back additions, removals and resets use current ownership before r
   hook.handleRemoveAttachment("missing-id");
   assert.equal(hook.fileInputRef.current.value, "");
   assert.deepEqual(harness.revoked, [removed.url]);
-  assert.equal(harness.render().isLimitExceeded, false);
+  assert.equal(harness.render().attachmentError, null);
   hook.handleFileChange(selectFiles([imageFile("replacement.png")]));
   hook = harness.render();
   assert.deepEqual(names(hook.attachedImages), ["second.png", "replacement.png"]);
@@ -330,10 +342,10 @@ for (const draft of ["", "  디자인 요청  "]) {
     chat.onPaste(eventWith({ clipboardData: { files: [imageFile("pasted.png")] } }));
     chat.onDrop(eventWith({ dataTransfer: { files: [imageFile("rejected.png")] } }));
     chat = findProps(harness.render(), "ChatPanel");
-    assert.equal(chat.isLimitExceeded, true);
+    assert.equal(chat.attachmentError, "사진은 최대 2장까지 첨부할 수 있어요.");
     chat.onDraftChange(draft);
     chat = findProps(harness.render(), "ChatPanel");
-    assert.equal(chat.isLimitExceeded, false);
+    assert.equal(chat.attachmentError, null);
     chat.fileInputRef.current = { value: "selected-file" };
     chat.onSubmit(eventWith());
     chat = findProps(harness.render(), "ChatPanel");
@@ -345,7 +357,7 @@ for (const draft of ["", "  디자인 요청  "]) {
     assert.equal(chat.attachedImages.length, 0);
     assert.equal(chat.fileInputRef.current.value, "");
     assert.equal(chat.draft, "");
-    assert.equal(chat.isLimitExceeded, false);
+    assert.equal(chat.attachmentError, null);
     assert.equal(harness.liveUrls.size, 0);
     chat.onDrop(eventWith({ dataTransfer: { files: [imageFile("while-loading.png")] } }));
     chat = findProps(harness.render(), "ChatPanel");
@@ -368,15 +380,125 @@ for (const desktop of [false, true]) {
     chat.onToggleHistory();
     const tree = harness.render();
     chat = findProps(tree, "ChatPanel");
-    assert.equal(chat.isLimitExceeded, true);
+    assert.equal(chat.attachmentError, "사진은 최대 2장까지 첨부할 수 있어요.");
     chat.fileInputRef.current = { value: "selected-file" };
     findProps(tree, "HistorySidebar").onNewChat();
     chat = findProps(harness.render(), "ChatPanel");
     assert.equal(chat.attachedImages.length, 0);
-    assert.equal(chat.isLimitExceeded, false);
+    assert.equal(chat.attachmentError, null);
     assert.equal(chat.fileInputRef.current.value, "");
     assert.equal(harness.liveUrls.size, 0);
     chat.onFileChange(selectFiles([imageFile("fresh.png")]));
     assert.deepEqual(names(findProps(harness.render(), "ChatPanel").attachedImages), ["fresh.png"]);
   });
 }
+
+const apiMimeError = "JPEG, PNG 또는 WebP 이미지만 첨부할 수 있어요.";
+const apiSizeError = "이미지 크기는 최대 10 MiB까지 허용돼요.";
+const apiLimitError = "사진은 최대 1장까지 첨부할 수 있어요.";
+const maxApiImageSize = 10 * 1024 * 1024;
+
+function attachWith(hook, method, files) {
+  const event = eventWith({ ...selectFiles(files), clipboardData: { files }, dataTransfer: { files } });
+  hook[method](event);
+  return event;
+}
+
+for (const method of ["handleFileChange", "handlePaste", "handleDrop"]) {
+  test(method + " validates API uploads before creating a URL and keeps the current file", (context) => {
+    const harness = createHarness(context, { mock: false });
+    const hook = harness.render();
+    const unsupported = new File(["fixture"], "reference.gif", { type: "image/gif" });
+    const oversized = new File([new Uint8Array(maxApiImageSize + 1)], "oversized.png", { type: "image/png" });
+
+    const unsupportedEvent = attachWith(hook, method, [unsupported]);
+    if (method !== "handleFileChange") assert.equal(unsupportedEvent.defaultPrevented, true);
+    assert.equal(harness.render().attachmentError, apiMimeError);
+    assert.equal(harness.created.length, 0);
+
+    attachWith(hook, method, [oversized]);
+    assert.equal(harness.render().attachmentError, apiSizeError);
+    assert.equal(harness.created.length, 0);
+
+    const file = new File(["fixture"], "reference.jpeg", { type: "image/jpeg" });
+    attachWith(hook, method, [file]);
+    const success = harness.render();
+    assert.equal(success.attachmentError, null);
+    assert.equal(success.attachedImages[0].file, file);
+    assert.equal(success.imageAccept, "image/jpeg,image/png,image/webp");
+
+    attachWith(hook, method, [unsupported]);
+    assert.equal(harness.render().attachmentError, apiMimeError);
+    attachWith(hook, method, [imageFile("second.png")]);
+    const retained = harness.render();
+    assert.equal(retained.attachmentError, apiLimitError);
+    assert.equal(retained.attachedImages.length, 1);
+    assert.equal(retained.attachedImages[0], success.attachedImages[0]);
+    assert.equal(harness.created.length, 1);
+    assert.deepEqual(harness.revoked, []);
+  });
+}
+
+test("API accepts PNG at 10 MiB and WebP after removal, and releases new URLs on reset and unmount", (context) => {
+  const harness = createHarness(context, { mock: false });
+  const hook = harness.render();
+  const png = new File([new Uint8Array(maxApiImageSize)], "boundary.png", { type: "image/png" });
+  const webp = new File(["fixture"], "replacement.webp", { type: "image/webp" });
+  hook.handleFileChange(selectFiles([png, webp]));
+  let current = harness.render();
+  assert.equal(current.attachmentError, apiLimitError);
+  assert.equal(current.attachedImages.length, 1);
+  assert.equal(current.attachedImages[0].file, png);
+
+  hook.handleRemoveAttachment(current.attachedImages[0].id);
+  assert.equal(harness.render().attachmentError, null);
+  assert.equal(harness.liveUrls.size, 0);
+  hook.handleFileChange(selectFiles([webp]));
+  current = harness.render();
+  assert.equal(current.attachedImages[0].file, webp);
+
+  hook.resetAttachments();
+  assert.equal(harness.render().attachedImages.length, 0);
+  assert.equal(harness.liveUrls.size, 0);
+  hook.handleFileChange(selectFiles([webp]));
+  harness.unmount();
+  assert.equal(harness.liveUrls.size, 0);
+  assert.equal(harness.revoked.length, 3);
+});
+
+test("Mock still accepts broad image MIME and sizes above the API limit", (context) => {
+  const harness = createHarness(context);
+  const hook = harness.render();
+  const gif = new File([new Uint8Array(maxApiImageSize + 1)], "fixture.gif", { type: "image/gif" });
+  hook.handleFileChange(selectFiles([gif, imageFile()]));
+  const state = harness.render();
+  assert.equal(state.imageAccept, "image/*");
+  assert.equal(state.attachedImages.length, 2);
+  assert.equal(state.attachedImages[0].file, gif);
+  assert.equal(state.attachmentError, null);
+});
+
+test("API paste leaves text alone and uses the same MIME validation for pasted files", (context) => {
+  const harness = createHarness(context, { mock: false });
+  const hook = harness.render();
+  const text = attachWith(hook, "handlePaste", []);
+  assert.equal(text.defaultPrevented, false);
+  assert.equal(harness.render().attachmentError, null);
+  const file = attachWith(hook, "handlePaste", [textFile()]);
+  assert.equal(file.defaultPrevented, false);
+  assert.equal(harness.render().attachmentError, apiMimeError);
+  assert.equal(harness.created.length, 0);
+});
+
+test("API attachment error is announced and the file picker shows supported types", (context) => {
+  const harness = createHarness(context, { workspace: true, mock: false });
+  const chat = findProps(harness.render(), "ChatPanel");
+  chat.onDrop(eventWith({ dataTransfer: { files: [textFile()] } }));
+  const panel = harness.renderChatPanel(findProps(harness.render(), "ChatPanel"));
+  const alert = findProps(panel, "p", (props) => props.role === "alert");
+  const picker = findProps(panel, "input", (props) => props.type === "file");
+  const attach = findProps(panel, "button", (props) => props["aria-label"] === "참고 이미지 첨부");
+  assert.equal(alert.children, apiMimeError);
+  assert.equal(attach["aria-describedby"], alert.id);
+  assert.equal(picker.accept, "image/jpeg,image/png,image/webp");
+});

@@ -15,12 +15,13 @@ import {
 
 interface ChatPanelProps {
   attachedImages: AttachedImage[];
+  attachmentError: string | null;
   draft: string;
   draftTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   isGenerated: boolean;
   isLoading: boolean;
-  isLimitExceeded: boolean;
+  imageAccept: string;
   isPrintBlocked: boolean;
   messages: ChatMessage[];
   onAutoFix: (messageId: string) => void;
@@ -37,12 +38,13 @@ interface ChatPanelProps {
 
 export function ChatPanel({
   attachedImages,
+  attachmentError,
   draft,
   draftTextareaRef,
   fileInputRef,
   isGenerated,
   isLoading,
-  isLimitExceeded,
+  imageAccept,
   isPrintBlocked,
   messages,
   onAutoFix,
@@ -131,12 +133,12 @@ export function ChatPanel({
         <form onSubmit={onSubmit} onDragOver={onDragOver} onDrop={onDrop} className="w-full">
           <div className={[
             "flex min-h-[60px] flex-col rounded-xl bg-white px-4 py-2 shadow-sm",
-            isLimitExceeded ? "border-2 border-red-400" : "border border-[#5a7bff]",
+            attachmentError ? "border-2 border-red-400" : "border border-[#5a7bff]",
           ].join(" ")}>
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept={imageAccept}
               onChange={onFileChange}
               className="sr-only"
             />
@@ -173,6 +175,7 @@ export function ChatPanel({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="참고 이미지 첨부"
+                aria-describedby={attachmentError ? "create-attachment-error" : undefined}
                 title="참고 이미지 첨부"
                 className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff]"
               >
@@ -201,9 +204,9 @@ export function ChatPanel({
               </button>
             </div>
           </div>
-          {isLimitExceeded && (
-            <p className="mt-2 text-center text-xs text-red-500">
-              사진은 최대 2장까지 첨부할 수 있어요
+          {attachmentError && (
+            <p id="create-attachment-error" role="alert" className="mt-2 text-center text-xs text-red-500">
+              {attachmentError}
             </p>
           )}
           <p className="mt-3 text-center text-xs text-gray-400">
