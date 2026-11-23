@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useSyncExternalStore } from "react";
 import { useAuth } from "@/entities/session";
 import { Header, LoginRequiredModal } from "@/widgets/header";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
+import { ApiCreateWorkspace } from "./api-create-workspace";
 import CreateWorkspace from "./create-workspace";
 
 const subscribeToHydration = () => () => {};
@@ -25,6 +27,11 @@ export default function CreatePage() {
     // History length does not guarantee a same-origin previous entry.
     router.push("/");
   }, [router]);
+
+  if (!isMockModeEnabled()) {
+    // This public unavailable screen stays unconnected until authenticated API integration.
+    return <ApiCreateWorkspace />;
+  }
 
   if (!isMounted || !isLoggedIn) {
     return (

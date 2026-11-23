@@ -14,6 +14,7 @@
     "test:meshy-api": "node scripts/verify-meshy-api.mjs",
     "test:register-form": "node scripts/verify-register-form.mjs",
     "test:create-generation": "node scripts/verify-create-generation.mjs",
+    "test:create-api-generation": "node scripts/verify-create-api-generation.mjs",
     "test:create-attachments": "node scripts/verify-create-attachments.mjs",
     "test:create-print-flow": "node scripts/verify-create-print-flow.mjs",
     "test:print": "node scripts/verify-print-lifecycle.mjs",
