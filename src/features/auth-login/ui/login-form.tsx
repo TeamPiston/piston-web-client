@@ -16,6 +16,7 @@ export function LoginForm() {
     showPassword,
     togglePasswordVisibility,
     error,
+    isSubmitting,
     handleSubmit,
   } = useLoginForm();
 
@@ -35,7 +36,7 @@ export function LoginForm() {
           데모 계정 채우기
         </button>
       </DemoNotice>
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} aria-busy={isSubmitting} className="space-y-3">
         {/* 아이디 */}
         <div className="relative">
           <TextInput
@@ -71,7 +72,7 @@ export function LoginForm() {
         )}
 
         {/* 로그인 버튼 */}
-        <Button type="submit">로그인</Button>
+        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "로그인 중..." : "로그인"}</Button>
       </form>
 
       {/* 하단 부가 링크 */}

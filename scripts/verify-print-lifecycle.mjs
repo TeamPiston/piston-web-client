@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { createAuthLocks } from "./test-auth-locks.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -30,16 +31,18 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "product
   ])));
   const window = {
     location: { origin: "https://frontend.invalid", search: "", pathname: "/mypage", assign() {} },
+    navigator: { locks: createAuthLocks() },
     localStorage: { getItem: () => null, removeItem() {} },
     dispatchEvent() {},
   };
   const context = createContext({
+    AbortSignal, Event,
     process: { env: {
       NODE_ENV: nodeEnv,
       NEXT_PUBLIC_USE_MOCK: String(mock),
       NEXT_PUBLIC_API_BASE_URL: baseUrl,
     } },
-    window, fetch: fetchImpl, Headers, FormData, Blob, URLSearchParams, ArrayBuffer, Event,
+    window, fetch: fetchImpl, Headers, FormData, Blob, URLSearchParams, ArrayBuffer,
   });
   const modules = new Map();
   function load(path) {
@@ -253,8 +256,8 @@ async function verifyApiAdapter() {
   const responseTask = {
     ...mock.MOCK_PRINT_STATUS_LIST[0], id: 7101, artworkName: "API contract artwork", progress: 0,
   };
-  const requestBody = { userId: print.PRINT_USER_ID, artworkName: responseTask.artworkName };
-  pending.push({ method: "GET", path: "/api/prints/current", body: { data: null } });
+  const requestBody = { artworkName: responseTask.artworkName };
+  pending.push({ method: "GET", path: "/api/prints/current", body: null });
   assert.equal(await print.getCurrentPrintTask(), null);
   pending.push({ method: "POST", path: "/api/prints", status: 201, body: { data: responseTask }, requestBody });
   const created = await print.createPrintTask(responseTask.artworkName);
@@ -328,7 +331,7 @@ async function verifyTransportIsolation() {
     const removed = [];
     const events = [];
     const redirects = [];
-    window.localStorage.getItem = () => "test-token-not-a-credential";
+    window.localStorage.getItem = (key) => key === "piston-access-token" ? "test-token-not-a-credential" : null;
     window.localStorage.removeItem = (key) => removed.push(key);
     window.dispatchEvent = (event) => events.push(event.type);
     window.location.assign = (url) => redirects.push(url);
@@ -360,7 +363,7 @@ async function verifyTransportIsolation() {
         checks += 1;
       }
     }
-    assert.deepEqual(removed, ["piston-access-token", "piston-auth", "piston-access-token", "piston-auth"]);
+    assert.deepEqual(removed, ["piston-api-session", "piston-access-token", "piston-auth", "piston-api-session", "piston-access-token", "piston-auth"]);
     assert.deepEqual(events, ["piston-auth-expired", "piston-auth-expired"]);
     assert.deepEqual(redirects, ["https://frontend.invalid/login", "https://frontend.invalid/login"]);
     for (const message of ["Network disconnected", "Failed to fetch (simulated CORS rejection)"]) {
@@ -387,10 +390,12 @@ async function verifyTransportIsolation() {
     checks += 1;
     const abort = new DOMException("Cancelled", "AbortError");
     const controller = new AbortController();
-    controller.abort();
-    respond = () => { throw abort; };
+    controller.abort(abort);
+    const beforeAbort = fetchCalls;
+    respond = () => { throw new Error("A pre-aborted request must not reach fetch"); };
     await assert.rejects(() => apiClient.get(path, { signal: controller.signal }), (error) => error === abort);
-    checks += 1;
+    assert.equal(fetchCalls, beforeAbort);
+    checks += 2;
     const bodyController = new AbortController();
     respond = () => ({
       status: 200, ok: true, headers: new Headers({ "Content-Type": "application/json" }),

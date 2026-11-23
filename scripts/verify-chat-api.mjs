@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createAuthLocks } from "./test-auth-locks.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
@@ -22,10 +23,12 @@ function harness(respond = async () => assert.fail("Unexpected fetch")) {
   const redirects = [];
   const storage = new Map([["piston-access-token", "synthetic-access-token"], ["piston-auth", "synthetic-session"]]);
   const context = createContext({
+    AbortSignal, Event,
     process: { env: { NODE_ENV: "production", NEXT_PUBLIC_API_BASE_URL: baseUrl } },
-    Headers, FormData, File, Blob, URLSearchParams, ArrayBuffer, Event,
+    Headers, FormData, File, Blob, URLSearchParams, ArrayBuffer,
     window: {
-      localStorage: { getItem: (key) => storage.get(key), removeItem: (key) => storage.delete(key) },
+      navigator: { locks: createAuthLocks() },
+      localStorage: { getItem: (key) => storage.get(key) ?? null, removeItem: (key) => storage.delete(key) },
       location: { origin: "https://frontend.invalid", pathname: "/create", assign: (url) => redirects.push(url) },
       dispatchEvent: (event) => events.push(event.type),
     },
@@ -247,13 +250,17 @@ test("an already aborted signal avoids even a transport attempt", async () => {
 test("both methods forward AbortSignal and preserve abort errors without retries", async () => {
   for (const method of ["GET", "POST"]) {
     const controller = new AbortController();
+    let started;
+    const inTransport = new Promise((resolve) => { started = resolve; });
     const h = harness(({ signal }) => new Promise((_, reject) => {
       assert.equal(signal, controller.signal);
       signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      started();
     }));
     const request = method === "GET"
       ? h.getChatHistory({ signal: controller.signal })
       : h.sendChatMessage({ message: "A sample" }, { signal: controller.signal });
+    await inTransport;
     assert.equal(h.requests.length, 1);
     controller.abort();
     await assert.rejects(request, (error) => error === controller.signal.reason);

@@ -149,7 +149,7 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
     const exports = {};
     loaded.set(path, exports);
     const entry = compiled.get(path).runInNewContext({
-      AbortController, URL, File, FormData, crypto: { randomUUID }, window: { sessionStorage: storage },
+      AbortController, Event, URL, File, FormData, crypto: { randomUUID }, window: { sessionStorage: storage },
       performance: { now: () => time },
       process: { env: { NEXT_PUBLIC_API_BASE_URL: "https://blocked.invalid" } },
       fetch: (...args) => {

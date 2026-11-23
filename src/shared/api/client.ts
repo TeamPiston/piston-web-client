@@ -1,14 +1,14 @@
 import {
-  ACCESS_TOKEN_STORAGE_KEY,
-  AUTH_EXPIRED_EVENT,
-  SESSION_STORAGE_KEY,
+  blockUnverifiedAuth, captureAuth, clearStoredAuth, ensureAuthLockAccess, hasConfirmedAuthLock, isCurrentAuth,
+  isToken, updateApiAccessToken, type AuthSnapshot,
 } from "./auth";
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 export interface ApiRequestOptions<T = unknown> extends Omit<RequestInit, "body"> {
   /** Public request: omit stored credentials and do not expire the session on 401. */
   skipAuth?: boolean;
+  /** Bind the request to credentials captured after verifying the session owner. */
+  authSnapshot?: AuthSnapshot;
   body?: unknown;
   decode?: (data: unknown, status: number) => T;
 }
@@ -35,27 +35,46 @@ function resolveUrl(path: string) {
   return `${baseUrl}${normalizedPath}`;
 }
 
-function getAccessToken() {
-  if (typeof window === "undefined") {
-    return null;
-  }
+const refreshes = new Map<string, Promise<boolean>>();
 
-  return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+function refreshAccess(snapshot: AuthSnapshot): Promise<boolean> {
+  const session = snapshot.session;
+  if (!session) return Promise.resolve(false);
+  const current = captureAuth();
+  if (current.storage.status === "unavailable") {
+    blockUnverifiedAuth(snapshot);
+    return Promise.resolve(false);
+  }
+  if (!isCurrentAuth(snapshot, current)) return Promise.resolve(false);
+  if (current.accessToken !== snapshot.accessToken) return Promise.resolve(true);
+  const existing = refreshes.get(session.id);
+  if (existing) return existing;
+  const pending = request("/reissue", {
+    method: "POST", skipAuth: true, redirect: "error",
+    headers: { Authorization: `Bearer ${session.refreshToken}` },
+    decode(data, status) {
+      if (status !== 200 || !data || typeof data !== "object" ||
+        !("accessToken" in data) || !isToken(data.accessToken)) throw new Error("Invalid refresh response");
+      return data.accessToken;
+    },
+  }).then((accessToken) => updateApiAccessToken(snapshot, accessToken))
+    .catch(async () => {
+      await clearStoredAuth(snapshot, { redirect: true, requireSameAccessToken: true });
+      return isCurrentAuth(snapshot) && captureAuth().accessToken !== snapshot.accessToken;
+    })
+    .finally(() => refreshes.delete(session.id));
+  refreshes.set(session.id, pending);
+  return pending;
 }
 
-function clearStoredAuth() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-  window.localStorage.removeItem(SESSION_STORAGE_KEY);
-  window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
-
-  if (window.location.pathname !== "/login") {
-    // Expired sessions require a full reload; this transport cannot use Router hooks.
-    window.location.assign(window.location.origin + "/login");
-  }
+function waitForAuth(pending: Promise<boolean>, signal: AbortSignal | null | undefined) {
+  if (!signal) return pending;
+  signal.throwIfAborted();
+  return new Promise<boolean>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    void pending.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
 }
 
 function serializeBody(body: unknown) {
@@ -91,20 +110,28 @@ async function parseResponse(response: Response): Promise<unknown> {
   return response.text();
 }
 
-async function request<T = unknown>(path: string, options: ApiRequestOptions<T> = {}) {
-  const { skipAuth = false, body, decode, ...requestOptions } = options;
+async function request<T = unknown>(path: string, options: ApiRequestOptions<T> = {}, retried = false): Promise<T> {
+  const { skipAuth = false, authSnapshot, body, decode, ...requestOptions } = options;
   const headers = new Headers(requestOptions.headers);
 
   if (body !== undefined && !isFormData(body) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  if (!skipAuth) {
-    const accessToken = getAccessToken();
-    if (accessToken) {
-      headers.set("Authorization", `Bearer ${accessToken}`);
+  requestOptions.signal?.throwIfAborted();
+  const snapshot = skipAuth ? null : authSnapshot ?? captureAuth();
+  if (snapshot) {
+    const canUseAuthLock = hasConfirmedAuthLock() ||
+      await waitForAuth(ensureAuthLockAccess(), requestOptions.signal);
+    requestOptions.signal?.throwIfAborted();
+    if (!canUseAuthLock || snapshot.storage.status === "unavailable") {
+      throw new ApiError("로그인 상태를 확인할 수 없습니다.", 401, null);
+    }
+    if (!isCurrentAuth(snapshot)) {
+      throw new ApiError("로그인 계정이 변경되었습니다.", 401, null);
     }
   }
+  if (snapshot?.accessToken) headers.set("Authorization", `Bearer ${snapshot.accessToken}`);
 
   const url = resolveUrl(path);
   const init = {
@@ -132,8 +159,23 @@ async function request<T = unknown>(path: string, options: ApiRequestOptions<T> 
     data = null;
   }
 
-  if (response.status === 401 && !skipAuth) {
-    clearStoredAuth();
+  requestOptions.signal?.throwIfAborted();
+  if (response.status === 401 && snapshot) {
+    if (!retried && snapshot.session &&
+      !/^\/(?:login|reissue|logout)\/?$/.test(new URL(url, "http://localhost").pathname)) {
+      const renewed = await waitForAuth(refreshAccess(snapshot), requestOptions.signal);
+      const method = (options.method ?? "GET").toUpperCase();
+      // Only reads are automatically replayed. Paid or destructive requests are never repeated.
+      if (renewed && (method === "GET" || method === "HEAD")) {
+        const renewedAuth = captureAuth();
+        if (renewedAuth.revision === snapshot.revision && renewedAuth.session?.id === snapshot.session.id) {
+          return request(path, { ...options, authSnapshot: renewedAuth }, true);
+        }
+      }
+    } else if (snapshot.storage.status === "readable") {
+      // Ownership and the rejected token must be checked while holding the storage lock.
+      await clearStoredAuth(snapshot, { redirect: true, requireSameAccessToken: true });
+    }
     throw new ApiError("인증이 만료되었습니다.", response.status, data);
   }
 
