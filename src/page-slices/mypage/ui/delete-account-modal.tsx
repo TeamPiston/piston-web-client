@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AccountDeletionUnavailableError } from "@/entities/session";
+import { useEffect, useRef, useState } from "react";
+import { AccountDeletionSessionChangedError } from "@/entities/session";
 
 interface DeleteAccountModalProps {
   isOpen: boolean;
+  blockedMessage?: string;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }
 
-export function DeleteAccountModal({ isOpen, onClose, onConfirm }: DeleteAccountModalProps) {
+export function DeleteAccountModal({ isOpen, blockedMessage, onClose, onConfirm }: DeleteAccountModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitting = useRef(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function DeleteAccountModal({ isOpen, onClose, onConfirm }: DeleteAccount
   }
 
   const handleClose = () => {
-    if (isSubmitting) {
+    if (submitting.current) {
       return;
     }
 
@@ -49,20 +51,22 @@ export function DeleteAccountModal({ isOpen, onClose, onConfirm }: DeleteAccount
   };
 
   const handleConfirm = async () => {
-    if (isSubmitting) {
+    if (submitting.current || blockedMessage) {
       return;
     }
 
+    submitting.current = true;
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
       await onConfirm();
     } catch (error) {
-      setErrorMessage(error instanceof AccountDeletionUnavailableError
+      setErrorMessage(error instanceof AccountDeletionSessionChangedError
         ? error.message
-        : "회원탈퇴 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.");
+        : "회원탈퇴 결과를 확인할 수 없습니다. 계정 상태를 확인해 주세요.");
     } finally {
+      submitting.current = false;
       setIsSubmitting(false);
     }
   };
@@ -104,9 +108,9 @@ export function DeleteAccountModal({ isOpen, onClose, onConfirm }: DeleteAccount
           <li>피드에 공유한 게시물</li>
         </ul>
 
-        {errorMessage && (
-          <p className="mb-4 text-center text-xs text-red-500" role="alert">
-            {errorMessage}
+        {(blockedMessage || errorMessage) && (
+          <p className="mb-4 text-center text-xs leading-5 text-red-500" role="alert">
+            {blockedMessage ?? errorMessage}
           </p>
         )}
 
@@ -122,7 +126,7 @@ export function DeleteAccountModal({ isOpen, onClose, onConfirm }: DeleteAccount
           <button
             type="button"
             onClick={() => void handleConfirm()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !!blockedMessage}
             className="h-[58px] rounded-lg bg-red-500 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "탈퇴 처리 중..." : "탈퇴하기"}

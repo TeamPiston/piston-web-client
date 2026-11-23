@@ -12,7 +12,7 @@ import {
   retryPrintTask,
   type PrintTask,
 } from "@/entities/print";
-import { deleteCurrentAccount, useAuth } from "@/entities/session";
+import { AccountDeletionSessionChangedError, deleteCurrentAccount, useAuth } from "@/entities/session";
 import {
   deleteMockDesign,
   fetchMockMyDesigns,
@@ -57,7 +57,7 @@ function MyPageContent() {
 
 function MyProfilePage() {
   const router = useRouter();
-  const { logout, user } = useAuth();
+  const { apiSessionId, logout, user } = useAuth();
   const [printTask, setPrintTask] = useState<PrintTask | null | undefined>(undefined);
   const [selectedPrintTask, setSelectedPrintTask] = useState<PrintTask | null>(null);
   const [isRetryModalOpen, setIsRetryModalOpen] = useState(false);
@@ -65,7 +65,12 @@ function MyProfilePage() {
   const [hasPrintLoadError, setHasPrintLoadError] = useState(false);
   const [createdDesigns, setCreatedDesigns] = useState<MyDesign[]>(MOCK_MY_DESIGNS);
   const [selectedDesign, setSelectedDesign] = useState<MyDesign | null>(null);
-  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+  const [deletionConfirmation, setDeletionConfirmation] = useState<"mock" | {
+    userId: string;
+    sessionId: string;
+  } | null>(null);
+  const deletionSessionChanged = deletionConfirmation !== null && deletionConfirmation !== "mock" &&
+    (deletionConfirmation.userId !== user?.userId || deletionConfirmation.sessionId !== apiSessionId);
 
   const closeDesignModal = useCallback(() => setSelectedDesign(null), []);
 
@@ -82,10 +87,20 @@ function MyProfilePage() {
     };
   }, []);
 
+  const openDeleteConfirmation = () => {
+    if (isMockModeEnabled()) {
+      setDeletionConfirmation("mock");
+    } else if (user?.userId && apiSessionId) {
+      setDeletionConfirmation({ userId: user.userId, sessionId: apiSessionId });
+    }
+  };
+
   const handleDeleteAccount = async () => {
-    await deleteCurrentAccount();
-    logout();
-    setIsDeleteAccountModalOpen(false);
+    if (!deletionConfirmation || deletionSessionChanged) throw new AccountDeletionSessionChangedError();
+    const mock = deletionConfirmation === "mock";
+    if (!await deleteCurrentAccount(mock ? undefined : deletionConfirmation.sessionId)) return;
+    if (mock) logout();
+    setDeletionConfirmation(null);
     router.replace("/login");
   };
 
@@ -124,7 +139,7 @@ function MyProfilePage() {
     return () => window.clearInterval(pollingId);
   }, [loadCurrentPrint, printTask?.status]);
 
-  const displayProfile = user && user.id !== "admin" ? user : MOCK_ACCOUNT_PROFILE;
+  const displayProfile = isMockModeEnabled() && (!user || user.id === "admin") ? MOCK_ACCOUNT_PROFILE : user;
   const selectedPrintDesign = selectedPrintTask
     ? createdDesigns.find((design) => design.title === selectedPrintTask.artworkName)
     : undefined;
@@ -153,8 +168,8 @@ function MyProfilePage() {
               aria-hidden="true"
             />
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-gray-950">{displayProfile.name}</h1>
-              <p className="mt-1 text-sm text-gray-500">{displayProfile.email}</p>
+              <h1 className="text-xl font-bold text-gray-950">{displayProfile?.name}</h1>
+              <p className="mt-1 text-sm text-gray-500">{displayProfile?.email}</p>
               <p className="mt-1 text-xs text-gray-400">프린터는 한 번에 하나만 출력할 수 있어요.</p>
             </div>
           </div>
@@ -176,7 +191,7 @@ function MyProfilePage() {
             </button>
             <button
               type="button"
-              onClick={() => setIsDeleteAccountModalOpen(true)}
+              onClick={openDeleteConfirmation}
               className="h-11 rounded-lg border border-gray-300 px-4 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
             >
               회원탈퇴
@@ -260,8 +275,9 @@ function MyProfilePage() {
         />
       )}
       <DeleteAccountModal
-        isOpen={isDeleteAccountModalOpen}
-        onClose={() => setIsDeleteAccountModalOpen(false)}
+        isOpen={deletionConfirmation !== null}
+        blockedMessage={deletionSessionChanged ? new AccountDeletionSessionChangedError().message : undefined}
+        onClose={() => setDeletionConfirmation(null)}
         onConfirm={handleDeleteAccount}
       />
     </>

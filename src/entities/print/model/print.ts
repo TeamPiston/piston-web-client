@@ -117,9 +117,8 @@ export async function createPrintTask(artworkName = PRINT_ARTWORK_NAME) {
   return withMockFallback(
     async () => {
       const response = await apiClient.post<unknown>("/api/prints", {
-        userId: PRINT_USER_ID,
         artworkName,
-      });
+      }, { redirect: "error" });
       const printTask = normalizePrintTask(response);
 
       if (!printTask) {
@@ -161,9 +160,8 @@ export async function retryPrintTask(printTask: PrintTask) {
   return withMockFallback(
     async () => {
       const response = await apiClient.post<unknown>("/api/prints", {
-        userId: PRINT_USER_ID,
         artworkName: printTask.artworkName,
-      });
+      }, { redirect: "error" });
       const nextTask = normalizePrintTask(response);
 
       if (!nextTask) {

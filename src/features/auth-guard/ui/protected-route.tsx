@@ -14,7 +14,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isRestoring } = useAuth();
   const isMounted = useSyncExternalStore(
     subscribeToMount,
     getClientMountState,
@@ -22,12 +22,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   );
 
   useEffect(() => {
-    if (isMounted && !isLoggedIn) {
+    if (isMounted && !isRestoring && !isLoggedIn) {
       router.replace("/login");
     }
-  }, [isLoggedIn, isMounted, router]);
+  }, [isLoggedIn, isMounted, isRestoring, router]);
 
-  if (!isMounted || !isLoggedIn) {
+  if (!isMounted || isRestoring || !isLoggedIn) {
     return null;
   }
 

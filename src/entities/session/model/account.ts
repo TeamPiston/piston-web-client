@@ -1,16 +1,33 @@
+import { apiClient } from "@/shared/api";
+import { captureAuth, clearStoredAuth, isCurrentAuth } from "@/shared/api/auth";
 import { deleteMockAccount, isMockModeEnabled } from "@/shared/mock/mock-data";
+import { requireNoContent } from "./api-session";
 
-export class AccountDeletionUnavailableError extends Error {
+export class AccountDeletionSessionChangedError extends Error {
   constructor() {
-    super("실제 서버 회원 탈퇴는 아직 지원하지 않습니다. 서비스 연동을 준비 중입니다.");
-    this.name = "AccountDeletionUnavailableError";
+    super("로그인 계정이 변경되었습니다. 다시 로그인 상태를 확인해 주세요.");
   }
 }
 
-export async function deleteCurrentAccount() {
-  if (!isMockModeEnabled()) {
-    throw new AccountDeletionUnavailableError();
+export async function deleteCurrentAccount(expectedSessionId?: string) {
+  if (isMockModeEnabled()) {
+    await deleteMockAccount();
+    return true;
   }
 
-  await deleteMockAccount();
+  const snapshot = captureAuth();
+  if (!snapshot.session || snapshot.session.id !== expectedSessionId) {
+    throw new AccountDeletionSessionChangedError();
+  }
+  try {
+    await apiClient.delete("/api/users/me", {
+      authSnapshot: snapshot,
+      redirect: "error",
+      decode: requireNoContent,
+    });
+  } catch (error) {
+    if (!isCurrentAuth(snapshot)) throw new AccountDeletionSessionChangedError();
+    throw error;
+  }
+  return clearStoredAuth(snapshot);
 }

@@ -42,8 +42,9 @@ function harness({ mock = false, enabled = true, component = false } = {}) {
     },
   };
   const context = createContext({
+    Event,
     process: { env: { NEXT_PUBLIC_USE_MOCK: String(mock), NEXT_PUBLIC_ENABLE_REGISTRATION_API: String(enabled), NEXT_PUBLIC_API_BASE_URL: "https://registration.invalid", NODE_ENV: "production" } },
-    Headers, FormData, Blob, URLSearchParams, ArrayBuffer, Event,
+    Headers, FormData, Blob, URLSearchParams, ArrayBuffer,
     console: Object.fromEntries(["log", "error", "warn", "debug", "info"].map((name) => [name, (...args) => logs.push(args)])),
     window: {
       localStorage: { getItem: () => "fixture-token", removeItem: (key) => authChanges.push(key) },
