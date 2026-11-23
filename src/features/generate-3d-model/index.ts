@@ -1,2 +1,2 @@
-export { generateImageTo3D, generateTextTo3D, ModelGenerationInputError } from "./api/generate-model";
-export type { GeneratedModel, ImageTo3DInput, TextTo3DInput } from "./api/generate-model";
+export { generateImageTo3D, generateTextTo3D, getMeshyTaskStatus, MeshyTaskConflictError, ModelGenerationInputError } from "./api/generate-model";
+export type { ImageTo3DInput, MeshyTaskAccepted, MeshyTaskStatus, TextTo3DInput } from "./api/generate-model";
