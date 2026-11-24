@@ -17,6 +17,7 @@ export interface SessionContextValue {
   login: (user: UserProfile) => void;
   loginWithCredentials: (credentials: LoginCredentials, signal?: AbortSignal) => Promise<boolean>;
   logout: () => void;
+  prepareLocalSignOut: () => (onSignedOut: () => void) => Promise<void>;
 }
 
 export const SessionContext = createContext<SessionContextValue | null>(null);

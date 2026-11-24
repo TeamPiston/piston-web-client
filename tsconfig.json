@@ -24,6 +24,7 @@
       "@/pages/feed": ["./src/page-slices/feed/ui/feed-page.tsx"],
       "@/pages/find-id": ["./src/page-slices/find-id/ui/find-id-page.tsx"],
       "@/pages/find-pwd": ["./src/page-slices/find-pwd/ui/find-pwd-page.tsx"],
+      "@/pages/reset-password": ["./src/page-slices/reset-password/ui/reset-password-page.tsx"],
       "@/pages/home": ["./src/page-slices/home/ui/home-page.tsx"],
       "@/pages/artwork-detail": ["./src/page-slices/artwork-detail/ui/artwork-detail-page.tsx"],
       "@/pages/login": ["./src/page-slices/login/ui/login-page.tsx"],

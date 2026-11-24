@@ -4,10 +4,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "@/shared/api";
 import {
   API_SESSION_STORAGE_KEY,
+  AUTH_WAIT_TIMEOUT_MS,
   AuthExpiredEvent,
   allowStoredAuthAfterLogin,
   beginApiLogin,
+  blockResetAuth,
+  blockUnverifiedAuth,
   captureAuth,
+  clearLocalSession,
   clearStoredAuth,
   isCurrentAuth,
   isCurrentAuthExpiry,
@@ -40,6 +44,23 @@ function getStoredUser(): UserProfile | null {
   }
 }
 
+interface LoginAttempt {
+  controller: AbortController;
+  result: Promise<boolean>;
+}
+
+function waitForLogin(attempt: LoginAttempt, deadline: AbortSignal) {
+  return new Promise<void>((resolve) => {
+    if (deadline.aborted) return resolve();
+    const finish = () => {
+      deadline.removeEventListener("abort", finish);
+      resolve();
+    };
+    deadline.addEventListener("abort", finish, { once: true });
+    void attempt.result.then(finish, finish);
+  });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const mock = isMockModeEnabled();
   const [verified, setVerified] = useState<{ user: UserProfile; sessionId: string | null } | null>(() => {
@@ -49,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isRestoring, setIsRestoring] = useState(!mock);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
   const observedSessionId = useRef<string | null>(null);
-  const loginPending = useRef(false);
+  const loginPending = useRef<LoginAttempt | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -109,13 +130,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setVerified({ user, sessionId: null });
   };
 
-  const loginWithCredentials = async (input: LoginCredentials, signal?: AbortSignal) => {
-    if (mock || loginPending.current) return false;
-    loginPending.current = true;
+  const performApiLogin = async (input: LoginCredentials, signal?: AbortSignal) => {
     let snapshot: ReturnType<typeof beginApiLogin> | undefined;
     try {
       snapshot = beginApiLogin();
       const result = await authenticate(input, signal);
+      signal?.throwIfAborted();
       const sessionId = await saveApiSession(snapshot, result.tokens, signal);
       if (!sessionId || captureAuth().session?.id !== sessionId) return false;
       observedSessionId.current = sessionId;
@@ -123,10 +143,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsRestoring(false);
       return true;
     } finally {
-      loginPending.current = false;
       if (isRestoring && (!snapshot || isCurrentAuthRevision(snapshot))) {
         setRestoreAttempt((attempt) => attempt + 1);
       }
+    }
+  };
+
+  const loginWithCredentials = async (input: LoginCredentials, signal?: AbortSignal) => {
+    if (mock || loginPending.current) return false;
+    const controller = new AbortController();
+    const loginSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+    const attempt = { controller, result: performApiLogin(input, loginSignal) };
+    loginPending.current = attempt;
+    try {
+      return await attempt.result;
+    } finally {
+      if (loginPending.current === attempt) loginPending.current = null;
     }
   };
 
@@ -139,6 +171,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void clearStoredAuth(snapshot, { explicit: true, mock });
   };
 
+  const prepareLocalSignOut = () => {
+    const expected = captureAuth();
+    const sessionId = expected.storage.status === "readable"
+      ? expected.session?.id ?? null
+      : observedSessionId.current;
+
+    return async (onSignedOut: () => void) => {
+      if (mock) return;
+
+      blockResetAuth(expected, sessionId);
+      const deadline = AbortSignal.timeout(AUTH_WAIT_TIMEOUT_MS);
+      // Login settles outside the lock. One deadline covers any attempts during this wait.
+      let result;
+      do {
+        while (loginPending.current && !deadline.aborted) await waitForLogin(loginPending.current, deadline);
+        if (observedSessionId.current !== null && observedSessionId.current !== sessionId) return;
+        if (deadline.aborted && loginPending.current) {
+          const expired = loginPending.current;
+          loginPending.current = null;
+          expired.controller.abort(deadline.reason);
+        }
+        result = await clearLocalSession(expected, sessionId, () => !deadline.aborted && loginPending.current !== null);
+      } while (result === "login-pending");
+
+      if (result !== "cleared" || loginPending.current || observedSessionId.current !== null) return;
+
+      const current = captureAuth();
+      if (current.storage.status === "unavailable") {
+        blockUnverifiedAuth(current);
+        return;
+      }
+      if (current.storage.record === null && current.accessToken === null) onSignedOut();
+    };
+  };
+
   const value: SessionContextValue = {
     isLoggedIn: verified !== null,
     isRestoring,
@@ -147,6 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     loginWithCredentials,
     logout,
+    prepareLocalSignOut,
   };
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

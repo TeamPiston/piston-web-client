@@ -1,6 +1,6 @@
 import {
   blockUnverifiedAuth, captureAuth, clearStoredAuth, ensureAuthLockAccess, hasConfirmedAuthLock, isCurrentAuth,
-  isToken, updateApiAccessToken, type AuthSnapshot,
+  isResetAuthBlocked, isToken, updateApiAccessToken, type AuthSnapshot,
 } from "./auth";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
@@ -161,6 +161,7 @@ async function request<T = unknown>(path: string, options: ApiRequestOptions<T> 
 
   requestOptions.signal?.throwIfAborted();
   if (response.status === 401 && snapshot) {
+    if (isResetAuthBlocked(snapshot)) throw new ApiError("인증이 만료되었습니다.", response.status, data);
     if (!retried && snapshot.session &&
       !/^\/(?:login|reissue|logout)\/?$/.test(new URL(url, "http://localhost").pathname)) {
       const renewed = await waitForAuth(refreshAccess(snapshot), requestOptions.signal);
