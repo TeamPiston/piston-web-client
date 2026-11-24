@@ -153,7 +153,7 @@ function runtime(initialPrinters) {
     }).outputText;
     const requireSource = (specifier) => {
       if (specifier === "react") return react;
-      if (specifier === "react/jsx-runtime") return { jsx, jsxs: jsx };
+      if (specifier === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: Symbol.for("react.fragment") };
       if (specifier === "@/shared/ui") return load(resolve(root, "src/shared/ui/use-native-dialog.ts"));
       const target = specifier.startsWith("@/")
         ? resolve(root, "src", specifier.slice(2))
@@ -171,7 +171,12 @@ function runtime(initialPrinters) {
     };
     new Script("(function(require, module, exports) {\n" + source + "\n})", {
       filename: path,
-    }).runInNewContext({ crypto: { randomUUID } })(requireSource, mod, mod.exports);
+    }).runInNewContext({
+      Event,
+      crypto: { randomUUID },
+      process: { env: { NODE_ENV: "production", NEXT_PUBLIC_USE_MOCK: "true" } },
+      fetch: () => assert.fail("Mock printer management must not use HTTP"),
+    })(requireSource, mod, mod.exports);
     return mod.exports;
   }
   function render(name, fn) {

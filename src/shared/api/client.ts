@@ -10,6 +10,7 @@ export interface ApiRequestOptions<T = unknown> extends Omit<RequestInit, "body"
   /** Bind the request to credentials captured after verifying the session owner. */
   authSnapshot?: AuthSnapshot;
   body?: unknown;
+  responseBody?: "text";
   decode?: (data: unknown, status: number) => T;
 }
 
@@ -97,10 +98,12 @@ function isFormData(body: unknown): body is FormData {
   return typeof FormData !== "undefined" && body instanceof FormData;
 }
 
-async function parseResponse(response: Response): Promise<unknown> {
+async function parseResponse(response: Response, responseBody?: "text"): Promise<unknown> {
   if (response.status === 204) {
     return null;
   }
+
+  if (response.ok && responseBody === "text") return response.text();
 
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
@@ -111,7 +114,7 @@ async function parseResponse(response: Response): Promise<unknown> {
 }
 
 async function request<T = unknown>(path: string, options: ApiRequestOptions<T> = {}, retried = false): Promise<T> {
-  const { skipAuth = false, authSnapshot, body, decode, ...requestOptions } = options;
+  const { skipAuth = false, authSnapshot, body, responseBody, decode, ...requestOptions } = options;
   const headers = new Headers(requestOptions.headers);
 
   if (body !== undefined && !isFormData(body) && !headers.has("Content-Type")) {
@@ -149,7 +152,7 @@ async function request<T = unknown>(path: string, options: ApiRequestOptions<T> 
   }
   let data: unknown;
   try {
-    data = await parseResponse(response);
+    data = await parseResponse(response, responseBody);
   } catch (error) {
     if (requestOptions.signal?.aborted) throw error;
     // Malformed error bodies must not hide HTTP status or bypass 401 handling.
