@@ -26,6 +26,13 @@ export class ApiError extends Error {
   }
 }
 
+/** The authentication checks rejected the request before fetch was invoked. */
+export class ApiAuthPreflightError extends ApiError {
+  constructor(message: string) {
+    super(message, 401, null);
+  }
+}
+
 function resolveUrl(path: string) {
   if (/^https?:\/\//.test(path)) {
     return path;
@@ -128,10 +135,10 @@ async function request<T = unknown>(path: string, options: ApiRequestOptions<T> 
       await waitForAuth(ensureAuthLockAccess(), requestOptions.signal);
     requestOptions.signal?.throwIfAborted();
     if (!canUseAuthLock || snapshot.storage.status === "unavailable") {
-      throw new ApiError("로그인 상태를 확인할 수 없습니다.", 401, null);
+      throw new ApiAuthPreflightError("로그인 상태를 확인할 수 없습니다.");
     }
     if (!isCurrentAuth(snapshot)) {
-      throw new ApiError("로그인 계정이 변경되었습니다.", 401, null);
+      throw new ApiAuthPreflightError("로그인 계정이 변경되었습니다.");
     }
   }
   if (snapshot?.accessToken) headers.set("Authorization", `Bearer ${snapshot.accessToken}`);

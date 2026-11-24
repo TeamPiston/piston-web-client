@@ -12,11 +12,11 @@ interface PreviewPanelProps {
   isPrintBlocked: boolean;
   isPrintCheckFailed: boolean;
   isPrintStatusChecking: boolean;
-  modelParams: ResolvedArtworkModelParams;
-  onPrint: () => void;
-  onRetryPrintCheck: () => void;
+  modelParams: Pick<ResolvedArtworkModelParams, "color" | "scale" | "stlUrl">;
+  onPrint?: () => void;
+  onRetryPrintCheck?: () => void;
   printSuccessPhase: PrintSuccessPhase;
-  printButtonRef: RefObject<HTMLButtonElement | null>;
+  printButtonRef?: RefObject<HTMLButtonElement | null>;
   onZoom: (direction: "in" | "out") => void;
 }
 
@@ -98,10 +98,10 @@ export function PreviewPanel({
           ref={printButtonRef}
           type="button"
           onClick={onPrint}
-          disabled={!isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}
+          disabled={!onPrint || !isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}
           className="h-12 rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition-colors hover:bg-[#4a6ee5] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-white"
         >
-          {isPrintStatusChecking ? "프린터 상태 확인 중..." : isGenerated ? "출력하기" : "디자인을 생성해 주세요."}
+          {isPrintStatusChecking ? "프린터 상태 확인 중..." : isGenerated ? (onPrint ? "출력하기" : "미리보기 전용") : "디자인을 생성해 주세요."}
         </button>
         {isGenerated ? (
           <a
@@ -142,9 +142,13 @@ export function PreviewPanel({
         </div>
       )}
       <p className="mt-4 max-w-[432px] text-center text-xs leading-5 text-gray-400">
-        생성한 디자인은 기본으로 비공개예요.
-        <br />
-        Feed에 올리려면 마이페이지에서 공개로 바꿔 주세요.
+        {onPrint ? (
+          <>
+            생성한 디자인은 기본으로 비공개예요.
+            <br />
+            Feed에 올리려면 마이페이지에서 공개로 바꿔 주세요.
+          </>
+        ) : "이 화면에서는 미리보기와 다운로드만 제공해요."}
       </p>
     </section>
   );

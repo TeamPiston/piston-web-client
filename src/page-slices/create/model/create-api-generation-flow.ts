@@ -7,8 +7,11 @@ import type {
   MeshyTaskStatus,
 } from "@/features/generate-3d-model";
 import type { sendChatMessage, SentChatMessage } from "@/features/send-chat-message";
-import { ApiError } from "@/shared/api";
-import { createRequestStorage, type CreateRequestKind, type SavedCreateRequest } from "./create-api-request-storage";
+import { ApiAuthPreflightError, ApiError } from "@/shared/api";
+import {
+  createRequestStorage, requestChannel,
+  type CreateRequestChannel, type CreateRequestKind, type SavedCreateRequest,
+} from "./create-api-request-storage";
 
 export interface CreateApiTransport {
   sendChatMessage: typeof sendChatMessage;
@@ -18,7 +21,10 @@ export interface CreateApiTransport {
 }
 
 /** Read live, verified auth state. Recovery must attest reauthentication, including after navigation. */
-export type GetVerifiedCreateAccountScope = (purpose: "request" | "reauthentication") => string | null;
+export type GetVerifiedCreateAccountScope = (
+  purpose: "request" | "reauthentication",
+  previousSessionId?: string,
+) => string | null;
 
 export type CreateApiAction =
   | { kind: "chat"; message: string; image?: File }
@@ -60,7 +66,7 @@ export function canSubmitCreateApiAction(state: CreateApiState) {
 
 export function canRecheckCreateApiTask(state: CreateApiState) {
   return state.phase === "observing-stopped" &&
-    state.reason !== "not-found" && state.reason !== "access-denied";
+    state.reason !== "access-denied";
 }
 
 function needsReauthentication(status: AcceptedRequest["status"]) {
@@ -73,7 +79,7 @@ function isFirstConflictLookup(status: AcceptedRequest["status"]) {
 
 function canObserve(request: SavedCreateRequest | null): request is AcceptedRequest {
   return request !== null && request.status !== "uncertain" &&
-    request.status !== "not-found" && request.status !== "forbidden" && request.status !== "access-denied";
+    request.status !== "forbidden" && request.status !== "access-denied";
 }
 
 function lookupStopReason(error: unknown, firstConflictLookup: boolean): ObservationStop {
@@ -96,12 +102,14 @@ function restoredState(request: SavedCreateRequest | null): CreateApiState {
 export function createApiGenerationFlow(
   transport?: CreateApiTransport,
   requestScope?: string,
+  authSessionId?: string,
+  channel?: CreateRequestChannel,
 ) {
   let getVerifiedAccountScope: GetVerifiedCreateAccountScope | undefined;
   let state: CreateApiState = { phase: transport ? "restoring" : "idle" };
   let active: Operation | null = null;
   const listeners = new Set<() => void>();
-  const storage = createRequestStorage(requestScope);
+  const storage = createRequestStorage(requestScope, channel);
 
   function publish(next: CreateApiState) {
     state = next;
@@ -153,18 +161,21 @@ export function createApiGenerationFlow(
     }
   }
 
-  function hasVerifiedAccount(reauthenticate = false) {
+  function hasVerifiedAccount(request?: AcceptedRequest) {
     try {
       return !!requestScope && getVerifiedAccountScope?.("request") === requestScope &&
-        (!reauthenticate || getVerifiedAccountScope("reauthentication") === requestScope);
+        (!request || !needsReauthentication(request.status) ||
+          getVerifiedAccountScope("reauthentication", request.authSessionId) === requestScope);
     } catch {
       return false;
     }
   }
 
-  function pauseForReauthentication(operation: Operation, request: AcceptedRequest) {
+  function pauseForReauthentication(operation: Operation, request: AcceptedRequest, rejected = false) {
     const status = isFirstConflictLookup(request.status) ? "reauth-required-conflict" : "reauth-required";
-    if (request.status !== status && !persist(request.id, { ...request, status })) return;
+    const rejectedSessionId = rejected || !needsReauthentication(request.status) ? authSessionId : request.authSessionId;
+    const next: AcceptedRequest = rejectedSessionId ? { ...request, status, authSessionId: rejectedSessionId } : { ...request, status };
+    if ((request.status !== status || request.authSessionId !== rejectedSessionId) && !persist(request.id, next)) return;
     complete(operation, { phase: "observing-stopped", taskId: request.taskId, reason: "reauth-required" });
   }
 
@@ -230,7 +241,7 @@ export function createApiGenerationFlow(
       return;
     }
 
-    if (!hasVerifiedAccount(needsReauthentication(request.status))) {
+    if (!hasVerifiedAccount(request)) {
       pauseForReauthentication(operation, request);
       return;
     }
@@ -243,12 +254,14 @@ export function createApiGenerationFlow(
     } catch (error) {
       if (active !== operation) return;
       if (error instanceof ApiError && error.status === 401) {
-        pauseForReauthentication(operation, request);
+        pauseForReauthentication(operation, request, true);
         return;
       }
       const reason = lookupStopReason(error, isFirstConflictLookup(request.status));
       const status = reason === "access-denied" ? "forbidden" : reason === "not-found" ? reason : "accepted";
-      if (status !== request.status && !persist(request.id, { ...request, status })) return;
+      const next: AcceptedRequest = { ...request, status };
+      delete next.authSessionId;
+      if (status !== request.status && !persist(request.id, next)) return;
       complete(operation, { phase: "observing-stopped", taskId, reason });
       return;
     }
@@ -256,6 +269,7 @@ export function createApiGenerationFlow(
     if (active !== operation) return;
     if (result.status === "PENDING") {
       const next: AcceptedRequest = { ...request, status: "accepted" };
+      delete next.authSessionId;
       if (request.status !== "accepted" && !persist(request.id, next)) return;
       schedule(operation, next);
       return;
@@ -288,6 +302,19 @@ export function createApiGenerationFlow(
         : await api.generateImageTo3D({ image: action.image }, options);
       accept(operation, request, accepted.taskId, "accepted");
     } catch (error) {
+      if (error instanceof ApiAuthPreflightError) {
+        if (active === operation) {
+          if (persist(request.id, null)) complete(operation, { phase: "rejected", message: error.message });
+        } else {
+          try {
+            // A stopped operation may release its own unsent claim, even after remount.
+            storage.replace(request.id, null);
+          } catch {
+            // A different owner or an unreadable record must be left intact.
+          }
+        }
+        return;
+      }
       if (active !== operation) return;
       if (action.kind !== "chat" && error instanceof MeshyTaskConflictError && error.taskId !== null) {
         accept(operation, request, error.taskId, "conflict");
@@ -324,7 +351,8 @@ export function createApiGenerationFlow(
     },
     restore,
     submit(action: CreateApiAction) {
-      if (!transport || active || !canSubmitCreateApiAction(state) || !hasVerifiedAccount()) return false;
+      if (!transport || active || (channel && requestChannel(action.kind) !== channel) ||
+        !canSubmitCreateApiAction(state) || !hasVerifiedAccount()) return false;
       let request: SavedCreateRequest;
       try {
         const previous = storage.read();
@@ -349,7 +377,7 @@ export function createApiGenerationFlow(
       if (!transport || active || !canRecheckCreateApiTask(state)) return false;
       try {
         const request = storage.read();
-        if (!canObserve(request) || !hasVerifiedAccount(needsReauthentication(request.status))) {
+        if (!canObserve(request) || !hasVerifiedAccount(request)) {
           publish(restoredState(request));
           return false;
         }

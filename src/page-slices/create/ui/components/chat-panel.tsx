@@ -14,6 +14,12 @@ import {
 } from "./chat-message-cards";
 
 interface ChatPanelProps {
+  historyControls?: React.ReactNode;
+  composerControls?: React.ReactNode;
+  composerControlsDisabled?: boolean;
+  feedback?: React.ReactNode;
+  submissionDisabled?: boolean;
+  showLoadingCard?: boolean;
   attachedImages: AttachedImage[];
   attachmentError: string | null;
   draft: string;
@@ -24,7 +30,7 @@ interface ChatPanelProps {
   imageAccept: string;
   isPrintBlocked: boolean;
   messages: ChatMessage[];
-  onAutoFix: (messageId: string) => void;
+  onAutoFix?: (messageId: string) => void;
   onDraftChange: (value: string) => void;
   onDragOver: (event: DragEvent<HTMLFormElement>) => void;
   onDrop: (event: DragEvent<HTMLFormElement>) => void;
@@ -37,6 +43,12 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({
+  historyControls,
+  composerControls,
+  composerControlsDisabled,
+  feedback,
+  submissionDisabled = false,
+  showLoadingCard = true,
   attachedImages,
   attachmentError,
   draft,
@@ -58,6 +70,7 @@ export function ChatPanel({
   onSubmit,
   onToggleHistory,
 }: ChatPanelProps) {
+  const composerDisabled = isLoading || submissionDisabled;
   const latestPrintWarningId = [...messages].reverse().find((message) => message.hasPrintIssue)?.id;
 
   return (
@@ -72,6 +85,7 @@ export function ChatPanel({
         <Menu className="h-6 w-6" aria-hidden="true" />
       </button>
 
+      {historyControls}
       <DemoNotice isVisible={isMockModeEnabled()} className="mx-auto mb-3 w-full max-w-[480px] shrink-0">
         <p>3D 모델 생성과 출력은 데모 시뮬레이션이에요. 실제 프린터는 작동하지 않습니다.</p>
       </DemoNotice>
@@ -104,7 +118,7 @@ export function ChatPanel({
                       message.isPrintIssueResolved === true ||
                       message.id !== latestPrintWarningId
                     }
-                    onAutoFix={() => onAutoFix(message.id)}
+                    onAutoFix={() => onAutoFix?.(message.id)}
                   />
                 ) : (
                   <p
@@ -120,7 +134,7 @@ export function ChatPanel({
                 )}
               </div>
             ))}
-            {isLoading && <AiLoadingCard />}
+            {isLoading && showLoadingCard && <AiLoadingCard />}
           </div>
         ) : (
           <div className="flex flex-1 items-end justify-center pb-3">
@@ -130,7 +144,9 @@ export function ChatPanel({
           </div>
         )}
 
+        {feedback}
         <form onSubmit={onSubmit} onDragOver={onDragOver} onDrop={onDrop} className="w-full">
+          {composerControls && <fieldset disabled={composerControlsDisabled ?? composerDisabled} className="mb-2">{composerControls}</fieldset>}
           <div className={[
             "flex min-h-[60px] flex-col rounded-xl bg-white px-4 py-2 shadow-sm",
             attachmentError ? "border-2 border-red-400" : "border border-[#5a7bff]",
@@ -139,6 +155,7 @@ export function ChatPanel({
               ref={fileInputRef}
               type="file"
               accept={imageAccept}
+              disabled={submissionDisabled}
               onChange={onFileChange}
               className="sr-only"
             />
@@ -160,6 +177,7 @@ export function ChatPanel({
                     <button
                       type="button"
                       onClick={() => onRemoveAttachment(image.id)}
+                      disabled={submissionDisabled}
                       aria-label={`${image.name} 첨부 이미지 삭제`}
                       title="첨부 이미지 삭제"
                       className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 cursor-pointer"
@@ -174,6 +192,7 @@ export function ChatPanel({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
+                disabled={submissionDisabled}
                 aria-label="참고 이미지 첨부"
                 aria-describedby={attachmentError ? "create-attachment-error" : undefined}
                 title="참고 이미지 첨부"
@@ -184,10 +203,10 @@ export function ChatPanel({
               <textarea
                 ref={draftTextareaRef}
                 value={draft}
-                onChange={(event) => onDraftChange(event.target.value)}
+                onChange={(event) => onDraftChange(event.currentTarget.value)}
                 onKeyDown={onInputKeyDown}
                 onPaste={onPaste}
-                disabled={isLoading}
+                disabled={composerDisabled}
                 rows={1}
                 placeholder="메시지를 입력해 주세요."
                 aria-label="디자인 생성 메시지"
@@ -195,7 +214,7 @@ export function ChatPanel({
               />
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={composerDisabled}
                 aria-label="메시지 전송"
                 title="메시지 전송"
                 className="py-2 shrink-0 text-gray-950 transition-colors hover:text-[#5a7bff] disabled:cursor-not-allowed disabled:text-gray-300"

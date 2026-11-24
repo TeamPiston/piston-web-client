@@ -1,4 +1,5 @@
 import { ApiError, apiClient } from "@/shared/api";
+import type { AuthSnapshot } from "@/shared/api/auth";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -39,6 +40,7 @@ export class MeshyTaskConflictError extends ApiError {
 }
 
 interface GenerationOptions {
+  authSnapshot?: AuthSnapshot;
   signal?: AbortSignal;
 }
 
@@ -107,11 +109,11 @@ function decodeTaskStatus(value: unknown, expectedTaskId: string): MeshyTaskStat
 async function requestModel(
   path: "/meshy/text-to-3d" | "/meshy/image-to-3d",
   body: TextTo3DInput | FormData,
-  signal: AbortSignal | undefined,
+  { signal, authSnapshot }: GenerationOptions,
 ): Promise<MeshyTaskAccepted> {
   try {
     // Fetch must not replay a potentially billable POST on a 307 or 308 redirect.
-    return await apiClient.post(path, body, { signal, redirect: "error", decode: decodeAcceptedTask });
+    return await apiClient.post(path, body, { signal, authSnapshot, redirect: "error", decode: decodeAcceptedTask });
   } catch (error) {
     signal?.throwIfAborted();
     if (error instanceof ApiError && error.status === 409 && isRecord(error.data)) {
@@ -127,22 +129,22 @@ async function requestModel(
 /** Aborting the local request does not guarantee cancellation of server work. */
 export async function generateTextTo3D(
   { prompt }: TextTo3DInput,
-  { signal }: GenerationOptions = {},
+  options: GenerationOptions = {},
 ): Promise<MeshyTaskAccepted> {
-  signal?.throwIfAborted();
+  options.signal?.throwIfAborted();
   if (typeof prompt !== "string" || prompt.trim() === "") {
     throw new ModelGenerationInputError("prompt", "3D 모델 생성 프롬프트를 입력해 주세요.");
   }
 
-  return requestModel("/meshy/text-to-3d", { prompt }, signal);
+  return requestModel("/meshy/text-to-3d", { prompt }, options);
 }
 
 /** Aborting the local request does not guarantee cancellation of server work. */
 export async function generateImageTo3D(
   { image }: ImageTo3DInput,
-  { signal }: GenerationOptions = {},
+  options: GenerationOptions = {},
 ): Promise<MeshyTaskAccepted> {
-  signal?.throwIfAborted();
+  options.signal?.throwIfAborted();
   if (typeof File === "undefined" || !(image instanceof File) || !IMAGE_TYPES.has(image.type)) {
     throw new ModelGenerationInputError("image", "JPEG, PNG 또는 WebP 이미지 파일만 보낼 수 있습니다.");
   }
@@ -152,13 +154,13 @@ export async function generateImageTo3D(
 
   const body = new FormData();
   body.set("image", image);
-  return requestModel("/meshy/image-to-3d", body, signal);
+  return requestModel("/meshy/image-to-3d", body, options);
 }
 
 /** Reads the task once. The caller controls when to check again. */
 export async function getMeshyTaskStatus(
   taskId: string,
-  { signal }: GenerationOptions = {},
+  { signal, authSnapshot }: GenerationOptions = {},
 ): Promise<MeshyTaskStatus> {
   signal?.throwIfAborted();
   if (!isTaskId(taskId)) {
@@ -168,6 +170,7 @@ export async function getMeshyTaskStatus(
   try {
     return await apiClient.get("/meshy/tasks/" + encodeURIComponent(taskId), {
       signal,
+      authSnapshot,
       cache: "no-store",
       decode: (value) => decodeTaskStatus(value, taskId),
     });
