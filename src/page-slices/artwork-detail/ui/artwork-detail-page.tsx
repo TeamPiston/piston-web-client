@@ -10,6 +10,7 @@ import { LikeButton } from "@/features/like-artwork";
 import { PrintSettingsModal } from "@/features/print-artwork";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import { Header } from "@/widgets/header";
+import { isMockModeEnabled } from "@/shared/mock/mock-data";
 
 interface ArtworkDetailPageProps {
   artwork: ArtworkDetail;
@@ -47,11 +48,12 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   };
   const estimatedPrintTime = artwork.estimatedPrintTime ?? "1시간";
   const isQueued = printStatus === "printing";
+  const canSimulatePrint = isMockModeEnabled();
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
     setIsPrintModalOpen(false);
 
-    const didStartPrint = connectedPrinter ? startPrint({
+    const didStartPrint = canSimulatePrint && connectedPrinter ? startPrint({
       colorMode,
       printerId: connectedPrinter.id,
       stlUrl,
@@ -129,10 +131,10 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
             <button
               type="button"
               onClick={() => setIsPrintModalOpen(true)}
-              disabled={isQueued}
+              disabled={!canSimulatePrint || isQueued}
               className="mt-10 h-11 w-full rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition hover:bg-[#4a6ee5] active:scale-[0.99] disabled:cursor-default disabled:hover:bg-[#5a7bff]"
             >
-              {isQueued ? "출력 대기 중" : "출력하기"}
+              {!canSimulatePrint ? "작품 출력 연동 준비 중" : isQueued ? "출력 대기 중" : "출력하기"}
             </button>
           </div>
 

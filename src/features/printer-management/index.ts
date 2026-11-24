@@ -4,3 +4,5 @@ export { usePrinterManagement } from "./model/use-printer-management";
 export { AddPrinterButton, PrinterControls } from "./ui/printer-controls";
 export { PrinterFormModal } from "./ui/printer-form-modal";
 export { PrinterDeleteModal } from "./ui/printer-delete-modal";
+export { useApiPrinterManagement } from "./model/use-api-printer-management";
+export { ApiPrinterFormModal } from "./ui/api-printer-form-modal";

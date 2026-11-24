@@ -5,24 +5,28 @@ import type { Printer } from "@/entities/printer";
 
 interface PrinterControlsProps {
   printer: Printer;
-  onCheckConnection: (printer: Printer) => void;
+  onCheckConnection?: (printer: Printer) => void;
+  disabled?: boolean;
   onEdit: (printer: Printer) => void;
   onDelete: (printer: Printer) => void;
 }
 
-export function PrinterControls({ printer, onCheckConnection, onEdit, onDelete }: PrinterControlsProps) {
+export function PrinterControls({ printer, onCheckConnection, onEdit, onDelete, disabled = false }: PrinterControlsProps) {
   return (
     <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
-      <button
-        type="button"
-        onClick={() => onCheckConnection(printer)}
-        className="h-10 flex-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50 sm:flex-none"
-      >
-        연결 확인
-      </button>
+      {onCheckConnection && (
+        <button
+          type="button"
+          onClick={() => onCheckConnection(printer)}
+          className="h-10 flex-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50 sm:flex-none"
+        >
+          연결 확인
+        </button>
+      )}
       <button
         type="button"
         onClick={() => onEdit(printer)}
+        disabled={disabled}
         className="h-10 flex-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-50 sm:flex-none"
       >
         수정
@@ -30,6 +34,7 @@ export function PrinterControls({ printer, onCheckConnection, onEdit, onDelete }
       <button
         type="button"
         onClick={() => onDelete(printer)}
+        disabled={disabled}
         className="h-10 flex-1 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 sm:flex-none"
       >
         삭제

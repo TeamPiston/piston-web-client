@@ -20,6 +20,7 @@
     "test:create-print-flow": "node scripts/verify-create-print-flow.mjs",
     "test:print": "node scripts/verify-print-lifecycle.mjs",
     "test:printer": "node scripts/verify-printer-management.mjs",
+    "test:printer-api": "node scripts/verify-printer-api.mjs",
     "test:e2e:print": "npm run test:print",
     "test:print:api": "node scripts/verify-print-lifecycle.mjs --api"
   },

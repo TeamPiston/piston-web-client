@@ -27,7 +27,7 @@ import { Header } from "@/widgets/header";
 import { DeleteAccountModal } from "./delete-account-modal";
 import { DesignDetailModal, type MyDesign } from "./design-detail-modal";
 import { PrintRetryConfirmModal } from "./print-retry-confirm-modal";
-import { PrinterManagementPage } from "./printer-management-page";
+import { ApiPrinterManagementPage, PrinterManagementPage } from "./printer-management-page";
 import { PrintStatusDetailModal } from "./print-status-detail-modal";
 
 export default function MyPage() {
@@ -44,10 +44,12 @@ function MyPageContent() {
     <div className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col overflow-x-clip bg-[#fbfbfb] xl:h-dvh xl:min-h-0 xl:overflow-hidden">
       <Header />
       {isPrinterTab ? (
-        <PrinterManagementPage
-          key={isEmptyPreview ? "empty-printers" : "default-printers"}
-          previewEmpty={isEmptyPreview}
-        />
+        isMockModeEnabled() ? (
+          <PrinterManagementPage
+            key={isEmptyPreview ? "empty-printers" : "default-printers"}
+            previewEmpty={isEmptyPreview}
+          />
+        ) : <ApiPrinterManagementPage />
       ) : (
         <MyProfilePage />
       )}
