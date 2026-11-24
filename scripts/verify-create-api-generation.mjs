@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUID, webcrypto } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import test from "node:test";
@@ -14,12 +14,24 @@ const pagePath = "src/page-slices/create/ui/create-page.tsx";
 const allowed = new Set([
   modelPath, uiPath, pagePath,
   "src/page-slices/create/model/create-api-request-storage.ts",
+  "src/page-slices/create/model/create-api-session.ts",
+  "src/page-slices/create/model/use-create-attachments.ts",
+  "src/page-slices/create/model/use-create-chat-history.ts",
+  "src/features/stl-viewer/model/use-stl-model.ts",
+  "src/page-slices/create/ui/components/chat-panel.tsx",
+  "src/page-slices/create/ui/components/chat-message-cards.tsx",
+  "src/page-slices/create/ui/components/preview-panel.tsx",
+  "src/page-slices/create/ui/components/version-history.tsx",
+  "src/features/send-chat-message/api/send-chat-message.ts",
+  "src/entities/chat/api/chat-history.ts",
   "src/shared/api/client.ts", "src/shared/api/auth.ts",
   "src/entities/chat/model/chat-input-error.ts",
   "src/features/generate-3d-model/api/generate-model.ts",
 ]);
 const compiled = new Map();
 const networkAttempts = [];
+const sessionKey = "piston-api-session";
+const sessionRecord = (id) => JSON.stringify({ id, accessToken: "fixture-token-" + id, refreshToken: "fixture-refresh-" + id });
 
 test.afterEach(() => {
   assert.deepEqual(networkAttempts.splice(0), [], "No request can reach the real transport");
@@ -32,6 +44,8 @@ const image = new File(["fixture"], "fixture.png", { type: "image/png" });
 
 const scope = "fixture-account";
 const storageKey = "piston:create-api:pending:v1:" + scope;
+const chatStorageKey = storageKey + ":chat";
+const meshyStorageKey = storageKey + ":meshy";
 
 function memoryStorage() {
   const values = new Map();
@@ -43,7 +57,8 @@ function memoryStorage() {
 }
 
 function harness({ mock = false, authenticated = false, storage = memoryStorage(),
-  auth = { account: scope, reauthenticatedAccount: null } } = {}) {
+  auth = { account: scope, reauthenticatedAccount: null }, localStorage = memoryStorage(),
+  fetchResponse, getHistory } = {}) {
   const getVerifiedAccountScope = (purpose) =>
     purpose === "reauthentication" ? auth.reauthenticatedAccount : auth.account;
   const loaded = new Map();
@@ -58,6 +73,15 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
   let mounted = true;
   let scopedKey;
   const jsxs = (type, props, key) => ({ type, props, key });
+  function renderPanels(tree) {
+    if (Array.isArray(tree)) return tree.map(renderPanels);
+    if (!tree?.props) return tree;
+    const { type, props } = tree;
+    if (typeof type === "function" && ["ChatPanel", "PreviewPanel", "VersionHistory"].includes(type.name)) {
+      return renderPanels(type(props));
+    }
+    return { ...tree, props: { ...props, children: renderPanels(props.children) } };
+  }
 
   function registerEffect(phase, setup, dependencies) {
     const index = cursor++;
@@ -98,16 +122,17 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
       }
     }
     pendingEffects.length = 0;
-    return tree;
+    return renderPanels(tree);
   }
   const react = {
+    Component: class {},
     useState(initial) {
       assert(mounted);
       const index = cursor++;
       if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
       return [slots[index], (next) => {
         assert(mounted, "state update after unmount");
-        slots[index] = next;
+        slots[index] = typeof next === "function" ? next(slots[index]) : next;
       }];
     },
     useRef(value) {
@@ -118,20 +143,43 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
     useEffect: (setup, dependencies) => registerEffect("passive", setup, dependencies),
     useLayoutEffect: (setup, dependencies) => registerEffect("layout", setup, dependencies),
     useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
-    useCallback(callback) { return callback; },
+    useCallback(callback, deps) {
+      if (!deps) return callback;
+      const index = cursor++;
+      const previous = slots[index];
+      if (!previous || deps.some((value, i) => value !== previous.deps[i])) {
+        slots[index] = { callback, deps };
+      }
+      return slots[index].callback;
+    },
   };
+  const fixtureLoader = Symbol("STL loader");
   const stubs = {
+    "@react-three/fiber": { useLoader: { clear(loader, modelUrl) {
+      assert.equal(loader, fixtureLoader);
+      clearedModels.push(modelUrl);
+    } } },
+    "three/examples/jsm/loaders/STLLoader.js": { STLLoader: fixtureLoader },
     react,
     "react/jsx-runtime": { jsx: jsxs, jsxs, Fragment: "fragment" },
     "next/navigation": { useRouter: () => ({ push: () => assert.fail("Unexpected navigation") }) },
     "@/shared/ui": { PistonLogo: "PistonLogo" },
     "@/widgets/header": { Header: "Header", LoginRequiredModal: "LoginRequiredModal" },
-    "@/entities/session": { useAuth: () => ({ isLoggedIn: authenticated }) },
+    "@/entities/session": { useAuth: () => typeof authenticated === "object" ? authenticated : { isLoggedIn: authenticated } },
+    "lucide-react": new Proxy({}, { get: (_, name) => String(name) }),
+    "next/image": { default: "Image" },
+    "@/features/stl-viewer": {
+      ArtworkModelPreview: "ArtworkModelPreview",
+      clearStlModel: (modelUrl) => load("src/features/stl-viewer/model/use-stl-model.ts").clearStlModel(modelUrl),
+    },
+    "@/shared/ui/demo-notice": { DemoNotice: "DemoNotice" },
     "@/shared/mock/mock-data": { isMockModeEnabled: () => mock },
     "./create-workspace": { default: "MockCreateWorkspace" },
   };
   const aliases = {
     "@/shared/api": "src/shared/api/client.ts",
+    "@/shared/api/auth": "src/shared/api/auth.ts",
+    "@/features/send-chat-message": "src/features/send-chat-message/api/send-chat-message.ts",
     "@/entities/chat": "src/entities/chat/model/chat-input-error.ts",
     "@/features/generate-3d-model": "src/features/generate-3d-model/api/generate-model.ts",
   };
@@ -149,10 +197,16 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
     const exports = {};
     loaded.set(path, exports);
     const entry = compiled.get(path).runInNewContext({
-      AbortController, Event, URL, File, FormData, crypto: { randomUUID }, window: { sessionStorage: storage },
+      AbortController, AbortSignal, Event, URL, URLSearchParams, Headers, File, FormData, TextEncoder, queueMicrotask,
+      crypto: { randomUUID, subtle: webcrypto.subtle },
+      window: {
+        sessionStorage: storage, localStorage,
+        navigator: { locks: { request: (_name, _options, run) => Promise.resolve().then(run) } },
+      },
       performance: { now: () => time },
       process: { env: { NEXT_PUBLIC_API_BASE_URL: "https://blocked.invalid" } },
       fetch: (...args) => {
+        if (fetchResponse) return fetchResponse(...args);
         networkAttempts.push(args[0]);
         assert.fail("Live network must never run");
       },
@@ -163,6 +217,9 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
       clearTimeout(id) { timers.delete(id); },
     });
     entry((specifier) => {
+      if (specifier === "@/entities/chat") return {
+        ...load(aliases["@/entities/chat"]), ...load("src/entities/chat/api/chat-history.ts"),
+      };
       if (Object.hasOwn(stubs, specifier)) return stubs[specifier];
       if (Object.hasOwn(aliases, specifier)) return load(aliases[specifier]);
       assert(specifier.startsWith("."), "Unexpected import: " + specifier);
@@ -173,14 +230,19 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
   }
 
   const calls = [];
+  const clearedModels = [];
   const transport = Object.fromEntries(["sendChatMessage", "generateTextTo3D", "generateImageTo3D", "getMeshyTaskStatus"]
     .map((method) => [method, (input, { signal }) => new Promise((resolve, reject) => {
       calls.push({ method, input, signal, resolve, reject });
     })]));
   return {
-    calls, transport, storage, auth,
-    flow(enabled = true, requestScope = scope, restore = true) {
-      const flow = load(modelPath).createApiGenerationFlow(enabled ? transport : undefined, requestScope);
+    calls, transport, storage, auth, clearedModels,
+    bindApi: (id, account) => load("src/page-slices/create/model/create-api-session.ts").bindCreateApi(id, account),
+    renderBoundWorkspace(bound, requestScope = scope, sessionId = "session-a") {
+      return renderScoped(load(uiPath).ApiCreateWorkspace({ ...bound, requestScope, sessionId }));
+    },
+    flow(enabled = true, requestScope = scope, restore = true, authSessionId) {
+      const flow = load(modelPath).createApiGenerationFlow(enabled ? transport : undefined, requestScope, authSessionId);
       flow.setAccountVerifier(getVerifiedAccountScope);
       if (restore) flow.restore();
       return flow;
@@ -200,6 +262,9 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
       }
       time = end;
     },
+    preflightError() {
+      return new (load(aliases["@/shared/api"]).ApiAuthPreflightError)("Synthetic auth rejection");
+    },
     error(status, kind = "http") {
       return new (load(aliases["@/shared/api"]).ApiError)("Synthetic failure", status, null, kind);
     },
@@ -208,12 +273,12 @@ function harness({ mock = false, authenticated = false, storage = memoryStorage(
     },
     renderWorkspace(injected = transport, requestScope = scope, verifier = getVerifiedAccountScope, commit = true) {
       return renderScoped(load(uiPath).ApiCreateWorkspace({
-        transport: injected, requestScope, getVerifiedAccountScope: verifier,
+        transport: injected, requestScope, getVerifiedAccountScope: verifier, getHistory,
       }), commit);
     },
     renderPage() {
-      const element = load(pagePath).default();
-      return element.type === load(uiPath).ApiCreateWorkspace ? renderScoped(element.type(element.props)) : element;
+      cursor = 0;
+      return load(pagePath).default();
     },
     unmount,
   };
@@ -249,10 +314,10 @@ async function accept(h, flow, conflict = false) {
   await tick();
 }
 
-test("production API route displays its unavailable state with no form, preview link, output, or requests", () => {
+test("signed-out API route opens the existing login gate without a composer or requests", () => {
   const h = harness();
   const ui = h.renderPage();
-  assert.match(role(ui, "status").children, /연동을 준비 중/);
+  assert.equal(element(ui, "LoginRequiredModal").isOpen, true);
   assert.equal(element(ui, "form"), undefined);
   assert.equal(element(ui, "button"), undefined);
   assert.equal(element(ui, "a"), undefined);
@@ -263,6 +328,202 @@ test("production API route displays its unavailable state with no form, preview 
 test("Mock route keeps the existing workspace and unauthenticated login gate", () => {
   assert.equal(harness({ mock: true, authenticated: true }).renderPage().type, "MockCreateWorkspace");
   assert.equal(element(harness({ mock: true }).renderPage(), "LoginRequiredModal").isOpen, true);
+});
+
+test("verified API route selects the keyed workspace and restoring auth does not mount it", () => {
+  const auth = { isLoggedIn: true, user: { userId: "7" }, apiSessionId: "session-a", isRestoring: true };
+  const h = harness({ authenticated: auth });
+  assert.match(role(h.renderPage(), "status").children, /로그인 상태를 확인/);
+  auth.isRestoring = false;
+  const tree = h.renderPage();
+  assert.equal(tree.type.name, "AuthenticatedApiCreateWorkspace");
+  assert.equal(tree.key, "session-a");
+  assert.equal(tree.props.userId, "7");
+  assert.equal(h.calls.length, 0);
+});
+
+function apiHarness(respond) {
+  const localStorage = memoryStorage();
+  localStorage.setItem(sessionKey, sessionRecord("session-a"));
+  const requests = [];
+  const h = harness({ localStorage, fetchResponse(address, options) {
+    const url = new URL(address);
+    assert.equal(url.origin, "https://blocked.invalid");
+    assert.match(url.pathname, /^\/(?:chats\/messages|meshy\/(?:text-to-3d|image-to-3d|tasks\/[a-z-]+))$/);
+    requests.push({ url, options });
+    return respond(url, options);
+  } });
+  const bound = h.bindApi("session-a", scope);
+  const render = () => h.renderBoundWorkspace(bound);
+  return { h, bound, localStorage, requests, render };
+}
+
+test("authenticated chat history requests older cursor pages and user submission sends one billable multipart POST", async () => {
+  const row = (chatId, message) => ({
+    chatId, role: "USER", message, imageUrl: null, jobId: null, createdAt: "2026-01-01T10:00:00Z",
+  });
+  const { requests, render } = apiHarness((url, options) => {
+    assert.equal(options.headers.get("Authorization"), "Bearer fixture-token-session-a");
+    if (options.method === "POST") {
+      assert(options.body instanceof FormData);
+      assert.equal(options.headers.get("Content-Type"), null);
+      assert.equal(options.body.get("message"), "Synthetic question");
+      assert.equal(options.body.get("image"), image);
+      return Response.json({ chatId: "4", jobId: null, reply: "Synthetic answer" }, { status: 201 });
+    }
+    assert.equal(url.searchParams.get("size"), "30");
+    if (url.searchParams.has("cursor")) {
+      assert.equal(url.searchParams.get("cursor"), "cursor/older+");
+      return Response.json({ hasNext: false, nextCursor: null, chats: [row("1", "Older message")] });
+    }
+    return Response.json({ hasNext: true, nextCursor: "cursor/older+", chats: [row("2", "Latest message")] });
+  });
+
+  render();
+  await tick();
+  element(render(), "textarea").onChange({ currentTarget: { value: "Synthetic question" } });
+  element(render(), "select").onChange({ currentTarget: { value: "chat" } });
+  element(render(), "input").onChange({ target: { files: [image], value: "" } });
+  const form = element(render(), "form");
+  form.onSubmit(formEvent());
+  form.onSubmit(formEvent());
+  await tick();
+  assert(find(render(), ({ props }) => props.children === "Synthetic answer"));
+  find(render(), ({ props }) => props["aria-label"] === "대화 메뉴 열기").props.onClick();
+  button(render(), "이전 채팅 기록 더 보기").onClick();
+  await tick();
+  const visible = JSON.stringify(render());
+  assert(visible.indexOf("Older message") < visible.indexOf("Latest message"));
+  assert.deepEqual(requests.map(({ options }) => options.method), ["GET", "POST", "GET", "GET"]);
+});
+
+test("bound image generation waits between GETs and enables STL only on server success", async () => {
+  let statuses = 0;
+  const { h, requests, render } = apiHarness((target, options) => {
+    if (target.pathname === "/chats/messages") {
+      return Response.json({ hasNext: false, nextCursor: null, chats: [] });
+    }
+    if (options.method === "POST") {
+      assert.equal(target.pathname, "/meshy/image-to-3d");
+      assert.equal(options.body.get("image"), image);
+      assert.equal(options.headers.get("Content-Type"), null);
+      return Response.json({ taskId }, { status: 202 });
+    }
+    assert.equal(target.pathname, "/meshy/tasks/" + taskId);
+    return Response.json(++statuses === 1 ? { taskId, status: "PENDING" } : { taskId, status: "SUCCEEDED", modelUrl: url });
+  });
+  render();
+  await tick();
+  element(render(), "select").onChange({ currentTarget: { value: "image" } });
+  element(render(), "input").onChange({ target: { files: [image], value: "" } });
+  element(render(), "form").onSubmit(formEvent());
+  await tick();
+  h.advance(4999);
+  assert.equal(requests.length, 2);
+  h.advance(1);
+  await tick();
+  assert.equal(statuses, 1);
+  assert.equal(element(render(), "ArtworkModelPreview"), undefined);
+  h.advance(4999);
+  assert.equal(statuses, 1);
+  h.advance(1);
+  await tick();
+  assert.equal(element(render(), "ArtworkModelPreview").stlUrl, url);
+  assert.equal(button(render(), "미리보기 전용").disabled, true);
+  assert.equal(h.timers(), 0);
+  assert.deepEqual(requests.map(({ options }) => options.method), ["GET", "POST", "GET", "GET"]);
+});
+
+test("the bound API cannot send with a replacement session or surface a late successful response", async () => {
+  let started, respond;
+  const hasStarted = new Promise((resolve) => { started = resolve; });
+  const { bound, localStorage, requests } = apiHarness(() => new Promise((resolve) => {
+    respond = resolve;
+    started();
+  }));
+  assert.equal(bound.getVerifiedAccountScope("reauthentication", "session-a"), null);
+  assert.equal(bound.getVerifiedAccountScope("reauthentication", "old-session"), scope);
+  const pending = bound.transport.generateTextTo3D({ prompt: "Synthetic request" });
+  await hasStarted;
+  localStorage.setItem(sessionKey, sessionRecord("session-b"));
+  respond(Response.json({ taskId }, { status: 202 }));
+  await assert.rejects(pending, { status: 401 });
+  const count = requests.length;
+  assert.equal(count, 1);
+  await assert.rejects(bound.transport.generateTextTo3D({ prompt: "Another request" }), { status: 401 });
+  assert.equal(requests.length, count);
+  assert(requests.every(({ options }) => options.headers.get("Authorization") === "Bearer fixture-token-session-a"));
+});
+
+test("a real 409 decoder resumes the existing task without another paid POST", async () => {
+  const { h, requests, render } = apiHarness((target, options) => {
+    if (target.pathname === "/chats/messages") return Response.json({ hasNext: false, nextCursor: null, chats: [] });
+    if (options.method === "POST") return Response.json({ message: "Existing fixture task", taskId }, { status: 409 });
+    assert.equal(target.pathname, "/meshy/tasks/" + taskId);
+    return Response.json({ taskId, status: "FAILED", failureReason: "Synthetic failure" });
+  });
+  render();
+  await tick();
+  element(render(), "select").onChange({ currentTarget: { value: "text" } });
+  element(render(), "textarea").onChange({ currentTarget: { value: textAction.prompt } });
+  element(render(), "form").onSubmit(formEvent());
+  await tick();
+  h.advance(5000);
+  await tick();
+  assert.match(role(render(), "alert").children, /생성에 실패/);
+  assert.equal(element(render(), "ArtworkModelPreview"), undefined);
+  assert.equal(h.timers(), 0);
+  assert.deepEqual(requests.map(({ url, options }) => [options.method, url.pathname]),
+    [["GET", "/chats/messages"], ["POST", "/meshy/text-to-3d"], ["GET", "/meshy/tasks/" + taskId]]);
+});
+
+test("changing the bound session aborts history and keeps late old-account messages out of the UI", async () => {
+  let resolveOld;
+  const { h, localStorage, requests, render } = apiHarness((_, options) => {
+    if (options.headers.get("Authorization") === "Bearer fixture-token-session-a") {
+      return new Promise((resolve) => { resolveOld = resolve; });
+    }
+    return Response.json({ hasNext: false, nextCursor: null, chats: [] });
+  });
+  render();
+  await tick();
+  assert.equal(requests.length, 1);
+  localStorage.setItem(sessionKey, sessionRecord("session-b"));
+  const other = h.bindApi("session-b", "another-account");
+  h.renderBoundWorkspace(other, "another-account", "session-b");
+  await tick();
+  assert.equal(requests[0].options.signal.aborted, true);
+  resolveOld(Response.json({ hasNext: false, nextCursor: null, chats: [{
+    chatId: "99", role: "USER", message: "Old account message", imageUrl: null, jobId: null, createdAt: "2026-01-01T10:00:00Z",
+  }] }));
+  await tick();
+  assert.equal(JSON.stringify(h.renderBoundWorkspace(other, "another-account", "session-b")).includes("Old account message"), false);
+  assert.equal(requests.length, 2);
+});
+
+test("a saved 401 records the rejected session and only a new authenticated session can resume it", async () => {
+  const { h, bound, localStorage } = apiHarness(() => assert.fail("Injected flow should not use HTTP"));
+  const first = h.flow(true, scope, true, "session-a");
+  first.setAccountVerifier(bound.getVerifiedAccountScope);
+  await accept(h, first);
+  h.advance(5000);
+  h.calls[1].reject(h.error(401));
+  await tick();
+  const saved = JSON.parse(h.storage.getItem(storageKey));
+  assert.equal(saved.authSessionId, "session-a");
+  assert.equal(first.recheck(), false);
+  assert.equal(h.timers(), 0);
+
+  localStorage.setItem(sessionKey, sessionRecord("session-b"));
+  const next = h.flow(true, scope, true, "session-b");
+  next.setAccountVerifier(h.bindApi("session-b", scope).getVerifiedAccountScope);
+  assert.equal(next.recheck(), true);
+  h.advance(5000);
+  assert.deepEqual(h.calls.map(({ method }) => method), ["generateTextTo3D", "getMeshyTaskStatus", "getMeshyTaskStatus"]);
+  h.calls[2].resolve({ taskId, status: "PENDING" });
+  await tick();
+  assert.equal(JSON.parse(h.storage.getItem(storageKey)).authSessionId, undefined);
+  next.stop();
 });
 
 test("a flow without a transport rejects direct submissions and schedules nothing", () => {
@@ -412,8 +673,14 @@ test("a regular or repeated 404 is not treated as a queue registration race", as
       await tick();
     }
     assert.equal(flow.getSnapshot().reason, "not-found");
-    assert.equal(flow.recheck(), false);
     assert.equal(flow.submit(textAction), false);
+    const count = h.calls.length;
+    h.advance(15000);
+    assert.equal(h.calls.length, count);
+    assert.equal(flow.recheck(), true);
+    h.advance(5000);
+    assert.equal(h.calls.at(-1).method, "getMeshyTaskStatus");
+    assert.equal(h.calls.at(-1).input, taskId);
   }
 });
 
@@ -481,10 +748,10 @@ test("Enter repeat is ignored and shifts or IME composition do not submit", () =
 test("mixed text and image generation show an input error without discarding input or making requests", () => {
   const h = harness();
   chooseText(h);
-  element(h.renderWorkspace(), "input").onChange({ currentTarget: { files: [image] } });
+  element(h.renderWorkspace(), "input").onChange({ target: { files: [image], value: "" } });
   element(h.renderWorkspace(), "form").onSubmit(formEvent());
   assert.match(role(h.renderWorkspace(), "alert").children, /설명만 입력/);
-  assert.ok(button(h.renderWorkspace(), "첨부 이미지 제거"));
+  assert(find(h.renderWorkspace(), ({ props }) => props["aria-label"] === "fixture.png 첨부 이미지 삭제"));
   assert.equal(element(h.renderWorkspace(), "textarea").value, textAction.prompt);
   element(h.renderWorkspace(), "select").onChange({ currentTarget: { value: "image" } });
   element(h.renderWorkspace(), "form").onSubmit(formEvent());
@@ -556,7 +823,7 @@ test("unmount cleanup aborts both pending requests and timers without handling l
   }
 });
 
-test("UI announces submitting, pending and succeeded while leaving the model URL and print controls hidden", async () => {
+test("UI announces successful generation and renders STL preview without enabling output", async () => {
   const h = harness();
   chooseText(h);
   element(h.renderWorkspace(), "form").onSubmit(formEvent());
@@ -569,9 +836,11 @@ test("UI announces submitting, pending and succeeded while leaving the model URL
   await tick();
   const ui = h.renderWorkspace();
   assert.match(role(ui, "status").children, /생성이 완료/);
-  assert.equal(element(ui, "a"), undefined);
+  assert.equal(element(ui, "a").href, url);
+  assert.equal(element(ui, "ArtworkModelPreview").stlUrl, url);
   assert.equal(button(ui, "출력하기"), undefined);
-  assert.equal(JSON.stringify(ui).includes(url), false);
+  assert.equal(button(ui, "미리보기 전용").disabled, true);
+  assert.equal(button(ui, "미리보기 전용").onClick, undefined);
   assert.deepEqual(h.calls.map(({ method }) => method), ["generateTextTo3D", "getMeshyTaskStatus"]);
 });
 
@@ -612,11 +881,12 @@ test("remount restores a still-unconfirmed chat and blocks a duplicate POST in t
   assert.equal(element(tree, "fieldset").disabled, true);
   tree = h.renderWorkspace();
   assert.match(role(tree, "alert").children, /중복을 방지하기 위해 새 요청을 제한/);
-  chooseText(h);
+  element(h.renderWorkspace(), "select").onChange({ currentTarget: { value: "chat" } });
+  assert.equal(element(h.renderWorkspace(), "textarea").disabled, true);
   element(h.renderWorkspace(), "form").onSubmit(formEvent());
-  button(h.renderWorkspace(), "새 대화").onClick();
-  assert.equal(element(h.renderWorkspace(), "fieldset").disabled, true);
-  assert.equal(JSON.parse(h.storage.getItem(storageKey)).kind, "chat");
+  button(h.renderWorkspace(), "입력 초기화").onClick();
+  assert.equal(element(h.renderWorkspace(), "fieldset").disabled, false);
+  assert.equal(JSON.parse(h.storage.getItem(chatStorageKey)).kind, "chat");
   assert.equal(h.calls.length, 1);
 });
 
@@ -663,17 +933,22 @@ test("a fresh page resumes a saved Meshy ID with GET only and clears the lock on
   }
 });
 
-test("a regular 404 cannot become resumable merely by switching routes", async () => {
+test("switching routes does not poll or create a replacement after a regular 404", async () => {
   const h = harness();
   const flow = h.flow();
   await accept(h, flow);
   h.advance(5000);
   h.calls[1].reject(h.error(404));
   await tick();
-  const restored = harness({ storage: h.storage }).flow();
+  const reopened = harness({ storage: h.storage });
+  const restored = reopened.flow();
   assert.equal(restored.getSnapshot().reason, "not-found");
-  assert.equal(restored.recheck(), false);
+  reopened.advance(15000);
+  assert.equal(reopened.calls.length, 0);
   assert.equal(restored.submit(textAction), false);
+  assert.equal(restored.recheck(), true);
+  reopened.advance(5000);
+  assert.deepEqual(reopened.calls.map(({ method, input }) => [method, input]), [["getMeshyTaskStatus", taskId]]);
 });
 
 test("scope changes reset the composer and isolate saved requests; a missing scope fails closed", () => {
@@ -844,7 +1119,7 @@ test("GET 401 preserves the task through unmount and only explicit same-account 
   const h = harness();
   chooseText(h);
   element(h.renderWorkspace(), "form").onSubmit(formEvent());
-  const original = JSON.parse(h.storage.getItem(storageKey));
+  const original = JSON.parse(h.storage.getItem(meshyStorageKey));
   h.calls[0].resolve({ taskId });
   await tick();
   h.advance(5000);
@@ -852,20 +1127,21 @@ test("GET 401 preserves the task through unmount and only explicit same-account 
   h.calls[1].reject(h.error(401));
   await tick();
 
-  assert.deepEqual(JSON.parse(h.storage.getItem(storageKey)), {
+  assert.deepEqual(JSON.parse(h.storage.getItem(meshyStorageKey)), {
     ...original, status: "reauth-required", taskId,
   });
   assert.match(role(h.renderWorkspace(), "alert").children, /인증이 만료/);
-  assert.equal(element(h.renderWorkspace(), "fieldset").disabled, true);
+  assert.equal(element(h.renderWorkspace(), "textarea").disabled, true);
   const deniedUi = h.renderWorkspace();
   assert.equal(button(deniedUi, "재인증 후 상태 다시 조회").onClick(), false);
   element(deniedUi, "form").onSubmit(formEvent());
 
   h.unmount();
   h.renderWorkspace();
+  element(h.renderWorkspace(), "select").onChange({ currentTarget: { value: "text" } });
   const restoredUi = h.renderWorkspace();
   assert.match(role(restoredUi, "alert").children, /같은 계정으로 다시 로그인/);
-  assert.equal(element(restoredUi, "fieldset").disabled, true);
+  assert.equal(element(restoredUi, "textarea").disabled, true);
   assert.equal(button(restoredUi, "재인증 후 상태 다시 조회").onClick(), false);
   assert.equal(h.calls.length, 2);
   assert.equal(h.timers(), 0);
@@ -887,7 +1163,7 @@ test("GET 401 preserves the task through unmount and only explicit same-account 
   assert.equal(h.calls[2].input, taskId);
   h.calls[2].resolve({ taskId, status: "SUCCEEDED", modelUrl: url });
   await tick();
-  assert.equal(h.storage.getItem(storageKey), null);
+  assert.equal(h.storage.getItem(meshyStorageKey), null);
   assert.match(role(h.renderWorkspace(), "status").children, /생성이 완료/);
   assert.equal(h.calls.length, 3);
 });
@@ -993,8 +1269,8 @@ test("401 does not consume a conflict task's first retryable 404 after reauthent
   h.calls[3].reject(h.error(404));
   await tick();
   assert.equal(flow.getSnapshot().reason, "not-found");
-  assert.equal(flow.recheck(), false);
   assert.equal(flow.submit(textAction), false);
+  h.advance(15000);
   assert.deepEqual(h.calls.map(({ method }) => method), [
     "generateTextTo3D", "getMeshyTaskStatus", "getMeshyTaskStatus", "getMeshyTaskStatus",
   ]);
@@ -1144,4 +1420,199 @@ test("a render that never commits cannot publish a permissive verifier to the ex
   assert.equal(button(h.renderWorkspace(h.transport, scope, allowed), labelForRecheck).onClick(), true);
   h.advance(5000);
   assert.deepEqual(h.calls.map(({ method, input }) => [method, input]), [["getMeshyTaskStatus", taskId]]);
+});
+
+test("a paid request rejected by auth before fetch releases only its saved request", async () => {
+  const { h, localStorage, render, requests } = apiHarness(() =>
+    Response.json({ hasNext: false, nextCursor: null, chats: [] }));
+  render();
+  await tick();
+  const unrelated = JSON.stringify({ version: 1, id: "kept-fixture", kind: "text", startedAt: 0,
+    status: "accepted", taskId: "kept-task" });
+  h.storage.setItem(meshyStorageKey, unrelated);
+  const write = h.storage.setItem.bind(h.storage);
+  h.storage.setItem = (...args) => {
+    write(...args);
+    localStorage.removeItem(sessionKey);
+  };
+  element(render(), "select").onChange({ currentTarget: { value: "chat" } });
+  element(render(), "textarea").onChange({ currentTarget: { value: "Not sent" } });
+  element(render(), "form").onSubmit(formEvent());
+  await tick();
+  assert(requests.every(({ options }) => options.method === "GET"));
+  assert.equal(h.storage.getItem(storageKey), null);
+  assert.equal(h.storage.getItem(chatStorageKey), null);
+  assert.equal(h.storage.getItem(meshyStorageKey), unrelated);
+  h.unmount();
+  h.storage.setItem = write;
+  localStorage.setItem(sessionKey, sessionRecord("session-b"));
+  const next = h.bindApi("session-b", scope);
+  h.renderBoundWorkspace(next, scope, "session-b");
+  await tick();
+  const tree = h.renderBoundWorkspace(next, scope, "session-b");
+  assert.equal(element(tree, "fieldset").disabled, false);
+  assert.equal(find(tree, ({ props }) => String(props.children).includes("새 요청을 제한")), undefined);
+});
+
+test("a failed fetch retains the paid chat lock across remount without resending automatically", async () => {
+  const { h, render, requests } = apiHarness((_, options) => {
+    if (options.method === "POST") throw new TypeError("Fixture connection lost after dispatch");
+    return Response.json({ hasNext: false, nextCursor: null, chats: [] });
+  });
+  render();
+  await tick();
+  const tryChat = () => {
+    element(render(), "select").onChange({ currentTarget: { value: "chat" } });
+    element(render(), "textarea").onChange({ currentTarget: { value: "Fixture question" } });
+    element(render(), "form").onSubmit(formEvent());
+  };
+  tryChat();
+  await tick();
+  const lock = h.storage.getItem(chatStorageKey);
+  assert.equal(JSON.parse(lock).status, "uncertain");
+  h.unmount();
+  render();
+  await tick();
+  tryChat();
+  h.advance(30000);
+  assert.equal(requests.filter(({ options }) => options.method === "POST").length, 1);
+  assert.equal(h.storage.getItem(chatStorageKey), lock);
+});
+
+test("a regular Meshy 404 leaves a GET recovery action and permits a separate paid chat", async () => {
+  const { h, render, requests } = apiHarness((target, options) => {
+    if (target.pathname === "/chats/messages" && options.method === "GET") {
+      return Response.json({ hasNext: false, nextCursor: null, chats: [] });
+    }
+    if (target.pathname === "/chats/messages") return Response.json({ chatId: "8", jobId: null, reply: "Chat works" });
+    if (options.method === "POST") return Response.json({ taskId }, { status: 202 });
+    return new Response(null, { status: 404 });
+  });
+  render();
+  await tick();
+  element(render(), "select").onChange({ currentTarget: { value: "text" } });
+  element(render(), "textarea").onChange({ currentTarget: { value: "Fixture model" } });
+  element(render(), "form").onSubmit(formEvent());
+  await tick();
+  h.advance(5000);
+  await tick();
+  assert.match(role(render(), "alert").children, /찾을 수 없습니다/);
+  assert.equal(requests.filter(({ options }) => options.method === "POST").length, 1);
+  const recheck = button(render(), "상태 다시 조회");
+  assert(recheck);
+  recheck.onClick();
+  h.advance(5000);
+  await tick();
+  assert.equal(requests.filter(({ options }) => options.method === "POST").length, 1);
+  const saved = JSON.parse(h.storage.getItem(meshyStorageKey));
+  assert.equal(saved.taskId, taskId);
+  assert.equal(saved.status, "not-found");
+
+  element(render(), "select").onChange({ currentTarget: { value: "chat" } });
+  element(render(), "textarea").onChange({ currentTarget: { value: "Fixture question" } });
+  element(render(), "form").onSubmit(formEvent());
+  await tick();
+  assert(find(render(), ({ props }) => props.children === "Chat works"));
+  assert.equal(requests.filter(({ options }) => options.method === "POST").length, 2);
+  assert.equal(h.storage.getItem(chatStorageKey), null);
+  assert.equal(JSON.parse(h.storage.getItem(meshyStorageKey)).taskId, taskId);
+});
+
+test("chat history refresh keeps distinct equal text and ignores a late initial GET", async () => {
+  let sendHistory, sendReply, sendRefreshed;
+  let reads = 0;
+  const { render, requests } = apiHarness((_, options) => new Promise((resolve) => {
+    if (options.method === "POST") sendReply = resolve;
+    else if (++reads === 1) sendHistory = resolve;
+    else sendRefreshed = resolve;
+  }));
+  const text = "Repeated fixture text";
+  const row = (chatId, role, message) => ({
+    chatId, role, message, imageUrl: null, jobId: null, createdAt: "2026-01-01T10:00:00Z",
+  });
+  render();
+  await tick();
+  element(render(), "select").onChange({ currentTarget: { value: "chat" } });
+  element(render(), "textarea").onChange({ currentTarget: { value: text } });
+  element(render(), "form").onSubmit(formEvent());
+  await tick();
+  sendReply(Response.json({ chatId: "3", jobId: null, reply: "Fixture reply" }));
+  await tick();
+  assert(requests[0].options.signal.aborted);
+  assert.equal(reads, 2);
+  sendRefreshed(Response.json({ hasNext: false, nextCursor: null,
+    chats: [row("1", "USER", text), row("2", "USER", text), row("3", "ASSISTANT", "Fixture reply")] }));
+  await tick();
+  sendHistory(Response.json({ hasNext: false, nextCursor: null, chats: [row("99", "USER", "Stale row")] }));
+  await tick();
+  const encoded = JSON.stringify(render());
+  assert.equal(encoded.split(text).length - 1, 2);
+  assert.equal(encoded.split("Fixture reply").length - 1, 1);
+  assert.equal(encoded.includes("Stale row"), false);
+  assert.equal(requests.filter(({ options }) => options.method === "POST").length, 1);
+});
+
+test("a failed chat refresh keeps the preexisting rows and renders the user only once", async () => {
+  let acceptChat;
+  let reads = 0;
+  const text = "Fixture user row";
+  const { render, requests } = apiHarness((_, options) => {
+    if (options.method === "POST") return new Promise((resolve) => { acceptChat = resolve; });
+    if (++reads > 1) return new Response(null, { status: 503 });
+    return Response.json({ hasNext: false, nextCursor: null, chats: [
+      { chatId: "1", role: "ASSISTANT", message: "Earlier fixture", imageUrl: null, jobId: null, createdAt: "2026-01-01T09:00:00Z" },
+      { chatId: "2", role: "USER", message: text, imageUrl: null, jobId: null, createdAt: "2026-01-01T10:00:00Z" },
+    ] });
+  });
+  render();
+  element(render(), "select").onChange({ currentTarget: { value: "chat" } });
+  element(render(), "textarea").onChange({ currentTarget: { value: text } });
+  element(render(), "form").onSubmit(formEvent());
+  await tick();
+  assert(find(render(), ({ props }) => props.children === text));
+  acceptChat(Response.json({ chatId: "3", jobId: null, reply: "Current fixture answer" }));
+  await tick();
+  const ui = render();
+  assert(find(ui, ({ props }) => props.children === "Earlier fixture"));
+  assert(find(ui, ({ props }) => props.children === "Current fixture answer"));
+  assert.equal(JSON.stringify(ui).split(text).length - 1, 1);
+  assert(button(ui, "다시 시도"));
+  assert.equal(requests.filter(({ options }) => options.method === "POST").length, 1);
+});
+
+test("a late preflight error cannot clear a newer lock in the same request channel", async () => {
+  const h = harness();
+  const flow = h.flow();
+  assert.equal(flow.submit({ kind: "chat", message: "Old fixture" }), true);
+  flow.stop();
+  const newer = JSON.stringify({ version: 1, id: "new-claim", kind: "chat", startedAt: 0, status: "uncertain" });
+  h.storage.setItem(storageKey, newer);
+  h.calls[0].reject(h.preflightError());
+  await tick();
+  assert.equal(h.storage.getItem(storageKey), newer);
+  assert.equal(h.calls.length, 1);
+});
+
+test("STL retry remounts the failed preview and clears the same signed URL without transport", async () => {
+  const h = harness();
+  const modelUrl = url + "?signature=fixture";
+  chooseText(h);
+  element(h.renderWorkspace(), "form").onSubmit(formEvent());
+  h.calls[0].resolve({ taskId });
+  await tick();
+  h.advance(5000);
+  h.calls[1].resolve({ taskId, status: "SUCCEEDED", modelUrl });
+  await tick();
+  const getBoundary = () => find(h.renderWorkspace(), ({ type }) => type?.name === "PreviewErrorBoundary");
+  const initial = getBoundary();
+  const boundary = new initial.type(initial.props);
+  boundary.props = initial.props;
+  boundary.state = initial.type.getDerivedStateFromError(new Error("Fixture STL failure"));
+  const retry = button(boundary.render(), "미리보기 다시 시도");
+  assert(retry);
+  retry.onClick();
+  assert.deepEqual(h.clearedModels, [modelUrl]);
+  assert.notEqual(getBoundary().key, initial.key);
+  assert.equal(element(h.renderWorkspace(), "ArtworkModelPreview").stlUrl, modelUrl);
+  assert.deepEqual(h.calls.map(({ method }) => method), ["generateTextTo3D", "getMeshyTaskStatus"]);
 });

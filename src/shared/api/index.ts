@@ -1,4 +1,4 @@
-export { ApiError, apiClient } from "./client";
+export { ApiAuthPreflightError, ApiError, apiClient } from "./client";
 export type { ApiRequestOptions } from "./client";
 export {
   ACCESS_TOKEN_STORAGE_KEY,

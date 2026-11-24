@@ -1,3 +1,5 @@
+import type { AuthSnapshot } from "@/shared/api/auth";
+
 export interface ChatHistoryMessage {
   chatId: string;
   role: "USER" | "ASSISTANT";
@@ -14,6 +16,7 @@ export interface ChatHistoryPage {
 }
 
 export interface ChatHistoryOptions {
+  authSnapshot?: AuthSnapshot;
   cursor?: string;
   size?: number;
   signal?: AbortSignal;

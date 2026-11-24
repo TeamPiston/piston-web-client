@@ -1,5 +1,6 @@
 import { ChatInputError } from "@/entities/chat";
 import { apiClient } from "@/shared/api";
+import type { AuthSnapshot } from "@/shared/api/auth";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -31,7 +32,7 @@ function decodeSentChatMessage(value: unknown): SentChatMessage {
 /** Sends one explicit, potentially billable request. Aborting only stops the client from waiting. */
 export async function sendChatMessage(
   { message, image }: SendChatMessageInput,
-  { signal }: { signal?: AbortSignal } = {},
+  { signal, authSnapshot }: { signal?: AbortSignal; authSnapshot?: AuthSnapshot } = {},
 ): Promise<SentChatMessage> {
   signal?.throwIfAborted();
 
@@ -52,5 +53,5 @@ export async function sendChatMessage(
   }
 
   // A 307 or 308 could otherwise cause fetch to send the billable POST again.
-  return apiClient.post("/chats/messages", body, { signal, redirect: "error", decode: decodeSentChatMessage });
+  return apiClient.post("/chats/messages", body, { signal, authSnapshot, redirect: "error", decode: decodeSentChatMessage });
 }

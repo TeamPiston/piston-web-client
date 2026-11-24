@@ -8,6 +8,7 @@ interface VersionHistoryProps {
   onSelectVersion: (versionId: string) => void;
   selectedVersionId: string;
   versions: DesignVersion[];
+  showAutosave?: boolean;
 }
 
 export function VersionHistory({
@@ -15,6 +16,7 @@ export function VersionHistory({
   onSelectVersion,
   selectedVersionId,
   versions,
+  showAutosave = true,
 }: VersionHistoryProps) {
   return (
     <aside className="flex min-h-[420px] min-w-0 flex-col border-l border-gray-200 bg-white px-5 py-7 xl:min-h-0">
@@ -53,7 +55,7 @@ export function VersionHistory({
           })}
         </div>
       )}
-      {isGenerated && (
+      {isGenerated && showAutosave && (
         <p className="mt-6 flex shrink-0 items-center gap-2 text-xs text-gray-400">
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           수정할 때마다 자동으로 저장돼요.

@@ -1,4 +1,9 @@
 export type CreateRequestKind = "chat" | "text" | "image";
+export type CreateRequestChannel = "chat" | "meshy";
+
+export function requestChannel(kind: CreateRequestKind): CreateRequestChannel {
+  return kind === "chat" ? "chat" : "meshy";
+}
 
 type SavedTaskStatus = "accepted" | "conflict" | "not-found" | "forbidden" | "access-denied" |
   "reauth-required" | "reauth-required-conflict";
@@ -12,7 +17,7 @@ interface RequestIdentity {
 
 export type SavedCreateRequest = RequestIdentity & (
   | { status: "uncertain" }
-  | { status: SavedTaskStatus; taskId: string }
+  | { status: SavedTaskStatus; taskId: string; authSessionId?: string }
 );
 
 const REQUEST_KEY = "piston:create-api:pending:v1:";
@@ -28,7 +33,13 @@ function isSavedCreateRequest(value: unknown): value is SavedCreateRequest {
   ) return false;
 
   if (value.status === "uncertain") return Object.keys(value).length === 5;
-  return Object.keys(value).length === 6 && value.kind !== "chat" &&
+  const hasAuthSession = "authSessionId" in value;
+  if (hasAuthSession && (
+    (value.status !== "reauth-required" && value.status !== "reauth-required-conflict") ||
+    typeof value.authSessionId !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(value.authSessionId)
+  )) return false;
+
+  return Object.keys(value).length === (hasAuthSession ? 7 : 6) && value.kind !== "chat" &&
     (value.status === "accepted" || value.status === "conflict" ||
       value.status === "not-found" || value.status === "forbidden" || value.status === "access-denied" ||
       value.status === "reauth-required" || value.status === "reauth-required-conflict") &&
@@ -38,7 +49,7 @@ function isSavedCreateRequest(value: unknown): value is SavedCreateRequest {
 }
 
 /** The caller supplies a stable opaque authentication namespace, never a token or profile field. */
-export function createRequestStorage(requestScope?: string) {
+export function createRequestStorage(requestScope?: string, channel?: CreateRequestChannel) {
   const key = requestScope && /^[a-zA-Z0-9_-]{1,128}$/.test(requestScope)
     ? REQUEST_KEY + requestScope
     : null;
@@ -48,8 +59,7 @@ export function createRequestStorage(requestScope?: string) {
     return key;
   }
 
-  function read(): SavedCreateRequest | null {
-    const storageKey = requireKey();
+  function readKey(storageKey: string): SavedCreateRequest | null {
     const raw = window.sessionStorage.getItem(storageKey);
     if (raw === null) return null;
     const value: unknown = JSON.parse(raw);
@@ -57,13 +67,29 @@ export function createRequestStorage(requestScope?: string) {
     return value;
   }
 
+  function readEntry() {
+    const legacyKey = requireKey();
+    const legacy = readKey(legacyKey);
+    if (!channel) return { storageKey: legacyKey, request: legacy };
+
+    const storageKey = legacyKey + ":" + channel;
+    const request = readKey(storageKey);
+    const legacyRequest = legacy && requestChannel(legacy.kind) === channel ? legacy : null;
+    if ((request && requestChannel(request.kind) !== channel) || (request && legacyRequest)) {
+      throw new Error("Conflicting saved Create requests");
+    }
+    return legacyRequest ? { storageKey: legacyKey, request: legacyRequest } : { storageKey, request };
+  }
+
   function replace(expectedId: string | null, next: SavedCreateRequest | null) {
-    const storageKey = requireKey();
-    if ((read()?.id ?? null) !== expectedId) throw new Error("Create request ownership changed");
-    if (next && !isSavedCreateRequest(next)) throw new Error("Invalid Create request to save");
+    const { storageKey, request } = readEntry();
+    if ((request?.id ?? null) !== expectedId) throw new Error("Create request ownership changed");
+    if (next && (!isSavedCreateRequest(next) || (channel && requestChannel(next.kind) !== channel))) {
+      throw new Error("Invalid Create request to save");
+    }
     if (next) window.sessionStorage.setItem(storageKey, JSON.stringify(next));
     else window.sessionStorage.removeItem(storageKey);
   }
 
-  return { read, replace };
+  return { read: () => readEntry().request, replace };
 }

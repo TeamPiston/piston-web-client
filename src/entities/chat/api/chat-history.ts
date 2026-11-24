@@ -49,7 +49,7 @@ function decodeChatHistory(value: unknown): ChatHistoryPage {
 }
 
 /** Retrieves one page in server order. Callers explicitly request subsequent pages. */
-export async function getChatHistory({ cursor, size, signal }: ChatHistoryOptions = {}): Promise<ChatHistoryPage> {
+export async function getChatHistory({ cursor, size, signal, authSnapshot }: ChatHistoryOptions = {}): Promise<ChatHistoryPage> {
   signal?.throwIfAborted();
 
   const query = new URLSearchParams();
@@ -67,5 +67,5 @@ export async function getChatHistory({ cursor, size, signal }: ChatHistoryOption
   }
 
   const search = query.size === 0 ? "" : `?${query}`;
-  return apiClient.get(`/chats/messages${search}`, { signal, decode: decodeChatHistory });
+  return apiClient.get(`/chats/messages${search}`, { signal, authSnapshot, cache: "no-store", decode: decodeChatHistory });
 }

@@ -133,7 +133,7 @@ async function verifyFrontendContracts() {
     'aria-live="polite"',
     "출력이 시작되었습니다.",
     "마이페이지에서 출력 상황을 확인해 주세요!",
-    'disabled={!isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}',
+    'disabled={!onPrint || !isGenerated || isPrintBlocked || isPrintCheckFailed || isPrintStatusChecking}',
     "onClick={onRetryPrintCheck}",
   ]) {
     assert(previewSource.includes(statement), "Create preview: missing contract: " + statement);

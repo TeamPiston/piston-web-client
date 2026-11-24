@@ -5,7 +5,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import { useAuth } from "@/entities/session";
 import { Header, LoginRequiredModal } from "@/widgets/header";
 import { isMockModeEnabled } from "@/shared/mock/mock-data";
-import { ApiCreateWorkspace } from "./api-create-workspace";
+import { AuthenticatedApiCreateWorkspace } from "./api-create-workspace";
 import CreateWorkspace from "./create-workspace";
 
 const subscribeToHydration = () => () => {};
@@ -16,7 +16,8 @@ const getServerHydrationSnapshot = () => false;
 
 export default function CreatePage() {
   const router = useRouter();
-  const { isLoggedIn } = useAuth();
+  const isMock = isMockModeEnabled();
+  const { isLoggedIn, isRestoring, user, apiSessionId } = useAuth();
   const isMounted = useSyncExternalStore(
     subscribeToHydration,
     getClientHydrationSnapshot,
@@ -28,17 +29,21 @@ export default function CreatePage() {
     router.push("/");
   }, [router]);
 
-  if (!isMockModeEnabled()) {
-    // This public unavailable screen stays unconnected until authenticated API integration.
-    return <ApiCreateWorkspace />;
+  if (!isMock) {
+    if (!isMounted || isRestoring) {
+      return <><Header /><p role="status" className="mx-auto py-10 text-sm text-gray-600">로그인 상태를 확인하는 중이에요.</p></>;
+    }
+    if (isLoggedIn && user?.userId && apiSessionId) {
+      return <AuthenticatedApiCreateWorkspace key={apiSessionId} userId={user.userId} sessionId={apiSessionId} />;
+    }
   }
 
-  if (!isMounted || !isLoggedIn) {
+  if (!isMounted || !isLoggedIn || !isMock) {
     return (
       <>
         <Header />
         <LoginRequiredModal
-          isOpen={isMounted && !isLoggedIn}
+          isOpen={isMounted}
           onClose={handleAuthModalClose}
         />
       </>
