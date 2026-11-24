@@ -1,8 +1,10 @@
 import { apiClient } from "@/shared/api";
+import type { AuthSnapshot } from "@/shared/api/auth";
 import {
   cancelMockPrint,
   createMockPrintTask,
   fetchMockPrintStatus,
+  isMockModeEnabled,
   retryMockPrint,
   withMockFallback,
 } from "@/shared/mock/mock-data";
@@ -86,7 +88,7 @@ function normalizePrintTask(value: unknown): PrintTask | null {
   return {
     id,
     userId: String(candidate.userId ?? PRINT_USER_ID),
-    artworkName: String(candidate.artworkName ?? PRINT_ARTWORK_NAME),
+    artworkName: optionalString(candidate.artworkName)?.trim() || "디자인 이름 확인 불가",
     modelUrl: optionalString(candidate.modelUrl ?? candidate.stlUrl),
     printerName: optionalString(candidate.printerName),
     printingMethod: optionalString(candidate.printingMethod),
@@ -114,27 +116,14 @@ function normalizePrintTask(value: unknown): PrintTask | null {
 }
 
 export async function createPrintTask(artworkName = PRINT_ARTWORK_NAME) {
-  return withMockFallback(
-    async () => {
-      const response = await apiClient.post<unknown>("/api/prints", {
-        artworkName,
-      }, { redirect: "error" });
-      const printTask = normalizePrintTask(response);
-
-      if (!printTask) {
-        throw new Error("출력 시작 응답 형식이 올바르지 않습니다.");
-      }
-
-      return printTask;
-    },
-    () => createMockPrintTask(artworkName),
-  );
+  requireMockPrintActions();
+  return createMockPrintTask(artworkName);
 }
 
-export async function getCurrentPrintTask() {
+export async function getCurrentPrintTask(signal?: AbortSignal, authSnapshot?: AuthSnapshot) {
   return withMockFallback(
     async () => {
-      const response = await apiClient.get<unknown>("/api/prints/current");
+      const response = await apiClient.get<unknown>("/api/prints/current", { signal, authSnapshot });
       if (unwrapResponse(response) === null) {
         return null;
       }
@@ -150,26 +139,17 @@ export async function getCurrentPrintTask() {
 }
 
 export async function cancelPrintTask(printTaskId: number) {
-  await withMockFallback(
-    () => apiClient.delete<void>(`/api/prints/${printTaskId}`),
-    () => cancelMockPrint(printTaskId),
-  );
+  requireMockPrintActions();
+  await cancelMockPrint(printTaskId);
 }
 
 export async function retryPrintTask(printTask: PrintTask) {
-  return withMockFallback(
-    async () => {
-      const response = await apiClient.post<unknown>("/api/prints", {
-        artworkName: printTask.artworkName,
-      }, { redirect: "error" });
-      const nextTask = normalizePrintTask(response);
+  requireMockPrintActions();
+  return retryMockPrint(printTask.id);
+}
 
-      if (!nextTask) {
-        throw new Error("재출력 시작 응답 형식이 올바르지 않습니다.");
-      }
-
-      return nextTask;
-    },
-    () => retryMockPrint(printTask.id),
-  );
+function requireMockPrintActions() {
+  if (!isMockModeEnabled()) {
+    throw new Error("출력 기능 준비 중");
+  }
 }

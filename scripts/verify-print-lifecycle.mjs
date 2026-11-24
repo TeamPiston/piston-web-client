@@ -14,18 +14,22 @@ const args = new Set(process.argv.slice(2));
 const requests = [];
 
 // Execute the real TS modules without a Next server or generated files.
-async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "production", fetchImpl }) {
+async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "production", fetchImpl, ui }) {
   const paths = [
     "src/entities/print/model/print.ts",
     "src/shared/mock/mock-data.ts",
     "src/shared/api/index.ts",
     "src/shared/api/client.ts",
     "src/shared/api/auth.ts",
+    ...(ui ? [
+      "src/page-slices/mypage/ui/mypage-page.tsx",
+      "src/page-slices/mypage/ui/print-status-detail-modal.tsx",
+    ] : []),
   ];
   const sources = new Map(await Promise.all(paths.map(async (path) => [
     resolve(ROOT_DIR, path),
     ts.transpileModule(await readFile(resolve(ROOT_DIR, path), "utf8"), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
       fileName: path,
     }).outputText,
   ])));
@@ -42,7 +46,8 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "product
       NEXT_PUBLIC_USE_MOCK: String(mock),
       NEXT_PUBLIC_API_BASE_URL: baseUrl,
     } },
-    window, fetch: fetchImpl, Headers, FormData, Blob, URLSearchParams, ArrayBuffer,
+    window: Object.assign(window, ui?.timers), fetch: fetchImpl, Headers, FormData, Blob, URL, URLSearchParams, ArrayBuffer,
+    AbortController, document: { body: { style: {} }, addEventListener() {}, removeEventListener() {} },
   });
   const modules = new Map();
   function load(path) {
@@ -51,10 +56,12 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "product
     const loadedModule = { exports: {} };
     modules.set(path, loadedModule);
     const requireSource = (specifier) => {
+      if (ui && specifier === "@/entities/print") return load(resolve(ROOT_DIR, paths[0]));
+      if (ui && Object.hasOwn(ui.stubs, specifier)) return ui.stubs[specifier];
       const target = specifier.startsWith("@/")
         ? resolve(ROOT_DIR, "src", specifier.slice(2))
         : resolve(dirname(path), specifier);
-      return load(sources.has(target + ".ts") ? target + ".ts" : resolve(target, "index.ts"));
+      return load([target + ".ts", target + ".tsx"].find((path) => sources.has(path)) ?? resolve(target, "index.ts"));
     };
     new Script("(function(require, module, exports) {\n" + sources.get(path) + "\n})", {
       filename: path,
@@ -65,8 +72,344 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "product
     print: load(resolve(ROOT_DIR, paths[0])),
     mock: load(resolve(ROOT_DIR, paths[1])),
     api: load(resolve(ROOT_DIR, "src/shared/api/index.ts")),
+    MyPage: ui ? load(resolve(ROOT_DIR, "src/page-slices/mypage/ui/mypage-page.tsx")).default : undefined,
     window,
   };
+}
+
+function findElement(tree, match) {
+  if (Array.isArray(tree)) return tree.map((child) => findElement(child, match)).find(Boolean);
+  if (!tree?.props) return undefined;
+  if (match(tree)) return tree;
+  return findElement(tree.props.children, match);
+}
+
+async function verifyMyPageSafety(mock = false) {
+  const jsx = (type, props, key) => ({ type, props, key });
+  const auth = {
+    user: { id: "a", userId: "a", name: "Account A" },
+    apiSessionId: "session-a",
+    isLoggedIn: true,
+    isRestoring: false,
+  };
+  const credentials = (id) => ({ id, accessToken: "token-" + id, refreshToken: "refresh-" + id });
+  let storedSession = credentials(auth.apiSessionId);
+  let storageUnavailable = mock;
+  let hooks = [];
+  let effects = new Map();
+  let index = 0;
+  let profileKey;
+  const timeouts = new Map();
+  const intervals = new Map();
+  const printRequests = [];
+  const refreshRequests = [];
+  let responseStatus = "PRINTING";
+  let nextReadStatus;
+  let holdNextRead = false;
+  let finishRead;
+  const runtime = await loadPrintRuntime({
+    mock, baseUrl: "https://mypage-contract.invalid",
+    fetchImpl: async (url, options) => {
+      const authorization = options.headers.get("Authorization");
+      if (url === "https://mypage-contract.invalid/reissue") {
+        refreshRequests.push({ method: options.method, authorization });
+        return Response.json({ accessToken: "renewed-session-a" });
+      }
+      printRequests.push({ method: options.method, authorization, signal: options.signal });
+      assert.equal(options.method, "GET");
+      assert.equal(url, "https://mypage-contract.invalid/api/prints/current");
+      if (nextReadStatus) {
+        const status = nextReadStatus;
+        nextReadStatus = undefined;
+        return new Response(null, { status });
+      }
+      if (holdNextRead) {
+        holdNextRead = false;
+        return new Promise((resolve) => { finishRead = resolve; });
+      }
+      return Response.json({ id: 7110, artworkName: "Task for " + authorization, status: responseStatus });
+    },
+    ui: {
+      timers: {
+        setTimeout(callback) { const id = Symbol(); timeouts.set(id, callback); return id; },
+        clearTimeout(id) { timeouts.delete(id); },
+        setInterval(callback, delay) {
+          assert.equal(delay, 3000);
+          const id = Symbol();
+          intervals.set(id, callback);
+          return id;
+        },
+        clearInterval(id) { intervals.delete(id); },
+      },
+      stubs: {
+        react: {
+          Suspense: "Suspense",
+          useState(initial) {
+            const slot = index++;
+            if (!(slot in hooks)) hooks[slot] = typeof initial === "function" ? initial() : initial;
+            const current = hooks;
+            return [current[slot], (next) => {
+              current[slot] = typeof next === "function" ? next(current[slot]) : next;
+            }];
+          },
+          useRef(initial) {
+            const slot = index++;
+            return hooks[slot] ??= { current: initial };
+          },
+          useCallback(fn, deps) {
+            const slot = index++;
+            const previous = hooks[slot];
+            if (!previous || deps.some((dep, i) => dep !== previous.deps[i])) hooks[slot] = { fn, deps };
+            return hooks[slot].fn;
+          },
+          useEffect(setup, deps) {
+            const slot = index++;
+            const previous = effects.get(slot);
+            if (!previous || deps.some((dep, i) => dep !== previous.deps[i])) {
+              effects.set(slot, { deps, cleanup: previous?.cleanup, setup });
+            }
+          },
+        },
+        "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
+        "next/navigation": {
+          useRouter: () => ({}),
+          useSearchParams: () => new URLSearchParams(),
+        },
+        "next/link": { default: "Link" },
+        "lucide-react": { CircleUserRound: "CircleUserRound" },
+        "@/entities/session": { useAuth: () => auth },
+        "@/features/stl-viewer": { ArtworkModelPreview: "ArtworkModelPreview" },
+        "@/shared/ui/demo-notice": { DemoNotice: "DemoNotice" },
+        "@/widgets/header": { Header: "Header" },
+        "./design-detail-modal": { DesignDetailModal: "DesignDetailModal" },
+        "./delete-account-modal": { DeleteAccountModal: "DeleteAccountModal" },
+        "./print-retry-confirm-modal": { PrintRetryConfirmModal: "PrintRetryConfirmModal" },
+        "./printer-management-page": { ApiPrinterManagementPage: "ApiPrinterManagementPage" },
+      },
+    },
+  });
+  runtime.window.localStorage.getItem = (key) => {
+    if (storageUnavailable) throw new Error("Fixture storage unavailable");
+    return key === "piston-api-session" ? JSON.stringify(storedSession) : null;
+  };
+  runtime.window.localStorage.setItem = (key, value) => {
+    assert.equal(key, "piston-api-session");
+    storedSession = JSON.parse(value);
+  };
+  const fetchMockDesigns = runtime.mock.fetchMockMyDesigns;
+  let mockDesignReads = 0;
+  runtime.mock.fetchMockMyDesigns = () => {
+    mockDesignReads += 1;
+    return fetchMockDesigns();
+  };
+  const clearPage = () => {
+    for (const effect of effects.values()) effect.cleanup?.();
+    hooks = [];
+    effects = new Map();
+  };
+  const render = () => {
+    const content = runtime.MyPage().props.children;
+    const profile = findElement(content.type(), ({ type }) => type.name === "MyProfilePage");
+    if (profile.key !== profileKey) {
+      clearPage();
+      profileKey = profile.key;
+    }
+    index = 0;
+    const tree = profile.type(profile.props);
+    for (const effect of effects.values()) {
+      if (!effect.setup) continue;
+      effect.cleanup?.();
+      effect.cleanup = effect.setup();
+      delete effect.setup;
+    }
+    return tree;
+  };
+  const load = async () => {
+    for (const [id, callback] of timeouts) {
+      timeouts.delete(id);
+      callback();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+  const named = (tree, name) => findElement(tree, ({ type }) => type === name || type.name === name);
+  const statusCard = () => named(render(), "PrintStatusSection");
+  const designCard = (tree) => findElement(tree, ({ type, props }) => type === "button" && props["aria-label"]?.endsWith("상세 보기"));
+  const beforeLoad = render();
+  if (mock) {
+    runtime.mock.resetMockData("EMPTY");
+    await load();
+    const cards = named(render(), "CreatedDesignSection");
+    const design = cards.props.designs[0];
+    designCard(cards.type(cards.props)).props.onClick();
+    let modal = named(render(), "DesignDetailModal");
+    assert.equal(modal.props.design.id, design.id);
+    modal.props.onTogglePublished(design.id);
+    await load();
+    modal = named(render(), "DesignDetailModal");
+    assert.equal(modal.props.design.isPublished, !design.isPublished);
+    await modal.props.onPrint(design.title);
+    assert.equal(statusCard().props.printTask.artworkName, design.title);
+    statusCard().props.onSelect();
+    await named(render(), "PrintStatusDetailModal").props.onCancel();
+    assert.equal((await runtime.print.getCurrentPrintTask()).status, "CANCELLED");
+    modal.props.onDelete(design.id);
+    assert(!named(render(), "CreatedDesignSection").props.designs.some(({ id }) => id === design.id));
+    assert.equal(mockDesignReads, 1);
+    clearPage();
+    render();
+    await load();
+    statusCard().props.onRetry();
+    await named(render(), "PrintRetryConfirmModal").props.onConfirm();
+    assert.equal(statusCard().props.printTask.status, "PRINTING");
+    assert.equal(printRequests.length, 0);
+    clearPage();
+    console.log("PASS MyPage Mock design list, open, publish, delete and print lifecycle");
+    return;
+  }
+  const designNotice = "디자인 관리 기능 준비 중";
+  // Evaluate the page before its first effect, including the initial render on refresh.
+  assert(!named(beforeLoad, "CreatedDesignSection"), "API entry exposed Mock design cards");
+  assert(!named(beforeLoad, "DesignDetailModal"), "API entry exposed Mock design actions");
+  assert(findElement(beforeLoad, ({ props }) => props.children === designNotice));
+  await load();
+  const printing = statusCard();
+  assert.equal(printing.props.printTask.artworkName, "Task for Bearer token-session-a");
+  printing.props.onSelect();
+  const detail = named(render(), "PrintStatusDetailModal");
+  assert.equal(detail.props.onCancel, undefined);
+  const detailUi = detail.type(detail.props);
+  assert(!findElement(detailUi, ({ props }) => props.children === "출력 취소"));
+
+  const poll = async () => {
+    assert.equal(intervals.size, 1);
+    intervals.values().next().value();
+    await load();
+  };
+  nextReadStatus = 401;
+  await poll();
+  assert.deepEqual(refreshRequests, [{ method: "POST", authorization: "Bearer refresh-session-a" }]);
+  assert.deepEqual(printRequests.map(({ authorization }) => authorization), [
+    "Bearer token-session-a", "Bearer token-session-a", "Bearer renewed-session-a",
+  ]);
+  assert.equal(statusCard().props.printTask.artworkName, "Task for Bearer renewed-session-a");
+
+  const renewedA = storedSession;
+  const countBeforeBlockedPoll = printRequests.length;
+  storedSession = credentials("session-b");
+  await poll();
+  assert.equal(printRequests.length, countBeforeBlockedPoll, "A poll must not send the new account's token");
+  const blocked = named(render(), "PrintLoadState");
+  assert.equal(blocked.props.error, "auth");
+  storedSession = renewedA;
+  blocked.props.onRetry();
+  await load();
+  assert.equal(statusCard().props.printTask.artworkName, "Task for Bearer renewed-session-a");
+
+  holdNextRead = true;
+  await poll();
+  const pendingA = printRequests.at(-1);
+  const countBeforeSwitch = printRequests.length;
+  storedSession = credentials("session-b");
+  assert.equal(auth.apiSessionId, "session-a");
+  await poll();
+  assert.equal(printRequests.length, countBeforeSwitch, "A poll must not send the new account's token");
+  assert.equal(pendingA.signal.aborted, true, "A poll must abort the previous account's request");
+  assert.equal(statusCard(), undefined, "The stale view must clear the previous print");
+  assert(!named(render(), "PrintStatusDetailModal"));
+  assert.equal(intervals.size, 0);
+
+  auth.user = { id: "b", userId: "b", name: "Account B" };
+  auth.apiSessionId = "session-b";
+  responseStatus = "FAILED";
+  assert(!named(render(), "PrintStatusDetailModal"));
+  await load();
+  const failed = statusCard();
+  assert.equal(failed.props.printTask.status, "FAILED");
+  assert.equal(failed.props.printTask.artworkName, "Task for Bearer token-session-b");
+  assert(!findElement(failed.type(failed.props), ({ props }) => props.children === "다시 출력하기"));
+  finishRead(Response.json({ id: 7120, artworkName: "Late account A task", status: "PRINTING" }));
+  await load();
+  assert.equal(statusCard().props.printTask.artworkName, "Task for Bearer token-session-b");
+  clearPage();
+  holdNextRead = true;
+  assert(findElement(render(), ({ props }) => props.children === designNotice));
+  await load();
+  assert.equal(typeof finishRead, "function");
+  storedSession = credentials("session-b-new-login");
+  finishRead(Response.json({ id: 7120, artworkName: "Old session task", status: "PRINTING" }));
+  await load();
+  assert.equal(statusCard(), undefined, "A response must check storage even without a subsequent poll");
+  assert.equal(intervals.size, 0);
+
+  auth.apiSessionId = storedSession.id;
+  auth.isRestoring = true;
+  responseStatus = "COMPLETED";
+  const countBeforeRestore = printRequests.length;
+  render();
+  await load();
+  assert.equal(printRequests.length, countBeforeRestore);
+  auth.isRestoring = false;
+  storageUnavailable = true;
+  render();
+  await load();
+  assert.equal(printRequests.length, countBeforeRestore);
+  assert.equal(named(render(), "PrintLoadState").props.error, "auth");
+  storageUnavailable = false;
+  nextReadStatus = 503;
+  named(render(), "PrintLoadState").props.onRetry();
+  await load();
+  assert.equal(named(render(), "PrintLoadState").props.error, "request");
+  named(render(), "PrintLoadState").props.onRetry();
+  await load();
+  assert.equal(statusCard().props.printTask.status, "COMPLETED");
+  assert.equal(statusCard().props.printTask.artworkName, "Task for Bearer token-session-b-new-login");
+
+  clearPage();
+  responseStatus = "PRINTING";
+  render();
+  await load();
+  assert.equal(statusCard().props.printTask.status, "PRINTING");
+  holdNextRead = true;
+  await poll();
+  const pendingOnUnmount = printRequests.at(-1);
+  const countBeforeUnmount = printRequests.length;
+  await poll();
+  assert.equal(printRequests.length, countBeforeUnmount, "Polls must not overlap");
+  clearPage();
+  assert.equal(pendingOnUnmount.signal.aborted, true);
+  assert.equal(intervals.size, 0);
+  assert.equal(timeouts.size, 0);
+  finishRead(Response.json({ id: 7121, status: "COMPLETED" }));
+  await load();
+  assert.equal(mockDesignReads, 0);
+  assert(printRequests.every(({ method }) => method === "GET"));
+  assert.equal(refreshRequests.length, 1);
+  console.log("PASS MyPage session-bound polling, delayed storage events, late responses, token reissue, retry and cleanup; print writes=0");
+}
+
+async function verifyApiMutationSafety() {
+  const mutations = [];
+  const { print, mock, window } = await loadPrintRuntime({
+    baseUrl: "https://blocked-print.invalid",
+    fetchImpl: async (url, options) => {
+      mutations.push(options.method + " " + new URL(url).pathname);
+      return options.method === "DELETE"
+        ? new Response(null, { status: 204 })
+        : Response.json({ id: 7110, status: "PRINTING" }, { status: 201 });
+    },
+  });
+  window.location.search = "?mockPrintStatus=PRINTING";
+  window.localStorage.getItem = (key) => key === "piston-access-token" ? "fixture-access-token" : null;
+  mock.resetMockData("EMPTY");
+  const results = await Promise.allSettled([
+    print.createPrintTask("Fixture"),
+    print.retryPrintTask({ id: 7110, artworkName: "Fixture" }),
+    print.cancelPrintTask(7110),
+  ]);
+  assert.deepEqual(mutations, [], "API print mutations must stop before reaching fetch");
+  assert(results.every(({ status, reason }) => status === "rejected" && reason.message === "출력 기능 준비 중"));
+  assert.equal(await mock.fetchMockPrintStatus(), null);
+  console.log("PASS print adapter rejects create, retry and cancel in API mode; write requests=0");
 }
 
 async function verifyFrontendContracts() {
@@ -242,10 +585,7 @@ async function verifyApiAdapter() {
       const path = new URL(url).pathname;
       assert.equal(options.method, expected.method);
       assert.equal(path, expected.path);
-      if (expected.requestBody) {
-        assert.deepEqual(JSON.parse(options.body), expected.requestBody);
-        assert.equal(options.headers.get("Content-Type"), "application/json");
-      }
+      assert.equal(options.body, undefined);
       const status = expected.status ?? 200;
       requests.push({ method: options.method, path, status });
       return new Response(status === 204 ? null : JSON.stringify(expected.body), {
@@ -256,13 +596,8 @@ async function verifyApiAdapter() {
   const responseTask = {
     ...mock.MOCK_PRINT_STATUS_LIST[0], id: 7101, artworkName: "API contract artwork", progress: 0,
   };
-  const requestBody = { artworkName: responseTask.artworkName };
   pending.push({ method: "GET", path: "/api/prints/current", body: null });
   assert.equal(await print.getCurrentPrintTask(), null);
-  pending.push({ method: "POST", path: "/api/prints", status: 201, body: { data: responseTask }, requestBody });
-  const created = await print.createPrintTask(responseTask.artworkName);
-  assert.equal(created.id, responseTask.id);
-  assert.equal(created.status, "PRINTING");
 
   for (const status of ["PRINTING", "COMPLETED", "FAILED", "ERROR", "CANCELLED", "CANCELED", "EMPTY"]) {
     const body = { ...responseTask, id: "7101", status, progress: status === "COMPLETED" ? 100 : 38 };
@@ -273,32 +608,24 @@ async function verifyApiAdapter() {
     assert.equal(task.progress, body.progress);
   }
   const cancelled = { ...responseTask, status: "CANCELLED", failureReason: "User cancelled", stoppedAt: "14:02" };
-  pending.push({ method: "DELETE", path: "/api/prints/" + created.id, status: 204 });
-  await print.cancelPrintTask(created.id);
   pending.push({ method: "GET", path: "/api/prints/current", body: { data: cancelled } });
   const current = await print.getCurrentPrintTask();
   assert.equal(current.status, "CANCELLED");
   assert.equal(current.failureReason, cancelled.failureReason);
-  pending.push({ method: "POST", path: "/api/prints", body: { ...responseTask, id: 7102 }, requestBody });
-  const retried = await print.retryPrintTask(current);
-  assert.equal(retried.status, "PRINTING");
-  assert.equal(retried.artworkName, current.artworkName);
-  assert.notEqual(retried.id, created.id);
+  pending.push({ method: "GET", path: "/api/prints/current", body: { id: 7101, status: "PRINTING" } });
+  const unnamed = await print.getCurrentPrintTask();
+  assert.equal(unnamed.artworkName, "디자인 이름 확인 불가");
+  assert.equal(unnamed.modelUrl, undefined);
   pending.push({ method: "GET", path: "/api/prints/current", status: 204 });
   assert.equal(await print.getCurrentPrintTask(), null);
-  console.log("PASS API adapter POST/GET/DELETE by ID; retry uses POST /api/prints");
+  console.log("PASS API adapter reads current print status and handles empty responses");
 
   // HTTP errors must propagate even when URL parameters ask for a mock scenario.
   window.location.search = "?mockPrintStatus=PRINTING&mockError=print-create,print-cancel,print-retry";
   mock.resetMockData("EMPTY");
-  for (const [method, path, status, operation] of [
-    ["POST", "/api/prints", 401, () => print.createPrintTask()],
-    ["GET", "/api/prints/current", 404, () => print.getCurrentPrintTask()],
-    ["DELETE", "/api/prints/" + created.id, 403, () => print.cancelPrintTask(created.id)],
-    ["POST", "/api/prints", 500, () => print.retryPrintTask(current)],
-  ]) {
-    pending.push({ method, path, status, body: { message: "Expected failure" } });
-    await assert.rejects(operation, (error) => error.status === status);
+  for (const status of [401, 403, 404, 500]) {
+    pending.push({ method: "GET", path: "/api/prints/current", status, body: { message: "Expected failure" } });
+    await assert.rejects(() => print.getCurrentPrintTask(), (error) => error.status === status);
     assert.equal(await mock.fetchMockPrintStatus(), null);
   }
   assert.equal(pending.length, 0, "Not all expected requests were sent");
@@ -427,27 +754,8 @@ async function verifyLiveApi(baseUrl) {
       return response;
     },
   });
-  const initial = await print.getCurrentPrintTask();
-  assert(initial === null || initial.status === "EMPTY", "Test backend must start with no current task");
-  let activeTask;
-  try {
-    activeTask = await print.createPrintTask();
-    assert.equal(activeTask.status, "PRINTING");
-    const current = await print.getCurrentPrintTask();
-    assert.equal(current?.id, activeTask.id);
-    const previousTask = activeTask;
-    await print.cancelPrintTask(activeTask.id);
-    activeTask = null;
-    const cancelled = await print.getCurrentPrintTask();
-    assert(cancelled === null || ["EMPTY", "CANCELLED", "CANCELED"].includes(cancelled.status));
-    activeTask = await print.retryPrintTask(previousTask);
-    assert.equal(activeTask.status, "PRINTING");
-    assert.equal(activeTask.artworkName, previousTask.artworkName);
-    assert.notEqual(activeTask.id, previousTask.id);
-  } finally {
-    if (activeTask) await print.cancelPrintTask(activeTask.id);
-  }
-  console.log("PASS live API create/read/cancel/retry");
+  await print.getCurrentPrintTask();
+  console.log("PASS live API read-only print status");
 }
 
 async function main() {
@@ -460,6 +768,10 @@ async function main() {
   if (args.has("--api")) {
     await verifyLiveApi(process.env.PISTON_API_BASE_URL);
   } else {
+    const safetyChecks = await Promise.allSettled([verifyApiMutationSafety(), verifyMyPageSafety()]);
+    const failures = safetyChecks.filter((check) => check.status === "rejected");
+    assert.equal(failures.length, 0, failures.map(({ reason }) => reason.stack).join("\n"));
+    await verifyMyPageSafety(true);
     await verifyMockLifecycle();
     await verifyApiAdapter();
     await verifyTransportIsolation();

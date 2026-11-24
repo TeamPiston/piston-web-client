@@ -8,8 +8,8 @@ import { DemoNotice } from "@/shared/ui/demo-notice";
 
 interface PrintStatusDetailModalProps {
   filamentRemaining: string;
-  modelUrl: string;
-  onCancel: () => Promise<void>;
+  modelUrl?: string;
+  onCancel?: () => Promise<void>;
   onClose: () => void;
   printTask: PrintTask;
 }
@@ -23,6 +23,7 @@ export function PrintStatusDetailModal({
 }: PrintStatusDetailModalProps) {
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const isMock = isMockModeEnabled();
   const isPrinting = printTask.status === "PRINTING";
   const progress = Math.min(100, Math.max(0, printTask.progress));
 
@@ -44,7 +45,7 @@ export function PrintStatusDetailModal({
   }, [isCancelling, onClose]);
 
   const handleCancel = async () => {
-    if (isCancelling || !isPrinting) {
+    if (!onCancel || isCancelling || !isPrinting) {
       return;
     }
 
@@ -80,15 +81,13 @@ export function PrintStatusDetailModal({
         className="w-full max-w-[480px] rounded-3xl bg-white p-6 shadow-2xl"
         role="dialog"
       >
-        <DemoNotice isVisible={isMockModeEnabled()} className="mb-3">
+        <DemoNotice isVisible={isMock} className="mb-3">
           <p>화면에 표시된 출력 상태는 데모 데이터예요. 실제 프린터는 작동하지 않습니다.</p>
         </DemoNotice>
         <div className="relative flex h-[220px] items-center justify-center rounded-2xl bg-[#F7F7F8] p-5">
-          <ArtworkModelPreview
-            stlUrl={modelUrl}
-            variant="detail-compact"
-            showFullscreenControl={false}
-          />
+          {modelUrl && (
+            <ArtworkModelPreview stlUrl={modelUrl} variant="detail-compact" showFullscreenControl={false} />
+          )}
           <span
             className={[
               "absolute right-4 top-4 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold",
@@ -128,13 +127,13 @@ export function PrintStatusDetailModal({
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500">프린터 이름</dt>
             <dd className="text-right font-semibold text-gray-900">
-              {printTask.printerName || MOCK_ACCOUNT_SETTINGS.printerName}
+              {printTask.printerName || (isMock ? MOCK_ACCOUNT_SETTINGS.printerName : "정보 없음")}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500">출력 방식</dt>
             <dd className="text-right font-semibold text-gray-900">
-              {printTask.printingMethod || "FDM"}
+              {printTask.printingMethod || (isMock ? "FDM" : "정보 없음")}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -149,15 +148,17 @@ export function PrintStatusDetailModal({
           </p>
         )}
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => void handleCancel()}
-            disabled={!isPrinting || isCancelling}
-            className="h-12 rounded-xl border border-red-200 bg-white text-sm font-medium text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isCancelling ? "취소 중..." : "출력 취소"}
-          </button>
+        <div className={onCancel ? "mt-5 grid grid-cols-2 gap-2" : "mt-5 grid"}>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={() => void handleCancel()}
+              disabled={!isPrinting || isCancelling}
+              className="h-12 rounded-xl border border-red-200 bg-white text-sm font-medium text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isCancelling ? "취소 중..." : "출력 취소"}
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}

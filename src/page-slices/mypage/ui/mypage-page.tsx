@@ -3,7 +3,7 @@
 import { CircleUserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   cancelPrintTask,
   createPrintTask,
@@ -13,6 +13,8 @@ import {
   type PrintTask,
 } from "@/entities/print";
 import { AccountDeletionSessionChangedError, deleteCurrentAccount, useAuth } from "@/entities/session";
+import { ApiAuthPreflightError } from "@/shared/api";
+import { captureAuth } from "@/shared/api/auth";
 import {
   deleteMockDesign,
   fetchMockMyDesigns,
@@ -30,12 +32,16 @@ import { PrintRetryConfirmModal } from "./print-retry-confirm-modal";
 import { ApiPrinterManagementPage, PrinterManagementPage } from "./printer-management-page";
 import { PrintStatusDetailModal } from "./print-status-detail-modal";
 
+type PrintLoadError = "auth" | "request";
+type PrintReads = { pending: AbortController | null };
+
 export default function MyPage() {
   return <Suspense fallback={null}><MyPageContent /></Suspense>;
 }
 
 function MyPageContent() {
   const searchParams = useSearchParams();
+  const { apiSessionId, user } = useAuth();
   const isPrinterTab = searchParams.get("tab") === "printer";
   const isEmptyPreview = (isMockModeEnabled() || process.env.NODE_ENV !== "production") &&
     searchParams.get("empty") === "true";
@@ -51,7 +57,7 @@ function MyPageContent() {
           />
         ) : <ApiPrinterManagementPage />
       ) : (
-        <MyProfilePage />
+        <MyProfilePage key={isMockModeEnabled() ? user?.id : `${apiSessionId}:${user?.userId}`} />
       )}
     </div>
   );
@@ -59,13 +65,16 @@ function MyPageContent() {
 
 function MyProfilePage() {
   const router = useRouter();
-  const { apiSessionId, logout, user } = useAuth();
+  const { apiSessionId, isLoggedIn, isRestoring, logout, user } = useAuth();
+  const userId = user?.userId;
+  const isMock = isMockModeEnabled();
+  const printReads = useRef<PrintReads | null>(null);
   const [printTask, setPrintTask] = useState<PrintTask | null | undefined>(undefined);
   const [selectedPrintTask, setSelectedPrintTask] = useState<PrintTask | null>(null);
   const [isRetryModalOpen, setIsRetryModalOpen] = useState(false);
   const [isPrintLoading, setIsPrintLoading] = useState(true);
-  const [hasPrintLoadError, setHasPrintLoadError] = useState(false);
-  const [createdDesigns, setCreatedDesigns] = useState<MyDesign[]>(MOCK_MY_DESIGNS);
+  const [printLoadError, setPrintLoadError] = useState<PrintLoadError | null>(null);
+  const [createdDesigns, setCreatedDesigns] = useState<MyDesign[]>(() => isMock ? MOCK_MY_DESIGNS : []);
   const [selectedDesign, setSelectedDesign] = useState<MyDesign | null>(null);
   const [deletionConfirmation, setDeletionConfirmation] = useState<"mock" | {
     userId: string;
@@ -77,6 +86,8 @@ function MyProfilePage() {
   const closeDesignModal = useCallback(() => setSelectedDesign(null), []);
 
   useEffect(() => {
+    if (!isMock) return;
+
     let isMounted = true;
     void fetchMockMyDesigns().then((designs) => {
       if (isMounted) {
@@ -87,10 +98,10 @@ function MyProfilePage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isMock]);
 
   const openDeleteConfirmation = () => {
-    if (isMockModeEnabled()) {
+    if (isMock) {
       setDeletionConfirmation("mock");
     } else if (user?.userId && apiSessionId) {
       setDeletionConfirmation({ userId: user.userId, sessionId: apiSessionId });
@@ -107,26 +118,66 @@ function MyProfilePage() {
   };
 
   const loadCurrentPrint = useCallback(async () => {
-    try {
-      const nextPrintTask = await getCurrentPrintTask();
-      setPrintTask(nextPrintTask);
-      setSelectedPrintTask((selectedTask) =>
-        selectedTask && selectedTask.id === nextPrintTask?.id ? nextPrintTask : null,
-      );
-      setHasPrintLoadError(false);
-    } catch {
-      setHasPrintLoadError(true);
-    } finally {
+    const reads = printReads.current;
+    if (!reads || (!isMock && (!isLoggedIn || isRestoring || !userId || !apiSessionId))) return;
+
+    const showAuthError = () => {
+      setPrintTask(undefined);
+      setSelectedPrintTask(null);
+      setPrintLoadError("auth");
       setIsPrintLoading(false);
+    };
+    const snapshot = isMock ? undefined : captureAuth();
+    if (!isMock && (!snapshot?.accessToken || snapshot.session?.id !== apiSessionId)) {
+      reads.pending?.abort();
+      reads.pending = null;
+      showAuthError();
+      return;
     }
-  }, []);
+
+    if (reads.pending) return;
+    const controller = new AbortController();
+    reads.pending = controller;
+    let result: { task: PrintTask | null } | { error: PrintLoadError };
+    try {
+      result = { task: await getCurrentPrintTask(controller.signal, snapshot) };
+    } catch (error) {
+      result = { error: error instanceof ApiAuthPreflightError ? "auth" : "request" };
+    }
+
+    if (printReads.current !== reads || reads.pending !== controller || controller.signal.aborted) return;
+    reads.pending = null;
+    // A different tab can replace the stored session before the provider receives the storage event.
+    if ((!isMock && captureAuth().session?.id !== apiSessionId) || ("error" in result && result.error === "auth")) {
+      showAuthError();
+      return;
+    }
+
+    if ("error" in result) {
+      setPrintLoadError(result.error);
+    } else {
+      const { task } = result;
+      setPrintTask(task);
+      setSelectedPrintTask((selectedTask) =>
+        selectedTask && selectedTask.id === task?.id ? task : null,
+      );
+      setPrintLoadError(null);
+    }
+    setIsPrintLoading(false);
+  }, [apiSessionId, isLoggedIn, isMock, isRestoring, userId]);
 
   useEffect(() => {
+    const reads: PrintReads = { pending: null };
+    printReads.current = reads;
     const initialLoadId = window.setTimeout(() => {
       void loadCurrentPrint();
     }, 0);
 
-    return () => window.clearTimeout(initialLoadId);
+    return () => {
+      window.clearTimeout(initialLoadId);
+      printReads.current = null;
+      reads.pending?.abort();
+    };
   }, [loadCurrentPrint]);
 
   useEffect(() => {
@@ -141,23 +192,14 @@ function MyProfilePage() {
     return () => window.clearInterval(pollingId);
   }, [loadCurrentPrint, printTask?.status]);
 
-  const displayProfile = isMockModeEnabled() && (!user || user.id === "admin") ? MOCK_ACCOUNT_PROFILE : user;
-  const selectedPrintDesign = selectedPrintTask
-    ? createdDesigns.find((design) => design.title === selectedPrintTask.artworkName)
-    : undefined;
-  const selectedPrintModelUrl = selectedPrintTask?.modelUrl ??
-    selectedPrintDesign?.stlUrl ??
-    (selectedPrintTask?.artworkName === PRINT_ARTWORK_NAME
-      ? "/models/pencil-holder.stl"
-      : "/models/cube.stl");
-  const printDesign = printTask
-    ? createdDesigns.find((design) => design.title === printTask.artworkName)
-    : undefined;
-  const printModelUrl = printTask?.modelUrl ??
-    printDesign?.stlUrl ??
-    (printTask?.artworkName === PRINT_ARTWORK_NAME
-      ? "/models/pencil-holder.stl"
-      : "/models/cube.stl");
+  const displayProfile = isMock && (!user || user.id === "admin") ? MOCK_ACCOUNT_PROFILE : user;
+  const getPrintModelUrl = (task: PrintTask) => {
+    if (!isMock || task.modelUrl) return task.modelUrl;
+
+    const design = createdDesigns.find(({ title }) => title === task.artworkName);
+    return design?.stlUrl ??
+      (task.artworkName === PRINT_ARTWORK_NAME ? "/models/pencil-holder.stl" : "/models/cube.stl");
+  };
 
   return (
     <>
@@ -203,7 +245,7 @@ function MyProfilePage() {
 
         {printTask === undefined && (
           <PrintLoadState
-            hasError={hasPrintLoadError}
+            error={printLoadError}
             isLoading={isPrintLoading}
             onRetry={() => {
               setIsPrintLoading(true);
@@ -214,57 +256,65 @@ function MyProfilePage() {
         {(printTask === null || printTask?.status === "EMPTY") && <EmptyPrintState />}
         {printTask && printTask.status !== "EMPTY" && (
           <PrintStatusSection
-            modelUrl={printModelUrl}
+            modelUrl={getPrintModelUrl(printTask)}
             printTask={printTask}
             onSelect={() => setSelectedPrintTask(printTask)}
-            onRetry={() => setIsRetryModalOpen(true)}
+            onRetry={isMock ? () => setIsRetryModalOpen(true) : undefined}
           />
         )}
-        <CreatedDesignSection
-          designs={createdDesigns}
-          onSelect={setSelectedDesign}
-        />
+        {isMock ? (
+          <CreatedDesignSection designs={createdDesigns} onSelect={setSelectedDesign} />
+        ) : (
+          <section className="mt-14 pb-12">
+            <h2 className="text-xl font-bold text-gray-950">내가 만든 디자인</h2>
+            <p className="mt-6 rounded-2xl border border-gray-300 bg-white px-5 py-4 text-sm text-gray-500">
+              디자인 관리 기능 준비 중
+            </p>
+          </section>
+        )}
       </main>
-      <DesignDetailModal
-        design={selectedDesign}
-        onClose={closeDesignModal}
-        onDelete={(designId) => {
-          void deleteMockDesign(designId);
-          setCreatedDesigns((designs) => designs.filter((design) => design.id !== designId));
-          setSelectedDesign(null);
-        }}
-        onPrint={async (artworkName) => {
-          const nextPrintTask = await createPrintTask(artworkName);
-          setPrintTask(nextPrintTask);
-        }}
-        onTogglePublished={(designId) => {
-          void toggleMockDesignPublish(designId).then((nextDesign) => {
-            if (!nextDesign) {
-              return;
-            }
+      {isMock && (
+        <DesignDetailModal
+          design={selectedDesign}
+          onClose={closeDesignModal}
+          onDelete={(designId) => {
+            void deleteMockDesign(designId);
+            setCreatedDesigns((designs) => designs.filter((design) => design.id !== designId));
+            setSelectedDesign(null);
+          }}
+          onPrint={async (artworkName) => {
+            const nextPrintTask = await createPrintTask(artworkName);
+            setPrintTask(nextPrintTask);
+          }}
+          onTogglePublished={(designId) => {
+            void toggleMockDesignPublish(designId).then((nextDesign) => {
+              if (!nextDesign) {
+                return;
+              }
 
-            setCreatedDesigns((designs) =>
-              designs.map((design) => design.id === designId ? nextDesign : design),
-            );
-            setSelectedDesign((design) => design?.id === designId ? nextDesign : design);
-          });
-        }}
-      />
-      {selectedPrintTask && (
-        <PrintStatusDetailModal
-          printTask={selectedPrintTask}
-          modelUrl={selectedPrintModelUrl}
-          filamentRemaining={selectedPrintTask.filamentRemaining ?? "정보 없음"}
-          onClose={() => setSelectedPrintTask(null)}
-          onCancel={async () => {
-            await cancelPrintTask(selectedPrintTask.id);
-            setPrintTask(null);
-            setSelectedPrintTask(null);
-            setHasPrintLoadError(false);
+              setCreatedDesigns((designs) =>
+                designs.map((design) => design.id === designId ? nextDesign : design),
+              );
+              setSelectedDesign((design) => design?.id === designId ? nextDesign : design);
+            });
           }}
         />
       )}
-      {printTask && isRetryModalOpen && isFailedPrint(printTask.status) && (
+      {selectedPrintTask && (
+        <PrintStatusDetailModal
+          printTask={selectedPrintTask}
+          modelUrl={getPrintModelUrl(selectedPrintTask)}
+          filamentRemaining={selectedPrintTask.filamentRemaining ?? "정보 없음"}
+          onClose={() => setSelectedPrintTask(null)}
+          onCancel={isMock ? async () => {
+            await cancelPrintTask(selectedPrintTask.id);
+            setPrintTask(null);
+            setSelectedPrintTask(null);
+            setPrintLoadError(null);
+          } : undefined}
+        />
+      )}
+      {isMock && printTask && isRetryModalOpen && isFailedPrint(printTask.status) && (
         <PrintRetryConfirmModal
           printTask={printTask}
           onClose={() => setIsRetryModalOpen(false)}
@@ -272,7 +322,7 @@ function MyProfilePage() {
             const nextPrintTask = await retryPrintTask(printTask);
             setPrintTask(nextPrintTask);
             setIsRetryModalOpen(false);
-            setHasPrintLoadError(false);
+            setPrintLoadError(null);
           }}
         />
       )}
@@ -292,9 +342,9 @@ function PrintStatusSection({
   onRetry,
   printTask,
 }: {
-  modelUrl: string;
+  modelUrl?: string;
   onSelect: () => void;
-  onRetry: () => void;
+  onRetry?: () => void;
   printTask: PrintTask;
 }) {
   const isFailed = isFailedPrint(printTask.status);
@@ -319,14 +369,12 @@ function PrintStatusSection({
       <DemoNotice isVisible={isMockModeEnabled()} className="mt-2">
         <p>화면에 표시된 출력 상태는 데모 데이터예요. 실제 프린터는 작동하지 않습니다.</p>
       </DemoNotice>
+      {!onRetry && <p className="mt-2 text-sm text-gray-500">출력 기능 준비 중 · 현재 상태만 확인할 수 있어요.</p>}
       <article className="mt-6 flex w-full flex-col gap-6 rounded-2xl border border-gray-300 bg-white p-6 sm:flex-row sm:items-center sm:p-7">
         <div className="h-40 w-full shrink-0 overflow-hidden rounded-xl bg-[#f6f6f6] sm:w-40" aria-hidden="true">
-          <ArtworkModelPreview
-            stlUrl={modelUrl}
-            variant="detail-compact"
-            showFullscreenControl={false}
-            static
-          />
+          {modelUrl && (
+            <ArtworkModelPreview stlUrl={modelUrl} variant="detail-compact" showFullscreenControl={false} static />
+          )}
         </div>
         {isFailed ? (
           <div className="min-w-0 flex-1">{content}</div>
@@ -340,7 +388,7 @@ function PrintStatusSection({
             {content}
           </button>
         )}
-        {isFailed && (
+        {isFailed && onRetry && (
           <div className="flex shrink-0 flex-col items-start sm:items-end">
             <button
               type="button"
@@ -442,20 +490,24 @@ function formatStoppedTime(value?: string) {
 }
 
 function PrintLoadState({
-  hasError,
+  error,
   isLoading,
   onRetry,
 }: {
-  hasError: boolean;
+  error: PrintLoadError | null;
   isLoading: boolean;
   onRetry: () => void;
 }) {
+  const message = {
+    auth: "로그인 상태를 확인하지 못했어요",
+    request: "출력 상태를 불러오지 못했어요",
+  };
   return (
     <section className="mt-24 flex min-h-[315px] flex-col items-center justify-center rounded-2xl bg-[#f6f6f6] px-6 text-center">
       <h2 className="text-xl font-bold text-gray-950">
-        {hasError ? "출력 상태를 불러오지 못했어요" : "출력 상태를 불러오는 중이에요"}
+        {error ? message[error] : "출력 상태를 불러오는 중이에요"}
       </h2>
-      {hasError && (
+      {error && (
         <button
           type="button"
           onClick={onRetry}
