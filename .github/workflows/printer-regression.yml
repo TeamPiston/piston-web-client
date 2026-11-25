@@ -35,4 +35,6 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Verify printer management
-        run: npm run test:printer
+        run: |
+          sudo unshare --net -- setpriv --reuid "$(id -u)" --regid "$(id -g)" --init-groups --no-new-privs \
+            env "PATH=$PATH" "HOME=$HOME" npm run test:printer
