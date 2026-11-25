@@ -1,0 +1,7 @@
+// Offline CSS for CI builds. Application and Vercel builds use the normal fonts.
+module.exports = {
+  "https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap":
+    "@font-face { font-family: 'Geist'; font-style: normal; font-weight: 100 900; src: local('Arial'); }",
+  "https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap":
+    "@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 100 900; src: local('Courier New'); }",
+};
