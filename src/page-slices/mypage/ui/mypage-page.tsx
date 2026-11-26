@@ -43,6 +43,7 @@ function MyPageContent() {
   const searchParams = useSearchParams();
   const { apiSessionId, user } = useAuth();
   const isPrinterTab = searchParams.get("tab") === "printer";
+  const mockPrintScenario = isMockModeEnabled() ? searchParams.get("mockPrintStatus") : null;
   const isEmptyPreview = (isMockModeEnabled() || process.env.NODE_ENV !== "production") &&
     searchParams.get("empty") === "true";
 
@@ -57,7 +58,7 @@ function MyPageContent() {
           />
         ) : <ApiPrinterManagementPage />
       ) : (
-        <MyProfilePage key={isMockModeEnabled() ? user?.id : `${apiSessionId}:${user?.userId}`} />
+        <MyProfilePage key={isMockModeEnabled() ? `${user?.id}:${mockPrintScenario}` : `${apiSessionId}:${user?.userId}`} />
       )}
     </div>
   );
@@ -69,6 +70,10 @@ function MyProfilePage() {
   const userId = user?.userId;
   const isMock = isMockModeEnabled();
   const printReads = useRef<PrintReads | null>(null);
+  const deleteAccountButton = useRef<HTMLButtonElement>(null);
+  const printDetailsButton = useRef<HTMLButtonElement>(null);
+  const printSectionHeading = useRef<HTMLHeadingElement>(null);
+  const getPrintFocusFallback = useCallback(() => [printSectionHeading.current], []);
   const [printTask, setPrintTask] = useState<PrintTask | null | undefined>(undefined);
   const [selectedPrintTask, setSelectedPrintTask] = useState<PrintTask | null>(null);
   const [isRetryModalOpen, setIsRetryModalOpen] = useState(false);
@@ -235,6 +240,7 @@ function MyProfilePage() {
             </button>
             <button
               type="button"
+              ref={deleteAccountButton}
               onClick={openDeleteConfirmation}
               className="h-11 rounded-lg border border-gray-300 px-4 text-sm font-medium text-red-500 transition-colors hover:bg-red-50"
             >
@@ -253,11 +259,20 @@ function MyProfilePage() {
             }}
           />
         )}
+        {isMock && printTask?.persistenceWarning && (
+          <p className="mt-2 text-sm text-gray-600" role="status">
+            {printTask.persistenceWarning === "snapshot-removed"
+              ? "출력 상태를 저장하지 못했어요. 이 탭에서는 변경 사항이 유지되며, 새로고침하면 작업이 복원되지 않아요."
+              : "출력 상태를 저장하지 못했어요. 새로고침하면 이전 출력 상태가 다시 표시될 수 있어요."}
+          </p>
+        )}
         {(printTask === null || printTask?.status === "EMPTY") && <EmptyPrintState />}
         {printTask && printTask.status !== "EMPTY" && (
           <PrintStatusSection
             modelUrl={getPrintModelUrl(printTask)}
             printTask={printTask}
+            headingRef={printSectionHeading}
+            detailsButtonRef={printDetailsButton}
             onSelect={() => setSelectedPrintTask(printTask)}
             onRetry={isMock ? () => setIsRetryModalOpen(true) : undefined}
           />
@@ -303,12 +318,14 @@ function MyProfilePage() {
       {selectedPrintTask && (
         <PrintStatusDetailModal
           printTask={selectedPrintTask}
+          returnFocusRef={printDetailsButton}
+          getFallbackFocusTargets={getPrintFocusFallback}
           modelUrl={getPrintModelUrl(selectedPrintTask)}
           filamentRemaining={selectedPrintTask.filamentRemaining ?? "정보 없음"}
           onClose={() => setSelectedPrintTask(null)}
           onCancel={isMock ? async () => {
-            await cancelPrintTask(selectedPrintTask.id);
-            setPrintTask(null);
+            const cancelled = await cancelPrintTask(selectedPrintTask.id);
+            setPrintTask(cancelled ?? await getCurrentPrintTask());
             setSelectedPrintTask(null);
             setPrintLoadError(null);
           } : undefined}
@@ -328,6 +345,7 @@ function MyProfilePage() {
       )}
       <DeleteAccountModal
         isOpen={deletionConfirmation !== null}
+        returnFocusRef={deleteAccountButton}
         blockedMessage={deletionSessionChanged ? new AccountDeletionSessionChangedError().message : undefined}
         onClose={() => setDeletionConfirmation(null)}
         onConfirm={handleDeleteAccount}
@@ -337,11 +355,15 @@ function MyProfilePage() {
 }
 
 function PrintStatusSection({
+  detailsButtonRef,
+  headingRef,
   modelUrl,
   onSelect,
   onRetry,
   printTask,
 }: {
+  detailsButtonRef: React.RefObject<HTMLButtonElement | null>;
+  headingRef: React.RefObject<HTMLHeadingElement | null>;
   modelUrl?: string;
   onSelect: () => void;
   onRetry?: () => void;
@@ -365,7 +387,7 @@ function PrintStatusSection({
 
   return (
     <section className="mt-12">
-      <h2 className="text-xl font-bold text-gray-950">내 출력</h2>
+      <h2 ref={headingRef} tabIndex={-1} className="text-xl font-bold text-gray-950">내 출력</h2>
       <DemoNotice isVisible={isMockModeEnabled()} className="mt-2">
         <p>화면에 표시된 출력 상태는 데모 데이터예요. 실제 프린터는 작동하지 않습니다.</p>
       </DemoNotice>
@@ -381,6 +403,7 @@ function PrintStatusSection({
         ) : (
           <button
             type="button"
+            ref={detailsButtonRef}
             onClick={onSelect}
             aria-label={`${printTask.artworkName} 출력 현황 상세 보기`}
             className="min-w-0 flex-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5C7CFF]"

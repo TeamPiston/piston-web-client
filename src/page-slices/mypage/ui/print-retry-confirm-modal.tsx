@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { PrintTask } from "@/entities/print";
-import { isMockModeEnabled, MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
+import { usePrinterQuery } from "@/entities/printer";
+import { getMockRetryPrinter, isMockModeEnabled, MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
 import { DemoNotice } from "@/shared/ui/demo-notice";
 
 interface PrintRetryConfirmModalProps {
@@ -21,6 +22,9 @@ export function PrintRetryConfirmModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasColorFilament, setHasColorFilament] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { printers } = usePrinterQuery();
+  const printer = getMockRetryPrinter(printTask, printers);
+  const isPrinterConnected = printer?.connectionStatus === "connected";
   const stoppedTime = formatStoppedTime(printTask.stoppedAt);
   const filamentRemaining = printTask.filamentRemaining ?? MOCK_ACCOUNT_SETTINGS.filamentRemaining;
 
@@ -42,7 +46,7 @@ export function PrintRetryConfirmModal({
   }, [isSubmitting, onClose]);
 
   const handleConfirm = async () => {
-    if (isSubmitting) {
+    if (isSubmitting || !isPrinterConnected) {
       return;
     }
 
@@ -104,7 +108,9 @@ export function PrintRetryConfirmModal({
           <ChecklistItem title="잔여물 정리" description="이전 출력물이나 잔여물이 남아 있지 않은지" />
           <ChecklistItem
             title="프린터 연결"
-            description={`${printTask.printerName ?? MOCK_ACCOUNT_SETTINGS.printerName} · 연결됨`}
+            description={printer
+              ? `${printer.name} · ${isPrinterConnected ? "연결됨" : "연결 끊김"}`
+              : "이 작업에 사용한 프린터가 목록에 없어요."}
           />
           <div className="flex items-start gap-3">
             <input
@@ -153,7 +159,7 @@ export function PrintRetryConfirmModal({
           <button
             type="button"
             onClick={() => void handleConfirm()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !isPrinterConnected}
             className="h-12 flex-1 rounded-xl bg-[#5C7CFF] text-sm font-bold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "출력 시작 중..." : "점검했어요, 출력 시작"}

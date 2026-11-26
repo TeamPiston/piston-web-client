@@ -5,11 +5,12 @@ import { useEffect, useRef, type RefObject, type SyntheticEvent } from "react";
 interface NativeDialogOptions {
   isOpen?: boolean;
   onClose: () => void;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   getFallbackFocusTargets?: () => readonly (HTMLElement | null)[];
 }
 
-function focusIfAvailable(element: Element | null) {
+function isAvailable(element: Element | null): element is HTMLElement {
   if (
     !(element instanceof HTMLElement) || element === document.body ||
     !element.isConnected || element.matches(":disabled") ||
@@ -17,9 +18,35 @@ function focusIfAvailable(element: Element | null) {
   ) return false;
 
   const { visibility } = getComputedStyle(element);
-  if (visibility === "hidden" || visibility === "collapse") return false;
+  return visibility !== "hidden" && visibility !== "collapse";
+}
+
+function focusIfAvailable(element: Element | null) {
+  if (!isAvailable(element)) return false;
   element.focus({ preventScroll: true });
   return document.activeElement === element;
+}
+
+const tabbableSelector = "a[href], button, input:not([type=hidden]), select, textarea, summary, [tabindex], [contenteditable=true]";
+
+function trapTab(event: KeyboardEvent) {
+  if (event.key !== "Tab" || event.defaultPrevented) return;
+
+  const dialog = event.currentTarget as HTMLDialogElement;
+  const stops = Array.from(dialog.querySelectorAll<HTMLElement>(tabbableSelector))
+    .filter((element) => element.tabIndex >= 0 && isAvailable(element));
+  const first = stops[0];
+  const last = stops.at(-1);
+  const active = document.activeElement;
+
+  if (!first || !last) {
+    // A pending submission can temporarily disable every action.
+    event.preventDefault();
+    if (!dialog.contains(active)) dialog.focus({ preventScroll: true });
+  } else if (!stops.some((element) => element === active) || active === (event.shiftKey ? first : last)) {
+    event.preventDefault();
+    focusIfAvailable(event.shiftKey ? last : first);
+  }
 }
 
 // Multiple native dialogs may overlap; restore scrolling only after the last closes.
@@ -27,7 +54,7 @@ let openDialogs = 0;
 let originalOverflow = "";
 
 export function useNativeDialog({
-  isOpen = true, onClose, returnFocusRef, getFallbackFocusTargets,
+  isOpen = true, onClose, initialFocusRef, returnFocusRef, getFallbackFocusTargets,
 }: NativeDialogOptions) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -37,10 +64,13 @@ export function useNativeDialog({
 
     const returnTarget = returnFocusRef?.current ?? document.activeElement;
     dialog.showModal();
+    dialog.addEventListener("keydown", trapTab);
+    if (initialFocusRef?.current) focusIfAvailable(initialFocusRef.current);
     if (openDialogs++ === 0) originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
+      dialog.removeEventListener("keydown", trapTab);
       dialog.close();
       if (--openDialogs === 0) document.body.style.overflow = originalOverflow;
       if (!focusIfAvailable(returnTarget)) {
@@ -49,7 +79,7 @@ export function useNativeDialog({
         }
       }
     };
-  }, [isOpen, returnFocusRef, getFallbackFocusTargets]);
+  }, [isOpen, initialFocusRef, returnFocusRef, getFallbackFocusTargets]);
 
   const onCancel = (event: SyntheticEvent<HTMLDialogElement>) => {
     event.preventDefault();

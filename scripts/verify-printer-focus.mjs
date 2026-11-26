@@ -16,7 +16,7 @@ const source = ts.transpileModule(readFileSync(path, "utf8"), {
 
 // Simulate DOM focus and the passive-effect cleanup after DOM removal.
 // Native browser focus trapping and React commit scheduling are not emulated.
-function modalHarness({ print = false } = {}) {
+function modalHarness({ print = false, myPage = null } = {}) {
   const document = { activeElement: null, body: { style: { overflow: "auto" } } };
   class Element {
     isConnected = true;
@@ -26,6 +26,10 @@ function modalHarness({ print = false } = {}) {
     visibility = "visible";
     focusable = true;
     focusCalls = 0;
+    tabIndex = 0;
+    listeners = new Map();
+    addEventListener(type, handler) { this.listeners.set(type, handler); }
+    removeEventListener(type) { this.listeners.delete(type); }
     matches() { return this.disabled; }
     closest() { return this.hidden || this.inert ? this : null; }
     getClientRects() { return this.hidden ? [] : [{}]; }
@@ -57,17 +61,24 @@ function modalHarness({ print = false } = {}) {
     new Script(compiled, { filename: modulePath }).runInNewContext({ ...globals, exports, require(specifier) {
       if (specifier === "@/shared/mock/mock-data") return { isMockModeEnabled: () => true };
       if (specifier === "react/jsx-runtime") return { jsx, jsxs: jsx };
-      if (specifier === "@/shared/ui") return load(fileURLToPath(new URL("../src/shared/ui/use-native-dialog.ts", import.meta.url)));
+      if (specifier === "@/shared/ui/demo-notice") return { DemoNotice: "DemoNotice" };
+      if (specifier === "@/features/stl-viewer") return { ArtworkModelPreview: "ArtworkModelPreview" };
+      if (specifier === "@/entities/session") return { AccountDeletionSessionChangedError: class extends Error {} };
+      if (specifier === "@/shared/ui" || specifier === "@/shared/ui/use-native-dialog") return load(fileURLToPath(new URL("../src/shared/ui/use-native-dialog.ts", import.meta.url)));
       if (specifier === "lucide-react") return { X: "X" };
       assert.equal(specifier, "react");
       return react;
     } });
     return exports;
   }
-  const exports = load(print ? fileURLToPath(new URL("../src/features/print-artwork/ui/print-settings-modal.tsx", import.meta.url)) : path);
+  const exports = load(myPage
+    ? fileURLToPath(new URL("../src/page-slices/mypage/ui/" + myPage + ".tsx", import.meta.url))
+    : print ? fileURLToPath(new URL("../src/features/print-artwork/ui/print-settings-modal.tsx", import.meta.url)) : path);
   return {
     document,
     element: () => new Element(),
+    effects,
+    exports,
     mount(previous, getFallbackFocusTargets, returnFocusRef) {
       const dialog = new Element();
       let opened = false;
@@ -185,3 +196,91 @@ const closeUpper = stacked.mount(stacked.element());
 closeUpper("hidden");
 closeLower("clip");
 console.log("PASS shared dialog scroll lock remains owned until the last overlapping dialog closes");
+
+function flatten(tree) {
+  if (Array.isArray(tree)) return tree.flatMap(flatten);
+  if (!tree?.props) return [];
+  return [tree, ...flatten(tree.props.children)];
+}
+
+for (const isAccount of [true, false]) {
+  const ui = modalHarness({ myPage: isAccount ? "delete-account-modal" : "print-status-detail-modal" });
+  const render = isAccount ? ui.exports.DeleteAccountModal : ui.exports.PrintStatusDetailModal;
+  const trigger = ui.element();
+  const fallback = ui.element();
+  const dialog = ui.element();
+  const firstFocus = ui.element();
+  const title = ui.element();
+  let closes = 0;
+  let submissions = 0;
+  let resolveSubmission;
+  const submit = () => {
+    submissions += 1;
+    return new Promise((resolve) => { resolveSubmission = resolve; });
+  };
+  const props = {
+    isOpen: true, onClose: () => { closes += 1; }, returnFocusRef: { current: trigger },
+    onConfirm: submit, onCancel: submit, getFallbackFocusTargets: () => [fallback],
+    printTask: { artworkName: "Example", printerName: "Demo", status: "PRINTING", progress: 10, remainingMinutes: 20 },
+  };
+  const tree = render(props);
+  assert.equal(tree.type, "dialog", "The browser must contain focus in a native modal");
+  const items = flatten(tree);
+  const titleNode = items.find((node) => node.type === "h2");
+  assert.equal(tree.props["aria-labelledby"], titleNode.props.id);
+  assert(items.some((node) => node.props.id === tree.props["aria-describedby"]));
+  titleNode.props.ref.current = title;
+  const buttons = items.filter((node) => node.type === "button");
+  const confirm = buttons.find((node) => node.props.children === (isAccount ? "탈퇴하기" : "출력 취소"));
+  const safe = buttons.find((node) => node.props.children === (isAccount ? "취소" : "확인"));
+  safe.props.ref.current = firstFocus;
+  tree.props.ref.current = dialog;
+  dialog.showModal = () => { ui.document.activeElement = dialog; };
+  dialog.close = () => { ui.document.activeElement = ui.document.body; };
+  const cleanup = ui.effects.pop()();
+  assert.equal(ui.document.activeElement, firstFocus);
+  assert.equal(ui.document.body.style.overflow, "hidden");
+  const other = ui.element();
+  dialog.querySelectorAll = () => [firstFocus, other];
+  dialog.contains = (element) => [firstFocus, other, title].includes(element);
+  const pressTab = (shiftKey) => {
+    let prevented = false;
+    dialog.listeners.get("keydown")({
+      key: "Tab", currentTarget: dialog, shiftKey,
+      preventDefault() { prevented = true; },
+    });
+    assert.equal(prevented, true);
+  };
+  pressTab(true);
+  assert.equal(ui.document.activeElement, other);
+  pressTab(false);
+  assert.equal(ui.document.activeElement, firstFocus);
+  other.disabled = true;
+  pressTab(false);
+  pressTab(true);
+  assert.equal(ui.document.activeElement, firstFocus);
+  confirm.props.onClick();
+  confirm.props.onClick();
+  assert.equal(submissions, 1, "Synchronous duplicate activation must be blocked");
+  assert.equal(ui.document.activeElement, title, "Focus must stay in the dialog while buttons are disabled");
+  firstFocus.disabled = true;
+  pressTab(false);
+  pressTab(true);
+  assert.equal(ui.document.activeElement, title);
+  let prevented = 0;
+  const escape = () => tree.props.onCancel({ preventDefault: () => { prevented += 1; } });
+  escape();
+  assert.equal(closes, 0, "Escape must not dismiss a pending operation");
+  resolveSubmission();
+  await new Promise(setImmediate);
+  escape();
+  assert.equal(closes, 1);
+  assert.equal(prevented, 2);
+  if (!isAccount) trigger.isConnected = false;
+  cleanup();
+  assert.equal(dialog.listeners.has("keydown"), false);
+  assert.equal(ui.document.activeElement, isAccount ? trigger : fallback);
+  assert.equal(ui.document.body.style.overflow, "auto");
+}
+
+console.log("PASS MyPage dialogs: native semantics, safe initial focus, Escape, busy guard, opener/fallback focus, and scroll restoration");

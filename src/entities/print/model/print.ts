@@ -7,6 +7,7 @@ import {
   isMockModeEnabled,
   retryMockPrint,
   withMockFallback,
+  type MockPrintPersistenceWarning,
 } from "@/shared/mock/mock-data";
 
 export const PRINT_USER_ID = "demo-user";
@@ -26,7 +27,9 @@ export interface PrintTask {
   userId: string;
   artworkName: string;
   modelUrl?: string;
+  printerId?: string;
   printerName?: string;
+  persistenceWarning?: MockPrintPersistenceWarning;
   printingMethod?: string;
   filamentRemaining?: string;
   failureReason?: string;
@@ -140,7 +143,7 @@ export async function getCurrentPrintTask(signal?: AbortSignal, authSnapshot?: A
 
 export async function cancelPrintTask(printTaskId: number) {
   requireMockPrintActions();
-  await cancelMockPrint(printTaskId);
+  return cancelMockPrint(printTaskId);
 }
 
 export async function retryPrintTask(printTask: PrintTask) {

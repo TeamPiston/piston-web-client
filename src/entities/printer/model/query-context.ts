@@ -9,6 +9,7 @@ export interface PrinterQueryValue {
   readonly isPrinterConnected: boolean;
   readonly printStatus: PrintStatus;
   readonly printJob: PrintJob | null;
+  readonly hasActivePrint: boolean;
 }
 
 export const PrinterQueryContext = createContext<PrinterQueryValue | null>(null);
