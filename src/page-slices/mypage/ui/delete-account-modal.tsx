@@ -1,45 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
+import { useNativeDialog } from "@/shared/ui/use-native-dialog";
 import { AccountDeletionSessionChangedError } from "@/entities/session";
 
 interface DeleteAccountModalProps {
   isOpen: boolean;
   blockedMessage?: string;
   onClose: () => void;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
   onConfirm: () => Promise<void>;
 }
 
-export function DeleteAccountModal({ isOpen, blockedMessage, onClose, onConfirm }: DeleteAccountModalProps) {
+export function DeleteAccountModal({ isOpen, blockedMessage, onClose, onConfirm, returnFocusRef }: DeleteAccountModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitting = useRef(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isSubmitting) {
-        setErrorMessage(null);
-        onClose();
-      }
-    };
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, isSubmitting, onClose]);
-
-  if (!isOpen) {
-    return null;
-  }
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
 
   const handleClose = () => {
     if (submitting.current) {
@@ -49,6 +28,11 @@ export function DeleteAccountModal({ isOpen, blockedMessage, onClose, onConfirm 
     setErrorMessage(null);
     onClose();
   };
+  const { dialogRef, onCancel } = useNativeDialog({
+    isOpen, onClose: handleClose, initialFocusRef: cancelButton, returnFocusRef,
+  });
+
+  if (!isOpen) return null;
 
   const handleConfirm = async () => {
     if (submitting.current || blockedMessage) {
@@ -56,6 +40,7 @@ export function DeleteAccountModal({ isOpen, blockedMessage, onClose, onConfirm 
     }
 
     submitting.current = true;
+    title.current?.focus({ preventScroll: true });
     setIsSubmitting(true);
     setErrorMessage(null);
 
@@ -72,24 +57,22 @@ export function DeleteAccountModal({ isOpen, blockedMessage, onClose, onConfirm 
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="presentation"
+    <dialog
+      ref={dialogRef}
+      aria-describedby="delete-account-description"
+      aria-labelledby="delete-account-title"
+      aria-modal="true"
+      className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none items-center justify-center bg-transparent p-4 backdrop:bg-black/40 open:flex"
+      onCancel={onCancel}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           handleClose();
         }
       }}
     >
-      <section
-        aria-describedby="delete-account-description"
-        aria-labelledby="delete-account-title"
-        aria-modal="true"
-        className="w-full max-w-[440px] rounded-2xl bg-white px-7 py-8 shadow-2xl"
-        role="dialog"
-      >
+      <section className="max-h-full w-full max-w-[440px] overflow-y-auto rounded-2xl bg-white px-7 py-8 shadow-2xl">
         <div className="text-center">
-          <h2 id="delete-account-title" className="text-base font-bold text-gray-950">
+          <h2 ref={title} id="delete-account-title" tabIndex={-1} className="text-base font-bold text-gray-950">
             정말 탈퇴하시겠어요?
           </h2>
           <p
@@ -117,6 +100,7 @@ export function DeleteAccountModal({ isOpen, blockedMessage, onClose, onConfirm 
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
+            ref={cancelButton}
             onClick={handleClose}
             disabled={isSubmitting}
             className="h-[58px] rounded-lg border border-gray-300 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -133,6 +117,6 @@ export function DeleteAccountModal({ isOpen, blockedMessage, onClose, onConfirm 
           </button>
         </div>
       </section>
-    </div>
+    </dialog>
   );
 }

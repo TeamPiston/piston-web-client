@@ -16,8 +16,6 @@ interface ArtworkDetailPageProps {
   artwork: ArtworkDetail;
 }
 
-type PrintStatus = "idle" | "printing" | "failed";
-
 const FALLBACK_STL_URL = "/pencil-holder.stl";
 const FALLBACK_FILAMENT_COLORS: FilamentColor[] = [
   { name: "빨강", value: "#f04444" },
@@ -29,9 +27,9 @@ const FALLBACK_FILAMENT_COLORS: FilamentColor[] = [
 
 export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
   const router = useRouter();
-  const { connectedPrinter, isPrinterConnected } = usePrinterQuery();
+  const { connectedPrinter, hasActivePrint, isPrinterConnected, printJob, printStatus } = usePrinterQuery();
   const { startPrint } = usePrinterActions();
-  const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
+  const [printFailed, setPrintFailed] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const stlUrl = artwork.stlUrl ?? FALLBACK_STL_URL;
@@ -47,8 +45,9 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
     weight: "36g",
   };
   const estimatedPrintTime = artwork.estimatedPrintTime ?? "1시간";
-  const isQueued = printStatus === "printing";
+  const isQueued = printStatus === "PRINTING" && printJob?.title === artwork.title && printJob.stlUrl === stlUrl;
   const canSimulatePrint = isMockModeEnabled();
+  const anotherPrintIsActive = hasActivePrint && !isQueued;
 
   const handlePrintConfirm = ({ colorMode }: { colorMode: string }) => {
     setIsPrintModalOpen(false);
@@ -59,7 +58,7 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
       stlUrl,
       title: artwork.title,
     }) : false;
-    setPrintStatus(didStartPrint ? "printing" : "failed");
+    setPrintFailed(!didStartPrint);
   };
 
   const handleBack = () => {
@@ -76,20 +75,22 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
       <Header />
       <main className="box-border min-h-[calc(100vh-100px)] w-full overflow-x-hidden bg-[#fbfbfb] px-4 py-3 sm:px-8 sm:py-4 lg:h-[calc(100vh-100px)] lg:overflow-hidden lg:px-12 lg:pb-0 lg:pt-[52px] 2xl:px-16">
         <div className="mx-auto h-12 max-w-[1600px]">
-          {printStatus !== "idle" && (
+          {(isQueued || anotherPrintIsActive || printFailed) && (
             <div
               role="status"
               aria-live="polite"
               className={[
                 "text-center text-base font-semibold leading-6",
-                printStatus === "printing" ? "text-[#5a7bff]" : "text-red-500",
+                isQueued || anotherPrintIsActive ? "text-[#5a7bff]" : "text-red-500",
               ].join(" ")}
             >
-              {printStatus === "printing" ? (
+              {isQueued ? (
                 <>
                   <p>출력이 시작되었습니다.</p>
                   <p>마이페이지에서 출력 상황을 확인해 주세요!</p>
                 </>
+              ) : anotherPrintIsActive ? (
+                <p>이미 다른 출력 작업이 진행 중이에요. 마이페이지에서 확인해 주세요.</p>
               ) : (
                 <>
                   <p>출력을 실패했습니다.</p>
@@ -131,10 +132,10 @@ export default function ArtworkDetailPage({ artwork }: ArtworkDetailPageProps) {
             <button
               type="button"
               onClick={() => setIsPrintModalOpen(true)}
-              disabled={!canSimulatePrint || isQueued}
+              disabled={!canSimulatePrint || hasActivePrint}
               className="mt-10 h-11 w-full rounded-lg bg-[#5a7bff] text-sm font-semibold text-white transition hover:bg-[#4a6ee5] active:scale-[0.99] disabled:cursor-default disabled:hover:bg-[#5a7bff]"
             >
-              {!canSimulatePrint ? "작품 출력 연동 준비 중" : isQueued ? "출력 대기 중" : "출력하기"}
+              {!canSimulatePrint ? "작품 출력 연동 준비 중" : hasActivePrint ? "출력 대기 중" : "출력하기"}
             </button>
           </div>
 

@@ -94,7 +94,8 @@ function listSourceFiles(directory) {
 
 // Exercise the real provider and hooks with deterministic state and context slots.
 // This verifies state transitions, not browser rendering or React scheduling.
-function runtime(initialPrinters) {
+function runtime(initialPrinters, { storage = new Map(), search = "", clock = Date, isMock = true } = {}) {
+  const location = { search };
   const modules = new Map();
   const contexts = new Map();
   const state = new Map();
@@ -136,6 +137,8 @@ function runtime(initialPrinters) {
     useCallback: (callback, dependencies) => memoize(() => callback, dependencies),
     useRef: (initial) => memoize(() => ({ current: initial }), []),
     useId: () => "test-id",
+    useEffect: () => {},
+    useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
   };
   const jsx = (type, props) => ({ type, props });
   function load(relative) {
@@ -174,7 +177,17 @@ function runtime(initialPrinters) {
     }).runInNewContext({
       Event,
       crypto: { randomUUID },
-      process: { env: { NODE_ENV: "production", NEXT_PUBLIC_USE_MOCK: "true" } },
+      Date: clock,
+      URLSearchParams,
+      window: {
+        location,
+        sessionStorage: {
+          getItem: (key) => storage.get(key) ?? null,
+          setItem: (key, value) => storage.set(key, value),
+          removeItem: (key) => storage.delete(key),
+        },
+      },
+      process: { env: { NODE_ENV: "production", NEXT_PUBLIC_USE_MOCK: String(isMock) } },
       fetch: () => assert.fail("Mock printer management must not use HTTP"),
     })(requireSource, mod, mod.exports);
     return mod.exports;
@@ -214,6 +227,8 @@ function runtime(initialPrinters) {
   });
   run.inspectTree = inspectTree;
   run.PrinterProvider = feature.PrinterProvider;
+  run.print = load("src/entities/print/model/print.ts");
+  run.location = location;
   run.PrinterDeleteModal = feature.PrinterDeleteModal;
   return run;
 }
@@ -224,7 +239,7 @@ assert.equal(view.query.printers.length, 0);
 assert.equal(view.query.connectedPrinter, null);
 assert.equal(view.query.isPrinterConnected, false);
 assert.deepEqual(Object.keys(view.query).sort(), [
-  "connectedPrinter", "isPrinterConnected", "printJob", "printStatus", "printers",
+  "connectedPrinter", "hasActivePrint", "isPrinterConnected", "printJob", "printStatus", "printers",
 ]);
 const draft = { name: "Classroom", model: "QIDI X-Max 4", ipAddress: "192.0.2.31" };
 view.management.openAddForm();
@@ -287,6 +302,184 @@ assert.equal(view.management.deletingPrinter, null);
 assert.equal(view.query.printStatus, "EMPTY", "Deleting the active printer must clear PRINTING");
 assert.equal(view.query.printJob, null, "Deleted printers must not remain in the print job");
 console.log("PASS edit, connection invalidation/recheck and confirmed deletion");
+
+// The Artwork action and MyPage read adapter must see one task, including after a reload.
+const storage = new Map();
+let now = Date.UTC(2026, 0, 1);
+class PrintClock extends Date {
+  constructor(...args) { super(...(args.length ? args : [now])); }
+  static now() { return now; }
+}
+const artwork = runtime(undefined, { storage, clock: PrintClock });
+const artworkPrinter = artwork().query.connectedPrinter;
+const artworkJob = { printerId: artworkPrinter.id, colorMode: "single", title: "Feed artwork", stlUrl: "/models/feed-artwork.stl" };
+assert(artwork().actions.startPrint(artworkJob));
+const active = await artwork.print.getCurrentPrintTask();
+assert.equal(active.artworkName, artworkJob.title);
+assert.equal(active.printerName, artworkPrinter.name);
+assert.equal(active.modelUrl, artworkJob.stlUrl);
+assert.equal(active.status, "PRINTING");
+assert.equal(active.progress, 0);
+const otherArtwork = { ...artworkJob, title: "Second artwork" };
+assert.equal(artwork().actions.startPrint(otherArtwork), false);
+await assert.rejects(artwork.print.createPrintTask("MyPage design"), /이미 출력 중/);
+assert.equal((await artwork.print.getCurrentPrintTask()).id, active.id);
+
+const reloaded = runtime(undefined, { storage, clock: PrintClock });
+assert.equal(reloaded().query.printJob.title, artworkJob.title);
+assert.equal((await reloaded.print.getCurrentPrintTask()).id, active.id);
+assert.equal(reloaded().actions.startPrint(otherArtwork), false);
+assert.equal(await runtime(undefined, { storage, search: "?mockPrintStatus=EMPTY" }).print.getCurrentPrintTask(), null);
+assert.equal((await runtime(undefined, { storage, search: "?mockPrintStatus=FAILED" }).print.getCurrentPrintTask()).status, "FAILED");
+assert.equal((await runtime(undefined, { storage, search: "?mockPrintStatus=unknown", clock: PrintClock }).print.getCurrentPrintTask()).id, active.id);
+now += 26 * 60_000;
+assert.equal((await reloaded.print.getCurrentPrintTask()).progress, 50);
+now += 26 * 60_000;
+assert.equal((await reloaded.print.getCurrentPrintTask()).status, "COMPLETED");
+assert.equal(reloaded().query.printStatus, "COMPLETED");
+assert.equal(await reloaded.print.cancelPrintTask(active.id), undefined, "Completed jobs cannot be cancelled");
+
+const failed = runtime(undefined, { search: "?mockError=print-progress", clock: PrintClock, storage });
+assert(failed().actions.startPrint(artworkJob));
+now += 60_000;
+const failedTask = await failed.print.getCurrentPrintTask();
+assert.equal(failedTask.status, "FAILED");
+assert.equal(failedTask.printerName, artworkPrinter.name);
+
+const retryPage = runtime(undefined, { storage, clock: PrintClock });
+const retried = await retryPage.print.retryPrintTask(failedTask);
+assert.notEqual(retried.id, failedTask.id);
+assert.equal(retried.modelUrl, artworkJob.stlUrl);
+assert.equal(retried.printerName, artworkPrinter.name);
+assert.equal(retried.status, "PRINTING");
+assert.equal((await retryPage.print.cancelPrintTask(retried.id)).status, "CANCELLED");
+assert.equal((await retryPage.print.getCurrentPrintTask()).status, "CANCELLED");
+assert.equal(retryPage().query.printStatus, "EMPTY");
+
+const restart = runtime(undefined, { storage, clock: PrintClock });
+assert.equal((await restart.print.getCurrentPrintTask()).status, "CANCELLED");
+assert(restart().actions.startPrint(artworkJob));
+restart().actions.removePrinter(artworkJob.printerId);
+assert.equal(await restart.print.getCurrentPrintTask(), null);
+assert.equal(await runtime(undefined, { storage }).print.getCurrentPrintTask(), null);
+const printerStorage = new Map();
+const managed = runtime(undefined, { storage: printerStorage, clock: PrintClock });
+const defaultPrinter = managed().query.connectedPrinter;
+managed().actions.removePrinter(defaultPrinter.id);
+managed().management.savePrinter(draft, "connected");
+const added = managed().query.connectedPrinter;
+managed().management.openEditForm(added);
+managed().management.savePrinter({ ...draft, name: "Edited printer" }, null);
+assert.equal(managed().actions.startPrint({ ...artworkJob, printerId: added.id }), true);
+const restored = runtime(undefined, { storage: printerStorage, clock: PrintClock });
+assert.equal(restored().query.connectedPrinter.id, added.id);
+assert.equal(restored().query.connectedPrinter.name, "Edited printer");
+assert.equal(restored().query.printers.filter(({ id }) => id === added.id).length, 1);
+assert.equal(restored().query.printers.some(({ id }) => id === defaultPrinter.id), false);
+assert.equal((await restored.print.getCurrentPrintTask()).printerName, "Edited printer");
+const corrupted = new Map(printerStorage);
+corrupted.set("piston:mock-printers:v1", "{bad JSON");
+assert.equal(await runtime(undefined, { storage: corrupted }).print.getCurrentPrintTask(), null);
+const throwingStorage = new Map(printerStorage);
+throwingStorage.get = () => { throw new Error("Storage read denied"); };
+throwingStorage.set = () => { throw new Error("Storage write denied"); };
+const blockedStorage = runtime(undefined, { storage: throwingStorage, clock: PrintClock });
+assert(blockedStorage().actions.startPrint(artworkJob), "The current document can run a demo using its in-memory data");
+assert.equal((await blockedStorage.print.getCurrentPrintTask()).artworkName, artworkJob.title);
+restored().actions.removePrinter(added.id);
+const afterDelete = runtime(undefined, { storage: printerStorage });
+assert.equal(afterDelete().query.connectedPrinter, null);
+assert.equal(await afterDelete.print.getCurrentPrintTask(), null);
+const api = runtime(undefined, { isMock: false, storage });
+assert.equal(api().actions.startPrint(artworkJob), false, "Artwork printing must remain disabled in API mode");
+assert.equal(api().query.printJob, null);
+console.log("PASS shared Artwork and MyPage mock print, refresh, progress, completion, failure, retry, cancellation, printer removal, and API guard");
+
+const retryCase = runtime(undefined, { clock: PrintClock });
+let retryView = retryCase();
+assert(retryView.actions.startPrint(artworkJob));
+const retryOriginal = await retryCase.print.getCurrentPrintTask();
+const cancelledForRetry = await retryCase.print.cancelPrintTask(retryOriginal.id);
+retryView.actions.setPrinters((all) => all.map((printer) => printer.id === artworkJob.printerId
+  ? { ...printer, name: "Current printer name", connectionStatus: "disconnected" }
+  : printer));
+await assert.rejects(() => retryCase.print.retryPrintTask(cancelledForRetry), /연결이 끊겼어요/);
+assert.equal((await retryCase.print.getCurrentPrintTask()).id, cancelledForRetry.id);
+assert.equal((await retryCase.print.getCurrentPrintTask()).status, "CANCELLED");
+retryView.actions.setPrinters((all) => all.map((printer) => printer.id === artworkJob.printerId
+  ? { ...printer, connectionStatus: "connected" }
+  : printer));
+const renamedRetry = await retryCase.print.retryPrintTask(cancelledForRetry);
+assert.equal(renamedRetry.printerId, artworkJob.printerId);
+assert.equal(renamedRetry.printerName, "Current printer name");
+assert.equal(renamedRetry.status, "PRINTING");
+assert.equal(renamedRetry.modelUrl, artworkJob.stlUrl);
+
+const cancelledBeforeDelete = await retryCase.print.cancelPrintTask(renamedRetry.id);
+retryView.actions.removePrinter(artworkJob.printerId);
+await assert.rejects(() => retryCase.print.retryPrintTask(cancelledBeforeDelete), /작업을 확인하지 못했어요/);
+assert.equal(await retryCase.print.getCurrentPrintTask(), null);
+// Even if a stale task is still present, a missing printer cannot be silently substituted.
+const missingPrinterCase = runtime(undefined, { clock: PrintClock });
+assert(missingPrinterCase().actions.startPrint(artworkJob));
+const activeBeforeRemoval = await missingPrinterCase.print.getCurrentPrintTask();
+const cancelledBeforeRemoval = await missingPrinterCase.print.cancelPrintTask(activeBeforeRemoval.id);
+missingPrinterCase().actions.setPrinters((all) => all.filter(({ id }) => id !== artworkJob.printerId));
+await assert.rejects(() => missingPrinterCase.print.retryPrintTask(cancelledBeforeRemoval), /프린터가 삭제됐거나/);
+assert.equal((await missingPrinterCase.print.getCurrentPrintTask()).id, cancelledBeforeRemoval.id);
+console.log("PASS retry validates live printer identity, name, removal and connection at execution");
+
+for (const scenario of ["EMPTY", "FAILED"]) {
+  const blockedWrites = new Map();
+  blockedWrites.set = () => { throw new Error("Storage write denied"); };
+  const live = runtime(undefined, { storage: blockedWrites, clock: PrintClock });
+  assert(live().actions.startPrint(artworkJob));
+  const before = await live.print.getCurrentPrintTask();
+  assert.equal(before.persistenceWarning, "snapshot-removed");
+  live.location.search = "?mockPrintStatus=" + scenario;
+  const debug = await live.print.getCurrentPrintTask();
+  assert.equal(debug?.status ?? "EMPTY", scenario);
+  await assert.rejects(() => live.print.createPrintTask("Debug replacement"), /이미 출력 중/);
+  if (debug) await assert.rejects(() => live.print.retryPrintTask(debug), /이미 출력 중/);
+  live.location.search = "";
+  assert.equal((await live.print.getCurrentPrintTask()).id, before.id);
+  assert.equal((await live.print.getCurrentPrintTask()).status, "PRINTING");
+  assert.equal(live().actions.startPrint(otherArtwork), false);
+}
+console.log("PASS EMPTY and FAILED preserve the same-document task and submission lock when writes fail");
+
+for (const [allowWrite, allowRemove, warning] of [
+  [true, true, undefined],
+  [false, true, "snapshot-removed"],
+  [false, false, "snapshot-may-be-stale"],
+]) {
+  const snapshots = new Map();
+  const live = runtime(undefined, { storage: snapshots, clock: PrintClock });
+  assert(live().actions.startPrint(artworkJob));
+  const before = await live.print.getCurrentPrintTask();
+  assert.equal(before.persistenceWarning, undefined);
+  const key = "piston:mock-print:v1";
+  assert.equal(JSON.parse(snapshots.get(key)).status, "PRINTING");
+  if (!allowWrite) snapshots.set = () => { throw new Error("Storage write denied"); };
+  if (!allowRemove) snapshots.delete = () => { throw new Error("Storage remove denied"); };
+  const cancelled = await live.print.cancelPrintTask(before.id);
+  assert.equal(cancelled.status, "CANCELLED");
+  assert.equal(cancelled.persistenceWarning, warning);
+  assert.equal((await live.print.getCurrentPrintTask()).persistenceWarning, warning);
+  const fresh = await runtime(undefined, { storage: snapshots, clock: PrintClock }).print.getCurrentPrintTask();
+  if (allowWrite) {
+    assert.equal(fresh.id, before.id);
+    assert.equal(fresh.status, "CANCELLED");
+    assert.equal(fresh.persistenceWarning, undefined);
+  } else if (allowRemove) {
+    assert.equal(snapshots.has(key), false);
+    assert.notEqual(fresh?.id, before.id);
+  } else {
+    assert.equal(fresh.id, before.id);
+    assert.equal(fresh.status, "PRINTING");
+  }
+}
+console.log("PASS cancellation persistence and fresh-document recovery for every write/remove outcome");
 
 const first = runtime();
 const second = runtime();
@@ -376,7 +569,10 @@ references.actions.setPrinters((printers) =>
     : printer),
 );
 references = renderReferences();
-assert.equal(references.actions.startPrint(jobA), true, "Updated actions must see a reconnected printer");
+assert.equal(references.actions.startPrint(jobA), false, "Reconnecting a printer must not overwrite its active job");
+const completed = await renderReferences.print.getCurrentPrintTask();
+await renderReferences.print.cancelPrintTask(completed.id);
+assert.equal(references.actions.startPrint(jobA), true, "Updated actions must see a reconnected printer after cancellation");
 const reconnectedActions = references.actions;
 assert.equal(renderReferences().actions, reconnectedActions);
 initialActions.removePrinter(printerA.id);

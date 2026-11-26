@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
+import { useNativeDialog } from "@/shared/ui/use-native-dialog";
 import { ArtworkModelPreview } from "@/features/stl-viewer";
 import type { PrintTask } from "@/entities/print";
 import { isMockModeEnabled, MOCK_ACCOUNT_SETTINGS } from "@/shared/mock/mock-data";
@@ -12,6 +13,8 @@ interface PrintStatusDetailModalProps {
   onCancel?: () => Promise<void>;
   onClose: () => void;
   printTask: PrintTask;
+  returnFocusRef?: RefObject<HTMLButtonElement | null>;
+  getFallbackFocusTargets?: () => readonly (HTMLElement | null)[];
 }
 
 export function PrintStatusDetailModal({
@@ -20,35 +23,32 @@ export function PrintStatusDetailModal({
   onCancel,
   onClose,
   printTask,
+  returnFocusRef,
+  getFallbackFocusTargets,
 }: PrintStatusDetailModalProps) {
+  const cancelling = useRef(false);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const isMock = isMockModeEnabled();
   const isPrinting = printTask.status === "PRINTING";
   const progress = Math.min(100, Math.max(0, printTask.progress));
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isCancelling) {
-        onClose();
-      }
-    };
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isCancelling, onClose]);
+  const handleClose = () => {
+    if (!cancelling.current) onClose();
+  };
+  const { dialogRef, onCancel: onDialogCancel } = useNativeDialog({
+    onClose: handleClose, initialFocusRef: closeButton, returnFocusRef, getFallbackFocusTargets,
+  });
 
   const handleCancel = async () => {
-    if (!onCancel || isCancelling || !isPrinting) {
+    if (!onCancel || cancelling.current || !isPrinting) {
       return;
     }
 
+    cancelling.current = true;
+    title.current?.focus({ preventScroll: true });
     setIsCancelling(true);
     setCancelError(null);
 
@@ -56,6 +56,8 @@ export function PrintStatusDetailModal({
       await onCancel();
     } catch {
       setCancelError("출력을 취소하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      cancelling.current = false;
       setIsCancelling(false);
     }
   };
@@ -65,22 +67,20 @@ export function PrintStatusDetailModal({
     : printTask.estimatedEndTime || "출력이 완료됐어요.";
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
-      role="presentation"
+    <dialog
+      ref={dialogRef}
+      aria-describedby="print-status-detail-description"
+      aria-labelledby="print-status-detail-title"
+      aria-modal="true"
+      className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none items-center justify-center bg-transparent p-4 backdrop:bg-black/45 open:flex"
+      onCancel={onDialogCancel}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !isCancelling) {
-          onClose();
+        if (event.target === event.currentTarget) {
+          handleClose();
         }
       }}
     >
-      <section
-        aria-describedby="print-status-detail-description"
-        aria-labelledby="print-status-detail-title"
-        aria-modal="true"
-        className="w-full max-w-[480px] rounded-3xl bg-white p-6 shadow-2xl"
-        role="dialog"
-      >
+      <section className="max-h-full w-full max-w-[480px] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
         <DemoNotice isVisible={isMock} className="mb-3">
           <p>화면에 표시된 출력 상태는 데모 데이터예요. 실제 프린터는 작동하지 않습니다.</p>
         </DemoNotice>
@@ -106,7 +106,7 @@ export function PrintStatusDetailModal({
         </div>
 
         <div className="mt-5">
-          <h2 id="print-status-detail-title" className="text-lg font-bold text-gray-900">
+          <h2 ref={title} id="print-status-detail-title" tabIndex={-1} className="text-lg font-bold text-gray-900">
             {printTask.artworkName}
           </h2>
           <p id="print-status-detail-description" className="mt-1 text-xs text-gray-400">
@@ -161,7 +161,8 @@ export function PrintStatusDetailModal({
           )}
           <button
             type="button"
-            onClick={onClose}
+            ref={closeButton}
+            onClick={handleClose}
             disabled={isCancelling}
             className="h-12 rounded-xl bg-[#5C7CFF] text-sm font-bold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -169,6 +170,6 @@ export function PrintStatusDetailModal({
           </button>
         </div>
       </section>
-    </div>
+    </dialog>
   );
 }
