@@ -15,6 +15,7 @@ const allowedPaths = new Set([
   "src/page-slices/create/model/model-utils.ts",
   "src/page-slices/create/model/mock-data.ts",
   "src/shared/mock/mock-data.ts",
+  "src/shared/mock/mock-printers.ts",
   "src/shared/lib/index.ts",
   "src/shared/lib/use-mounted-ref.ts",
 ].map((path) => resolve(root, path)));

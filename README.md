@@ -1,5 +1,18 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## PISTON build modes
+
+Set these public variables before running a build or starting development:
+
+| Mode | Settings |
+| --- | --- |
+| Mock demo | `NEXT_PUBLIC_USE_MOCK=true`, `NEXT_PUBLIC_ENABLE_REGISTRATION_API=false`. No API base URL is required. |
+| API | `NEXT_PUBLIC_USE_MOCK=false` (or unset), plus a `NEXT_PUBLIC_API_BASE_URL` such as `https://api.example.com/v1`. Set `NEXT_PUBLIC_ENABLE_REGISTRATION_API=true` only where registration is enabled. |
+
+The API base URL must use HTTPS and contain no credentials, query, or fragment.
+`next dev` also accepts explicit HTTP loopback addresses such as
+`http://localhost:8080`. All `NEXT_PUBLIC_*` values are public. Keep secrets out of them.
+
 ## Getting Started
 
 First, run the development server:

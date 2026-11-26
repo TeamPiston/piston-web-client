@@ -1,3 +1,5 @@
+import { MOCK_PRINTERS, readMockPrinters, type MockPrinter } from "./mock-printers";
+
 interface MockUserProfile {
   email: string;
   id: string;
@@ -27,7 +29,19 @@ export type MockPrintStatus =
   | "CANCELED"
   | "EMPTY";
 
+interface MockArtworkPrint {
+  title: string;
+  stlUrl: string;
+  printerId: string;
+  colorMode: string;
+}
+
+export type MockPrintPersistenceWarning = "snapshot-removed" | "snapshot-may-be-stale";
+
 interface MockPrintTask {
+  persistenceWarning?: MockPrintPersistenceWarning;
+  job?: MockArtworkPrint;
+  simulateFailure?: boolean;
   artworkName: string;
   createdAt: string;
   estimatedEndTime: string;
@@ -35,6 +49,7 @@ interface MockPrintTask {
   filamentRemaining?: string;
   id: number;
   modelUrl?: string;
+  printerId?: string;
   printerName?: string;
   printingMethod?: string;
   progress: number;
@@ -463,9 +478,14 @@ export const MOCK_PRINT_STATUS_LIST: readonly MockPrintTask[] = [
 ];
 
 let mockDesigns = cloneDesigns(MOCK_MY_DESIGNS);
-let mockCurrentPrintTask: MockPrintTask | null = null;
-let isMockPrintInitialized = false;
-let nextMockPrintId = 5200;
+type MockPrintState = { task: MockPrintTask | null };
+let normalPrint: MockPrintState | undefined;
+let debugPrint: (MockPrintState & { scenario: MockPrintStatus }) | undefined;
+const firstMockPrintId = 5200;
+let nextMockPrintId = firstMockPrintId;
+const mockPrintStorageKey = "piston:mock-print:v1";
+const mockPrintListeners = new Set<() => void>();
+const mockPrintMinutes = 52;
 let isMockAccountDeleted = false;
 const mockFeedLikes = new Map(
   MOCK_FEED_POSTS.map((post) => [post.id, post.likedByCurrentUser]),
@@ -492,63 +512,244 @@ export async function withMockFallback<T>(
 }
 
 export async function fetchMockPrintStatus(): Promise<MockPrintTask | null> {
-  initializeMockPrintStatus();
-  return mockCurrentPrintTask ? { ...mockCurrentPrintTask } : null;
+  const state = getPrintState();
+  advancePrintState(state);
+  return state.task ? { ...state.task } : null;
 }
 
 export async function fetchMockPrintStatusList(): Promise<MockPrintTask[]> {
   return MOCK_PRINT_STATUS_LIST.map((task) => ({ ...task }));
 }
 
-export async function createMockPrintTask(artworkName = "육각형 연필꽂이") {
+export function createMockPrintTask(
+  artworkName = "육각형 연필꽂이",
+  selection?: { job: MockArtworkPrint; printerName: string },
+) {
+  return startMockPrint(artworkName, selection);
+}
+
+function startMockPrint(
+  artworkName: string,
+  selection?: { job: MockArtworkPrint; printerName: string },
+  retryPrinter?: MockPrinter,
+) {
+  if (!isMockModeEnabled()) throw new Error("출력 기능 준비 중");
   throwIfMockFailure("print-create");
-  initializeMockPrintStatus();
+  const state = getPrintState();
+  if (hasActiveMockPrint()) {
+    throw new Error("이미 출력 중인 작업이 있어요.");
+  }
+  const printer = retryPrinter ?? (selection
+    ? { id: selection.job.printerId, name: selection.printerName }
+    : (readMockPrinters() ?? MOCK_PRINTERS).find(({ connectionStatus }) => connectionStatus === "connected"));
+  if (!printer) throw new Error("연결된 프린터가 없어요.");
+
   const matchingDesign = mockDesigns.find((design) => design.title === artworkName);
   const nextTask: MockPrintTask = {
     id: nextMockPrintId++,
     userId: MOCK_ACCOUNT_PROFILE.id,
     artworkName,
-    modelUrl: matchingDesign?.stlUrl ?? "/models/pencil-holder.stl",
-    printerName: MOCK_ACCOUNT_SETTINGS.printerName,
+    job: selection?.job,
+    simulateFailure: selection && hasMockFailure("print-progress"),
+    modelUrl: selection?.job.stlUrl ?? matchingDesign?.stlUrl ?? "/models/pencil-holder.stl",
+    printerId: printer.id,
+    printerName: printer.name,
     printingMethod: "FDM",
     filamentRemaining: matchingDesign
       ? `${matchingDesign.filamentLength} / ${matchingDesign.filamentWeight}`
       : MOCK_ACCOUNT_SETTINGS.filamentRemaining,
     status: "PRINTING",
     progress: 0,
-    remainingMinutes: 52,
+    remainingMinutes: mockPrintMinutes,
     estimatedEndTime: "약 52분 후 완료 예정",
     createdAt: new Date().toISOString(),
   };
-  mockCurrentPrintTask = nextTask;
-  return { ...nextTask };
+  return updateMockPrintTask(state, nextTask);
 }
 
 export async function cancelMockPrint(printTaskId: number) {
   throwIfMockFailure("print-cancel");
-  initializeMockPrintStatus();
-  if (!mockCurrentPrintTask || mockCurrentPrintTask.id !== printTaskId) {
+  const state = getPrintState();
+  advancePrintState(state);
+  const task = state.task;
+  if (task?.id !== printTaskId || task.status !== "PRINTING") {
     return;
   }
 
-  mockCurrentPrintTask = {
-    ...mockCurrentPrintTask,
+  const cancelledTask: MockPrintTask = {
+    ...task,
     status: "CANCELLED",
     failureReason: "사용자 요청으로 중단",
     stoppedAt: getCurrentLocalTime(),
     remainingMinutes: 0,
     estimatedEndTime: `${getCurrentLocalTime()} 중단`,
   };
+  return updateMockPrintTask(state, cancelledTask);
 }
 
 export async function retryMockPrint(printTaskId: number) {
   throwIfMockFailure("print-retry");
-  initializeMockPrintStatus();
-  const previousTask = mockCurrentPrintTask?.id === printTaskId
-    ? mockCurrentPrintTask
-    : MOCK_PRINT_STATUS_LIST.find((task) => task.id === printTaskId);
+  const previousTask = getPrintState().task;
+  if (previousTask?.id !== printTaskId ||
+    !["FAILED", "ERROR", "CANCELLED", "CANCELED"].includes(previousTask.status)) {
+    throw new Error("다시 출력할 작업을 확인하지 못했어요.");
+  }
 
-  return createMockPrintTask(previousTask?.artworkName);
+  const printer = getMockRetryPrinter(previousTask);
+  if (printer?.connectionStatus !== "connected") {
+    throw new Error("이 작업의 프린터가 삭제됐거나 연결이 끊겼어요.");
+  }
+
+  const selection = previousTask.job && { job: previousTask.job, printerName: printer.name };
+  return startMockPrint(previousTask.artworkName, selection, printer);
+}
+
+type MockPrintPrinter = Pick<MockPrintTask, "printerId" | "printerName" | "job">;
+
+function mockPrintPrinterId(task: MockPrintPrinter) {
+  return task.printerId ?? task.job?.printerId ??
+    MOCK_PRINTERS.find(({ name }) => name === task.printerName)?.id;
+}
+
+export function getMockRetryPrinter(
+  task: MockPrintPrinter,
+  printers: readonly MockPrinter[] | null | undefined = readMockPrinters(),
+) {
+  const id = mockPrintPrinterId(task);
+  return (printers === undefined ? MOCK_PRINTERS : printers)?.find((printer) => printer.id === id);
+}
+
+export function subscribeMockPrint(listener: () => void) {
+  mockPrintListeners.add(listener);
+  return () => { mockPrintListeners.delete(listener); };
+}
+
+export function getCurrentMockPrint() {
+  return getPrintState().task;
+}
+
+export function hasActiveMockPrint() {
+  advanceMockPrint();
+  return isActiveMockPrint(getNormalPrint().task) || isActiveMockPrint(getPrintState().task);
+}
+
+export function isActiveMockPrint(task: MockPrintTask | null) {
+  // The built-in status fixtures are replaceable; jobs submitted in this tab are not.
+  return task?.status === "PRINTING" && task.id >= firstMockPrintId;
+}
+
+export function clearMockPrintForPrinter(printerId: string) {
+  for (const state of new Set([getNormalPrint(), getPrintState()])) {
+    if (state.task && mockPrintPrinterId(state.task) === printerId) {
+      updateMockPrintTask(state, null);
+    }
+  }
+}
+
+export function advanceMockPrint() {
+  const normal = getNormalPrint();
+  const visible = getPrintState();
+  advancePrintState(normal);
+  if (visible !== normal) advancePrintState(visible);
+}
+
+function advancePrintState(state: MockPrintState) {
+  const task = state.task;
+  if (!task || !isActiveMockPrint(task)) return;
+
+  const elapsedMinutes = Math.max(0, (Date.now() - Date.parse(task.createdAt)) / 60_000);
+  if (task.simulateFailure && elapsedMinutes >= 1) {
+    updateMockPrintTask(state, {
+      ...task,
+      status: "FAILED",
+      failureReason: "가상 출력 중 오류가 발생했어요.",
+      stoppedAt: getCurrentLocalTime(),
+      remainingMinutes: 0,
+      estimatedEndTime: "출력 실패",
+    });
+    return;
+  }
+
+  const progress = Math.min(100, Math.floor(elapsedMinutes * 100 / mockPrintMinutes));
+  const remainingMinutes = Math.max(0, Math.ceil(mockPrintMinutes - elapsedMinutes));
+  if (progress === task.progress && remainingMinutes === task.remainingMinutes) return;
+
+  updateMockPrintTask(state, {
+    ...task,
+    status: progress === 100 ? "COMPLETED" : "PRINTING",
+    progress,
+    remainingMinutes,
+    estimatedEndTime: progress === 100 ? `${getCurrentLocalTime()} 완료` : `약 ${remainingMinutes}분 후 완료 예정`,
+  });
+}
+
+function updateMockPrintTask(state: MockPrintState, task: MockPrintTask): MockPrintTask;
+function updateMockPrintTask(state: MockPrintState, task: null): null;
+function updateMockPrintTask(state: MockPrintState, task: MockPrintTask | null) {
+  const next = task && { ...task };
+  if (next) delete next.persistenceWarning;
+  if (state === normalPrint && isMockModeEnabled() && typeof window !== "undefined") {
+    const warning = persistMockPrint(next);
+    if (next && warning) next.persistenceWarning = warning;
+  }
+  state.task = next;
+  mockPrintListeners.forEach((listener) => listener());
+  return next && { ...next };
+}
+
+// If updating fails, try to remove the previous snapshot before exposing the new in-memory state.
+function persistMockPrint(task: MockPrintTask | null): MockPrintPersistenceWarning | undefined {
+  try {
+    window.sessionStorage.setItem(mockPrintStorageKey, JSON.stringify(task));
+  } catch {
+    try {
+      window.sessionStorage.removeItem(mockPrintStorageKey);
+      return "snapshot-removed";
+    } catch {
+      return "snapshot-may-be-stale";
+    }
+  }
+}
+
+function restoreMockPrint() {
+  if (!isMockModeEnabled() || typeof window === "undefined") return;
+
+  try {
+    const saved = window.sessionStorage?.getItem(mockPrintStorageKey);
+    if (saved == null) return;
+
+    const task: MockPrintTask | null = JSON.parse(saved);
+    if (task !== null && (
+      !Number.isSafeInteger(task.id) || task.id < 1 ||
+      task.userId !== MOCK_ACCOUNT_PROFILE.id ||
+      typeof task.artworkName !== "string" || !Number.isFinite(Date.parse(task.createdAt)) ||
+      !["PRINTING", "COMPLETED", "FAILED", "CANCELLED"].includes(task.status) ||
+      !Number.isFinite(task.progress) || !Number.isFinite(task.remainingMinutes) ||
+      typeof task.estimatedEndTime !== "string" ||
+      (task.printerId !== undefined && typeof task.printerId !== "string") ||
+      (task.modelUrl !== undefined && !isLocalMockModel(task.modelUrl)) ||
+      (task.simulateFailure !== undefined && typeof task.simulateFailure !== "boolean") ||
+      (task.job !== undefined && (
+        !task.job || typeof task.job.title !== "string" || !isLocalMockModel(task.job.stlUrl) ||
+        typeof task.job.printerId !== "string" || typeof task.job.colorMode !== "string"
+      ))
+    )) return;
+
+    const printers = readMockPrinters();
+    const printerId = task ? mockPrintPrinterId(task) : undefined;
+    if (task) nextMockPrintId = Math.max(nextMockPrintId, task.id + 1);
+    return {
+      task: task && printers !== null && (printers ?? MOCK_PRINTERS).some(({ id }) => id === printerId)
+        ? { ...task, printerId, persistenceWarning: undefined }
+        : null,
+    };
+  } catch {
+    // An unreadable demo snapshot can be replaced by a fresh demo session.
+  }
+}
+
+function isLocalMockModel(url: unknown) {
+  return typeof url === "string" && /^\/(?:models\/)?[\w.-]+\.stl$/i.test(url);
 }
 
 export async function fetchMockMyDesigns(): Promise<MockMyDesign[]> {
@@ -610,43 +811,48 @@ export async function deleteMockAccount() {
 
 export function resetMockData(printStatus?: MockPrintStatus) {
   mockDesigns = cloneDesigns(MOCK_MY_DESIGNS);
-  mockCurrentPrintTask = null;
-  isMockPrintInitialized = false;
+  normalPrint = printStatus ? { task: getPrintFixture(printStatus) } : undefined;
+  debugPrint = undefined;
   isMockAccountDeleted = false;
-  nextMockPrintId = 5200;
+  nextMockPrintId = firstMockPrintId;
+  try {
+    if (isMockModeEnabled() && typeof window !== "undefined") {
+      window.sessionStorage?.removeItem(mockPrintStorageKey);
+    }
+  } catch {
+    // The in-memory demo is already reset.
+  }
   for (const post of MOCK_FEED_POSTS) {
     mockFeedLikes.set(post.id, post.likedByCurrentUser);
   }
-  if (printStatus) {
-    initializeMockPrintStatus(printStatus);
-  }
 }
 
-function initializeMockPrintStatus(forcedStatus?: MockPrintStatus) {
-  if (isMockPrintInitialized) {
-    return;
-  }
+function getNormalPrint() {
+  return normalPrint ??= restoreMockPrint() ?? { task: getPrintFixture("PRINTING") };
+}
 
-  const status = forcedStatus ?? getPrintScenarioFromUrl();
-  if (!status) {
-    mockCurrentPrintTask = { ...MOCK_PRINT_STATUS_LIST[0] };
-  } else if (status === "EMPTY") {
-    mockCurrentPrintTask = null;
-  } else {
-    const scenario = MOCK_PRINT_STATUS_LIST.find((task) => task.status === status);
-    if (scenario) {
-      mockCurrentPrintTask = { ...scenario };
-    } else if (status === "ERROR" || status === "CANCELLED" || status === "CANCELED") {
-      const failedTask = MOCK_PRINT_STATUS_LIST.find((task) => task.status === "FAILED");
-      mockCurrentPrintTask = failedTask
-        ? { ...failedTask, status, failureReason: status === "ERROR" ? failedTask.failureReason : "출력이 취소됐어요" }
-        : null;
-    } else {
-      mockCurrentPrintTask = { ...MOCK_PRINT_STATUS_LIST[0] };
-    }
+function getPrintState() {
+  const scenario = isMockModeEnabled() ? getPrintScenarioFromUrl() : undefined;
+  if (!scenario) {
+    debugPrint = undefined;
+    return getNormalPrint();
   }
+  if (debugPrint?.scenario !== scenario) {
+    debugPrint = { scenario, task: getPrintFixture(scenario) };
+  }
+  return debugPrint;
+}
 
-  isMockPrintInitialized = true;
+function getPrintFixture(status: MockPrintStatus): MockPrintTask | null {
+  if (status === "EMPTY") return null;
+  const fixture = MOCK_PRINT_STATUS_LIST.find((task) => task.status === status);
+  if (fixture) return { ...fixture };
+  const failed = MOCK_PRINT_STATUS_LIST.find((task) => task.status === "FAILED");
+  return failed ? {
+    ...failed,
+    status,
+    failureReason: status === "ERROR" ? failed.failureReason : "출력이 취소됐어요",
+  } : null;
 }
 
 function getPrintScenarioFromUrl(): MockPrintStatus | undefined {
@@ -679,17 +885,19 @@ function getCurrentLocalTime() {
 }
 
 function throwIfMockFailure(action: string) {
-  if (!isMockUrlControlEnabled() || typeof window === "undefined") {
-    return;
+  if (hasMockFailure(action)) {
+    throw new Error(`Mock failure: ${action}`);
   }
+}
+
+function hasMockFailure(action: string) {
+  if (!isMockUrlControlEnabled() || typeof window === "undefined") return false;
 
   const actions = new URLSearchParams(window.location.search)
     .get("mockError")
     ?.split(",")
     .map((item) => item.trim());
-  if (actions?.includes(action)) {
-    throw new Error(`Mock failure: ${action}`);
-  }
+  return actions?.includes(action) ?? false;
 }
 
 function cloneDesigns(designs: MockMyDesign[]) {

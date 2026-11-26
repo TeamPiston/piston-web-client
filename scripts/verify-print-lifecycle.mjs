@@ -18,12 +18,14 @@ async function loadPrintRuntime({ mock = false, baseUrl = "", nodeEnv = "product
   const paths = [
     "src/entities/print/model/print.ts",
     "src/shared/mock/mock-data.ts",
+    "src/shared/mock/mock-printers.ts",
     "src/shared/api/index.ts",
     "src/shared/api/client.ts",
     "src/shared/api/auth.ts",
     ...(ui ? [
       "src/page-slices/mypage/ui/mypage-page.tsx",
       "src/page-slices/mypage/ui/print-status-detail-modal.tsx",
+      "src/shared/ui/use-native-dialog.ts",
     ] : []),
   ];
   const sources = new Map(await Promise.all(paths.map(async (path) => [
@@ -492,7 +494,7 @@ async function verifyFrontendContracts() {
     'href="/create"',
     'href="/feed"',
     "await cancelPrintTask(selectedPrintTask.id)",
-    "setPrintTask(null)",
+    "setPrintTask(cancelled ?? await getCurrentPrintTask())",
     "await retryPrintTask(printTask)",
   ]) {
     assert(myPageSource.includes(statement), "MyPage: missing contract: " + statement);

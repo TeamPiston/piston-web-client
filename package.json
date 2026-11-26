@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:public-environment": "node --test scripts/verify-public-environment.mjs",
     "test:account-deletion": "node scripts/verify-account-deletion.mjs",
     "test:login-form": "node scripts/verify-login-form.mjs",
     "test:auth-api": "node scripts/verify-auth-api.mjs",

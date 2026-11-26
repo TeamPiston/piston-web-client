@@ -1,0 +1,98 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Types, lint and regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Verify frontend without network access
+        run: |
+          sudo unshare --net -- setpriv --reuid "$(id -u)" --regid "$(id -g)" --init-groups --no-new-privs \
+            env "PATH=$PATH" "HOME=$HOME" bash -e <<'CHECKS'
+          node node_modules/typescript/bin/tsc --noEmit
+          npm run lint -- --max-warnings 0
+          npm run test:public-environment
+          npm run test:login-form
+          npm run test:auth-api
+          npm run test:register-form
+          npm run test:account-deletion
+          npm run test:auth-recovery
+          npm run test:create-generation
+          npm run test:create-attachments
+          npm run test:create-api-generation
+          npm run test:chat-api
+          npm run test:meshy-api
+          npm run test:printer-api
+          npm run test:create-print-flow
+          npm run test:print
+          CHECKS
+
+  build:
+    name: Production build (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: Mock
+            use_mock: "true"
+            base_url: ""
+          - mode: API
+            use_mock: "false"
+            base_url: https://piston-api.invalid
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Build with isolated network and offline fonts
+        env:
+          NEXT_PUBLIC_USE_MOCK: ${{ matrix.use_mock }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ matrix.base_url }}
+          NEXT_PUBLIC_ENABLE_REGISTRATION_API: "false"
+        run: |
+          sudo unshare --net -- setpriv --reuid "$(id -u)" --regid "$(id -g)" --init-groups --no-new-privs \
+            env "PATH=$PATH" "HOME=$HOME" CI=true NEXT_TELEMETRY_DISABLED=1 \
+            "NEXT_PUBLIC_USE_MOCK=$NEXT_PUBLIC_USE_MOCK" \
+            "NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL" \
+            "NEXT_PUBLIC_ENABLE_REGISTRATION_API=$NEXT_PUBLIC_ENABLE_REGISTRATION_API" \
+            "NEXT_FONT_GOOGLE_MOCKED_RESPONSES=$PWD/scripts/fixtures/google-fonts.cjs" \
+            bash -e <<'BUILD'
+          if [ "$NEXT_PUBLIC_USE_MOCK" = "false" ]; then
+            if output=$(NEXT_PUBLIC_API_BASE_URL= npm run build -- --webpack 2>&1); then
+              echo "::error::The API build accepted an empty base URL."
+              exit 1
+            fi
+            printf '%s\n' "$output" | grep -F "NEXT_PUBLIC_API_BASE_URL must be set in API mode."
+          fi
+          npm run build -- --webpack
+          BUILD
